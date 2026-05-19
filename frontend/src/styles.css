@@ -1701,10 +1701,27 @@ textarea {
   box-shadow: inset 3px 0 0 var(--brand);
 }
 
+.history-card--active {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .history-card div {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+}
+
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.history-actions .secondary-button {
+  flex: 1 1 96px;
+  justify-content: center;
 }
 
 .history-card span,

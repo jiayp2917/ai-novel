@@ -155,6 +155,51 @@ def test_chapter_versions_api_lists_current_version_first(tmp_path: Path, monkey
     assert len(versions) == 2
     assert versions[0]["is_current"] is True
     assert versions[0]["body_hash"] != versions[1]["body_hash"]
+    assert versions[0]["can_preview"] is True
+    assert versions[1]["can_publish"] is True
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_chapter_version_content_and_publish_restore_previous_text(tmp_path: Path, monkeypatch) -> None:
+    from fastapi.testclient import TestClient
+
+    content = tmp_path / "content"
+    chapter_path = content / "chapters" / "book.md"
+    write(chapter_path, "# \u7b2c001\u7ae0 First\nAlpha")
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("CONTENT_ROOT", str(content))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
+    from backend.app.core.config import get_settings
+    from backend.app.db.session import get_engine, reset_engine
+    from backend.app.main import app
+
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    client = TestClient(app)
+
+    assert client.post("/api/library/scan").status_code == 200
+    write(chapter_path, "# \u7b2c001\u7ae0 First\nBeta")
+    assert client.post("/api/library/scan").status_code == 200
+    chapter = client.get("/api/chapters").json()[0]
+    versions = client.get(f"/api/chapters/{chapter['id']}/versions").json()
+    previous = next(version for version in versions if not version["is_current"])
+
+    content_response = client.get(f"/api/chapters/{chapter['id']}/versions/{previous['id']}/content")
+    publish_response = client.post(
+        f"/api/chapters/{chapter['id']}/versions/{previous['id']}/publish",
+        json={"approved_by_user": True},
+    )
+
+    assert content_response.status_code == 200
+    assert "Alpha" in content_response.json()["text"]
+    assert publish_response.status_code == 200
+    assert publish_response.json()["published"] is True
+    assert "Alpha" in chapter_path.read_text(encoding="utf-8")
+    assert (get_settings().runtime_root / publish_response.json()["backup_path"]).exists()
+    assert (get_settings().runtime_root / publish_response.json()["diff_path"]).exists()
     get_settings.cache_clear()
     reset_engine()
 

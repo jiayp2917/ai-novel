@@ -6,6 +6,7 @@ import type {
   Artifact,
   Chapter,
   ChapterContent,
+  ChapterVersionContent,
   ChapterVersion,
   CostDashboard,
   EventRecord,
@@ -67,6 +68,15 @@ export function useChapterVersions(chapterId: number | null) {
     queryKey: ['chapter-versions', chapterId],
     queryFn: () => apiRequest<ChapterVersion[]>(`/api/chapters/${chapterId}/versions`),
     enabled: chapterId !== null,
+  });
+}
+
+export function useChapterVersionContent(chapterId: number | null, versionId: number | null) {
+  return useQuery({
+    queryKey: ['chapter-version-content', chapterId, versionId],
+    queryFn: () => apiRequest<ChapterVersionContent>(`/api/chapters/${chapterId}/versions/${versionId}/content`),
+    enabled: chapterId !== null && versionId !== null,
+    retry: false,
   });
 }
 

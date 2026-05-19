@@ -5,6 +5,7 @@ import {
   useChapters,
   useAnnotations,
   useChapterContent,
+  useChapterVersionContent,
   useSourceAnnotations,
   useSourceFileContent,
 } from '../hooks';
@@ -20,6 +21,7 @@ type DraftResponse = {
   artifact_id: number;
   artifact_path: string;
   artifact_sha256: string;
+  version_id?: number;
   chapter_id?: number;
   chapter_no?: number;
   source_file_id?: number;
@@ -30,6 +32,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const selectedSourceFileId = useWorkbenchStore((state) => state.selectedSourceFileId);
   const openChapterTabIds = useWorkbenchStore((state) => state.openChapterTabIds);
   const selectedAnnotationId = useWorkbenchStore((state) => state.selectedAnnotationId);
+  const selectedChapterVersionId = useWorkbenchStore((state) => state.selectedChapterVersionId);
   const writingFullscreen = useWorkbenchStore((state) => state.writingFullscreen);
   const setRightPanelOpen = useWorkbenchStore((state) => state.setRightPanelOpen);
   const rightPanelOpen = useWorkbenchStore((state) => state.rightPanelOpen);
@@ -37,6 +40,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const setCatalogPanelOpen = useWorkbenchStore((state) => state.setCatalogPanelOpen);
   const setWritingFullscreen = useWorkbenchStore((state) => state.setWritingFullscreen);
   const setSelectedChapterId = useWorkbenchStore((state) => state.setSelectedChapterId);
+  const setSelectedChapterVersionId = useWorkbenchStore((state) => state.setSelectedChapterVersionId);
   const recentChapterIds = useWorkbenchStore((state) => state.recentChapterIds);
   const closeChapterTab = useWorkbenchStore((state) => state.closeChapterTab);
   const setDraftAnnotationSelection = useWorkbenchStore((state) => state.setDraftAnnotationSelection);
@@ -54,22 +58,32 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const queryClient = useQueryClient();
   const chapters = useChapters();
   const content = useChapterContent(selectedChapterId);
+  const versionContent = useChapterVersionContent(selectedChapterId, selectedChapterVersionId);
   const sourceContent = useSourceFileContent(selectedSourceFileId);
   const chapterAnnotations = useAnnotations(selectedChapterId);
   const sourceAnnotations = useSourceAnnotations(selectedSourceFileId);
-  const activeContent = content.data ?? sourceContent.data;
+  const activeContent = versionContent.data
+    ? {
+        ...content.data,
+        id: versionContent.data.chapter_id,
+        title: versionContent.data.title,
+        text: versionContent.data.text,
+        offset_unit: 'python_code_point' as const,
+      }
+    : content.data ?? sourceContent.data;
   const activeAnnotations = selectedChapterId ? chapterAnnotations.data ?? [] : sourceAnnotations.data ?? [];
   const title = content.data
-    ? `第${content.data.chapter_no}章：${content.data.title}`
+    ? `第${content.data.chapter_no}章：${versionContent.data ? `${versionContent.data.title}（历史版本）` : content.data.title}`
     : sourceContent.data?.path ?? '阅读器';
   const kindLabel = content.data ? '正文' : sourceContent.data ? sourceKindLabel(sourceContent.data.kind) : '未选择';
   const activeText = draftActive ? draftText : activeContent?.text || '';
   const matchCount = searchMatchCount(activeText, searchQuery);
   const documentKey = content.data
-    ? `chapter:${content.data.id}:${content.data.current_version_id ?? 'none'}:${draftActive ? 'draft' : 'source'}`
+    ? `chapter:${content.data.id}:${selectedChapterVersionId ?? content.data.current_version_id ?? 'none'}:${draftActive ? 'draft' : 'source'}`
     : sourceContent.data
       ? `source:${sourceContent.data.id}:${draftActive ? 'draft' : 'source'}`
       : 'empty';
+  const viewingVersion = Boolean(selectedChapterVersionId && versionContent.data);
   const dirty = Boolean(activeContent && draftActive && draftText !== activeContent.text);
   const isSourceProposal = Boolean(sourceContent.data && sourceContent.data.kind !== 'chapters');
 
@@ -106,12 +120,21 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
     setSelection(null);
     setContextMenu(null);
     setDraftAnnotationSelection(undefined);
+    setSelectedChapterVersionId(null);
     setEditing(false);
     setDraftActive(false);
     setDraftText('');
     setSearchQuery('');
     setSearchIndex(0);
   }, [selectedChapterId, selectedSourceFileId]);
+
+  useEffect(() => {
+    setEditing(false);
+    setDraftActive(false);
+    setDraftText('');
+    setSearchQuery('');
+    setSearchIndex(0);
+  }, [selectedChapterVersionId]);
 
   useEffect(() => {
     setSearchIndex(0);
@@ -145,22 +168,23 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
     },
     onMutate: () =>
       pushTask({
-        label: content.data ? '保存草稿' : '保存提案',
+        label: content.data ? '保存正文版本' : '保存提案',
         status: 'running',
-        detail: '正在保存到草稿箱，不会覆盖正式正文。',
+        detail: content.data ? '正在保存为新的正文版本，不会直接覆盖正式正文。' : '正在保存为提案，不会覆盖源文件。',
       }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
+      void queryClient.invalidateQueries({ queryKey: ['chapter-versions'] });
       setActiveArtifactId(result.artifact_id);
       pushTask({
-        label: content.data ? '保存草稿' : '保存提案',
+        label: content.data ? '保存正文版本' : '保存提案',
         status: 'succeeded',
-        detail: content.data ? `草稿 #${result.artifact_id} 已保存。需要检查、查看改动或写回时，请到 AI 工作台处理。` : `提案 #${result.artifact_id} 已保存。需要检查和对比时，请到资料库或 AI 工作台处理。`,
+        detail: content.data ? `正文版本 #${result.version_id ?? result.artifact_id} 已保存。需要发布时，请在右侧“版本”中确认。` : `提案 #${result.artifact_id} 已保存。需要检查和对比时，请到资料库或 AI 工作台处理。`,
       });
     },
     onError: (error: Error) =>
       pushTask({
-        label: content.data ? '保存草稿' : '保存提案',
+        label: content.data ? '保存正文版本' : '保存提案',
         status: 'failed',
         detail: error.message,
       }),
@@ -272,6 +296,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         activeTextLength={activeText.length}
         annotationCount={activeAnnotations.length}
         dirty={dirty}
+        viewingVersion={viewingVersion}
         writingFullscreen={writingFullscreen}
         catalogPanelOpen={catalogPanelOpen}
         rightPanelOpen={rightPanelOpen}
@@ -298,9 +323,12 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         onSaveDraft={() => saveDraftMutation.mutate()}
         onSnapshot={() => snapshotMutation.mutate()}
         onToggleRightPanel={toggleRightPanel}
+        onBackToCurrentVersion={() => setSelectedChapterVersionId(null)}
       />
-      {(content.error || sourceContent.error) && (
-        <div className="inline-error">{(content.error as Error)?.message ?? (sourceContent.error as Error)?.message}</div>
+      {(content.error || sourceContent.error || versionContent.error) && (
+        <div className="inline-error">
+          {(content.error as Error)?.message ?? (sourceContent.error as Error)?.message ?? (versionContent.error as Error)?.message}
+        </div>
       )}
       {variant === 'writing' && (
         <ReaderSearchBar

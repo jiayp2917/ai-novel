@@ -85,6 +85,16 @@ export type ChapterVersion = {
   range_end: number;
   created_at: string;
   is_current: boolean;
+  can_preview: boolean;
+  can_publish: boolean;
+};
+
+export type ChapterVersionContent = {
+  chapter_id: number;
+  version_id: number;
+  title: string;
+  text: string;
+  is_current: boolean;
 };
 
 export type Annotation = {

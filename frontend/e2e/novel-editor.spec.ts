@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const sandboxPath = String.raw`D:\2917\numeric-monster\runtime\sandbox_workspace`;
 const apiBaseUrl = 'http://127.0.0.1:18080';
 
-test('new user 10-minute path can add workspace, scan, read, save draft, review, diff, and see history', async ({ page }) => {
+test('new user 10-minute path can add workspace, scan, read, save version, publish, and see history', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
   await page.goto('/');
@@ -27,34 +27,31 @@ test('new user 10-minute path can add workspace, scan, read, save draft, review,
   await page.reload();
   await expect(page.locator('.annotation-card').filter({ hasText: '新手路径：确认开篇人物位置清晰。' })).toBeVisible();
 
-  await page.getByRole('button', { name: '编辑草稿' }).click();
+  await page.getByRole('button', { name: '编辑正文' }).click();
   await page.locator('.cm-content').click();
-  await page.keyboard.type('\n新手路径草稿保存验证。');
-  await page.getByRole('button', { name: '保存草稿' }).click();
-  await expect(page.locator('.task-latest')).toContainText(/草稿 #\d+ 已保存/);
-  const draftId = await page.locator('.task-latest').innerText().then((text) => {
+  await page.keyboard.type('\n新手路径正文版本保存验证。');
+  await page.getByRole('button', { name: '保存正文版本' }).click();
+  await expect(page.locator('.task-latest')).toContainText(/正文版本 #\d+ 已保存/);
+  const versionId = await page.locator('.task-latest').innerText().then((text) => {
     const match = text.match(/#(\d+)/);
     if (!match) {
-      throw new Error(`Draft id not found in task text: ${text}`);
+      throw new Error(`Version id not found in task text: ${text}`);
     }
     return Number.parseInt(match[1], 10);
   });
-  await mainNav(page, 'AI 工作台').click();
-  await page.getByPlaceholder('手动输入草稿编号').fill(String(draftId));
-  await page.getByRole('button', { name: '绑定草稿' }).click();
-  await page.getByRole('button', { name: '查看改动' }).click();
-  await expect(page.locator('.diff-preview')).toContainText('新手路径草稿保存验证');
-  await expect(page.locator('.artifact-trace')).toContainText('人工草稿，可选检查');
-  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeEnabled();
-  await page.getByRole('button', { name: '确认写回正文' }).click();
-  await expect(page.locator('.task-latest')).toContainText('已写回正文');
-  await mainNav(page, '写作').click();
-  await page.getByRole('button', { name: '打开侧栏' }).click();
-  await page.getByRole('button', { name: '版本' }).click();
-  await expect(page.locator('.version-history')).toContainText('已保存草稿');
-  await expect(page.locator('.history-card').filter({ hasText: '草稿 #' })).toBeVisible();
+  await openSidebarIfClosed(page);
+  await page.getByRole('button', { name: '版本', exact: true }).click();
+  await expect(page.locator('.version-history')).toContainText('正文版本');
+  const savedVersion = page.locator('.history-card').filter({ hasText: `#${versionId}` });
+  await expect(savedVersion).toBeVisible();
+  await savedVersion.getByRole('button', { name: '切换查看' }).click();
+  await expect(page.locator('.reader-header h1')).toContainText('历史版本');
+  await expect(page.locator('.cm-content')).toContainText('新手路径正文版本保存验证');
+  page.once('dialog', (dialog) => dialog.accept());
+  await savedVersion.getByRole('button', { name: '发布此版本' }).click();
+  await expect(page.locator('.task-latest')).toContainText('已发布');
   const chapterAfterManualPublish = await chapterContent(page, 1);
-  expect(chapterAfterManualPublish.text).toContain('新手路径草稿保存验证');
+  expect(chapterAfterManualPublish.text).toContain('新手路径正文版本保存验证');
 
   const themeBefore = await page.locator('html').getAttribute('data-theme');
   await page.getByRole('button', { name: themeBefore === 'dark' ? '浅色' : '深色' }).click();
@@ -229,9 +226,9 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(1280);
   expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(720);
 
-  await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
+  await page.getByRole('button', { name: '编辑正文', exact: true }).click();
   await page.locator('.cm-content').click();
-  const longInput = '连续输入二百字验收：这段文本用于验证正文编辑模式不会在输入一个字符后丢失焦点，作者可以像普通编辑器一样持续写作。系统只把内容保存在草稿里，不会直接覆盖正式正文。'.repeat(2);
+  const longInput = '连续输入二百字验收：这段文本用于验证正文编辑模式不会在输入一个字符后丢失焦点，作者可以像普通编辑器一样持续写作。系统只把内容先保存为正文版本，不会直接覆盖正式正文。'.repeat(2);
   await page.keyboard.type(longInput);
   await expect(page.locator('.cm-content')).toContainText(longInput);
   await page.keyboard.press('Control+A');

@@ -6,6 +6,7 @@ from backend.app.db.models import Chapter
 from backend.app.db.session import get_db
 from backend.app.services.annotations import InvalidRequestError, NotFoundError
 from backend.app.services.artifacts import ArtifactStore
+from backend.app.services.chapter_versions import ChapterVersionService
 from backend.app.services.model_client import ModelClientError
 from backend.app.services.revision import RevisionService, create_snapshot_candidate_for_chapter
 
@@ -83,11 +84,13 @@ def create_draft_candidate(
         },
         base_chapter=chapter,
     )
+    version = ChapterVersionService(session).save_unpublished_version(chapter, text)
     session.commit()
     return {
         "artifact_id": artifact.id,
         "artifact_path": artifact.path,
         "artifact_sha256": artifact.sha256,
+        "version_id": version.id,
         "chapter_id": chapter.id,
         "chapter_no": chapter.chapter_no,
     }

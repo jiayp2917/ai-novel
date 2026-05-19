@@ -218,6 +218,11 @@ export function ChapterEditor({
     if (!view) {
       return;
     }
+    if (content && view.state.doc.toString() !== content.text) {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: content.text },
+      });
+    }
     view.dispatch({
       effects: [
         annotationsCompartmentRef.current.reconfigure(buildAnnotationPlugin(annotations, selectedAnnotationId)),
@@ -226,7 +231,7 @@ export function ChapterEditor({
         editableCompartmentRef.current.reconfigure(EditorView.editable.of(true)),
       ],
     });
-  }, [annotations, editable, selectedAnnotationId, searchQuery, searchIndex]);
+  }, [annotations, content, editable, selectedAnnotationId, searchQuery, searchIndex]);
 
   useEffect(() => {
     if (!viewRef.current || !searchQuery.trim()) {

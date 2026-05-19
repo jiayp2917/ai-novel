@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.core.config import get_settings
+from backend.app.db.base import Base
 from backend.app.db.models import Artifact, Chapter, Job, ModelCall, Review, SourceFile
-from backend.app.db.session import get_db, reset_engine
+from backend.app.db.session import get_db, get_engine, reset_engine
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.pipeline.runs import PipelineRunService
 from backend.app.services.pipeline.state_machine import PipelineState, PipelineStateMachine, job_payload
@@ -93,6 +94,7 @@ def reset_sandbox_workspace() -> dict:
     _assert_test_environment()
     reset_engine()
     reset_e2e_workspace()
+    Base.metadata.create_all(get_engine())
     return {"status": "ok"}
 
 

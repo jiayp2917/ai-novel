@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
-from backend.app.db.models import Artifact, Chapter, Job
+from backend.app.db.models import Artifact, Chapter, ChapterVersion, Job
 from backend.app.db.session import get_engine, reset_engine
 from backend.app.main import app
 from backend.app.services.annotations import AnnotationService
@@ -278,15 +278,21 @@ def test_draft_candidate_api_creates_artifact_without_writing_source(tmp_path: P
     response = client.post(f"/api/chapters/{chapter_id}/draft-candidate", json={"text": draft})
 
     assert response.status_code == 200
+    assert isinstance(response.json()["version_id"], int)
     with Session(get_engine()) as session:
         artifact = session.get(Artifact, response.json()["artifact_id"])
+        version = session.get(ChapterVersion, response.json()["version_id"])
         assert artifact is not None
+        assert version is not None
         assert artifact.kind == "candidate"
         assert artifact.base_chapter_id == chapter_id
+        assert version.chapter_id == chapter_id
+        assert version.text_snapshot_path is not None
         metadata = json.loads(artifact.metadata_json)
         assert metadata["source"] == "manual_editor_draft"
         assert metadata["requires_ai_review"] is False
         assert (runtime_root / artifact.path).read_text(encoding="utf-8") == draft
+        assert (runtime_root / version.text_snapshot_path).read_text(encoding="utf-8") == draft
     assert (content_root / "chapters" / "book.md").read_text(encoding="utf-8") == original
     get_settings.cache_clear()
     reset_engine()

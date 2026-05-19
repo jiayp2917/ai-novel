@@ -10,6 +10,7 @@ export type WorkbenchState = {
   selectedAnnotationIds: number[];
   draftAnnotationSelection: SelectionRange | null | undefined;
   activeArtifactId: number | null;
+  selectedChapterVersionId: number | null;
   rightPanelOpen: boolean;
   catalogPanelOpen: boolean;
   writingFullscreen: boolean;
@@ -31,6 +32,7 @@ export type WorkbenchState = {
   clearAnnotationSelection: () => void;
   setDraftAnnotationSelection: (selection: SelectionRange | null | undefined) => void;
   setActiveArtifactId: (id: number | null) => void;
+  setSelectedChapterVersionId: (id: number | null) => void;
   setRightPanelOpen: (open: boolean) => void;
   setCatalogPanelOpen: (open: boolean) => void;
   setWritingFullscreen: (open: boolean) => void;

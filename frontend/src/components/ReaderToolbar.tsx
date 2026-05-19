@@ -10,6 +10,7 @@ type ReaderToolbarProps = {
   activeTextLength: number;
   annotationCount: number;
   dirty: boolean;
+  viewingVersion: boolean;
   writingFullscreen: boolean;
   catalogPanelOpen: boolean;
   rightPanelOpen: boolean;
@@ -32,6 +33,7 @@ type ReaderToolbarProps = {
   onSaveDraft: () => void;
   onSnapshot: () => void;
   onToggleRightPanel: () => void;
+  onBackToCurrentVersion: () => void;
 };
 
 export function ReaderToolbar({
@@ -44,6 +46,7 @@ export function ReaderToolbar({
   activeTextLength,
   annotationCount,
   dirty,
+  viewingVersion,
   writingFullscreen,
   catalogPanelOpen,
   rightPanelOpen,
@@ -66,6 +69,7 @@ export function ReaderToolbar({
   onSaveDraft,
   onSnapshot,
   onToggleRightPanel,
+  onBackToCurrentVersion,
 }: ReaderToolbarProps) {
   return (
     <div className="reader-header reader-header--workspace">
@@ -77,21 +81,27 @@ export function ReaderToolbar({
             阅读
           </button>
           <button className={editing ? 'reader-tab reader-tab--active' : 'reader-tab'} type="button" onClick={onStartEditing} disabled={!activeContentExists}>
-            {editing ? '正在编辑草稿' : '编辑草稿'}
+            {editing ? '正在编辑正文' : '编辑正文'}
           </button>
+          {viewingVersion && (
+            <button className="reader-tab" type="button" onClick={onBackToCurrentVersion}>
+              回到当前正文
+            </button>
+          )}
           {draftActive && (
             <button className="reader-tab" type="button" onClick={onDiscardDraft}>
-              放弃草稿
+              放弃修改
             </button>
           )}
           <span className="reader-tab">右键工具</span>
         </div>
-        {editing && <p className="form-hint">当前只是在编辑草稿；点击“保存草稿”会进入草稿箱，不会直接覆盖正式正文。</p>}
+        {editing && <p className="form-hint">当前只是在编辑正文版本；点击“保存正文版本”会先保存版本，不会直接覆盖正式正文。</p>}
+        {viewingVersion && !editing && <p className="form-hint">正在查看历史正文版本。确认无误后可在右侧“版本”里发布此版本。</p>}
       </div>
       <div className="reader-meta">
         <span>{activeContentExists ? `${activeTextLength} 字符` : '等待选择'}</span>
         <span>批注 {annotationCount}</span>
-        <span>{dirty ? '草稿未保存' : '源文件未改动'}</span>
+        <span>{viewingVersion ? '历史版本预览' : dirty ? '版本未保存' : '当前正文'}</span>
         {variant === 'writing' && <span>{writingFullscreen ? '全屏写作' : '标准布局'}</span>}
         {variant === 'writing' && (
           <div className="chapter-jump">
@@ -137,7 +147,7 @@ export function ReaderToolbar({
           </button>
         )}
         <button type="button" className="icon-button" onClick={onSaveDraft} disabled={!canSaveDraft || savingDraft}>
-          保存草稿
+          保存正文版本
         </button>
         {hasChapter && (
           <button type="button" className="icon-button" onClick={onSnapshot} disabled={snapshotting}>

@@ -6,12 +6,12 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.core.file_utils import safe_read_text
+from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.db.models import Chapter, ChapterVersion, MemoryItem, SourceFile
 from backend.app.schemas import ChapterCreate, ChapterVersionCreate, SourceFileCreate
 from backend.app.services.annotations import relocate_annotations_for_chapter
 from backend.app.services.catalog import CatalogService
-from backend.app.services.workspace import WorkspaceResolver
+from backend.app.services.workspace import WorkspaceResolver, workspace_runtime_root
 from backend.app.utils.hashing import sha256_file, sha256_text
 
 
@@ -53,6 +53,7 @@ class LibraryScanner:
         self.session = session
         self.workspace = WorkspaceResolver(content_root)
         self.content_root = self.workspace.root
+        self.runtime_root = workspace_runtime_root(self.workspace.info)
         self.catalog = CatalogService(session)
 
     def scan(self) -> dict:
@@ -154,6 +155,7 @@ class LibraryScanner:
             body_hash = sha256_text(parsed.text)
             current = chapter.current_version
             if current is None or current.body_hash != body_hash or current.source_file_hash != source_hash:
+                snapshot_path = self._write_chapter_version_snapshot(chapter.id, body_hash, parsed.text)
                 version = self.catalog.create_chapter_version(
                     ChapterVersionCreate(
                         chapter_id=chapter.id,
@@ -161,6 +163,7 @@ class LibraryScanner:
                         body_hash=body_hash,
                         source_file_hash=source_hash,
                         title=parsed.title,
+                        text_snapshot_path=snapshot_path,
                         range_start=parsed.range_start,
                         range_end=parsed.range_end,
                     )
@@ -175,6 +178,13 @@ class LibraryScanner:
                 )
         self.session.flush()
         return stats
+
+    def _write_chapter_version_snapshot(self, chapter_id: int, body_hash: str, text: str) -> str:
+        directory = self.runtime_root / "versions"
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"chapter_{chapter_id}_{body_hash[:12]}.md"
+        safe_write_text(path, text, encoding="utf-8")
+        return path.relative_to(self.runtime_root).as_posix()
 
     def _deactivate_missing_source_files(self, seen_paths: set[str]) -> int:
         changed = 0

@@ -30,6 +30,7 @@ export const createNavigationSlice: SliceCreator = (set, get) => ({
         selectedAnnotationIds: view === 'planning' || view === 'writing' ? [] : state.selectedAnnotationIds,
         draftAnnotationSelection: view === 'planning' || view === 'writing' ? undefined : state.draftAnnotationSelection,
         activeArtifactId: view === 'writing' || view === 'planning' ? state.activeArtifactId : null,
+        selectedChapterVersionId: view === 'writing' ? state.selectedChapterVersionId : null,
         rightPanelOpen: view === 'planning' ? true : view === 'writing' ? false : state.rightPanelOpen,
         inspectorTab: view === 'writing' ? 'annotations' as InspectorTab : view === 'planning' ? 'candidates' as InspectorTab : state.inspectorTab,
       };
@@ -76,6 +77,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
           selectedAnnotationIds: [],
           draftAnnotationSelection: undefined,
           activeArtifactId: null,
+          selectedChapterVersionId: null,
         };
       }
       return {
@@ -86,6 +88,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
         selectedAnnotationIds: [],
         draftAnnotationSelection: undefined,
         activeArtifactId: null,
+        selectedChapterVersionId: null,
       };
     });
   },
@@ -105,6 +108,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
       selectedAnnotationIds: [],
       draftAnnotationSelection: undefined,
       activeArtifactId: null,
+      selectedChapterVersionId: null,
     });
   },
   closeChapterTab: (id) =>
@@ -120,6 +124,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
         selectedAnnotationIds: state.selectedChapterId === id ? [] : state.selectedAnnotationIds,
         draftAnnotationSelection: state.selectedChapterId === id ? undefined : state.draftAnnotationSelection,
         activeArtifactId: state.selectedChapterId === id ? null : state.activeArtifactId,
+        selectedChapterVersionId: state.selectedChapterId === id ? null : state.selectedChapterVersionId,
       };
     }),
   setChapterFilter: (value) => {
@@ -156,7 +161,9 @@ export const createAnnotationSlice: SliceCreator = (set) => ({
 
 export const createArtifactSlice: SliceCreator = (set) => ({
   activeArtifactId: null,
+  selectedChapterVersionId: null,
   setActiveArtifactId: (id) => set({ activeArtifactId: id }),
+  setSelectedChapterVersionId: (id) => set({ selectedChapterVersionId: id }),
 });
 
 export const createUiSlice: SliceCreator = (set) => ({

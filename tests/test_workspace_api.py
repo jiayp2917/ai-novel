@@ -1,4 +1,5 @@
 from pathlib import Path
+import importlib
 
 from fastapi.testclient import TestClient
 
@@ -118,13 +119,64 @@ def test_workspace_runtime_defaults_to_workspace_when_runtime_env_absent(tmp_pat
     write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 First\nBody")
     get_settings.cache_clear()
     reset_engine()
+
+
+def test_test_support_can_seed_failed_review_hash_mismatch_and_budget_pause(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "e2e-app.db"))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "e2e-runtime"))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "e2e-runtime"))
+    monkeypatch.setenv("ENABLE_TEST_SUPPORT", "true")
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
+    workspace = tmp_path / "sandbox_workspace"
+    write(workspace / "content" / "chapters" / "book.md", "# 第001章 First\nBody")
+    get_settings.cache_clear()
+    reset_engine()
     Base.metadata.create_all(get_engine())
+    import backend.app.main as main_module
 
-    client = TestClient(app)
-    response = client.post("/api/workspace", json={"path": str(workspace)})
+    app_with_test_support = importlib.reload(main_module).app
 
-    assert response.status_code == 200
-    assert response.json()["runtime_root"] == str((workspace / "runtime").resolve())
+    client = TestClient(app_with_test_support)
+    assert client.post("/api/workspace", json={"path": str(workspace)}).status_code == 200
+    assert client.post("/api/library/scan").status_code == 200
+    chapter = client.get("/api/chapters").json()[0]
+    failed = client.post(
+        "/api/test/seed-reviewed-candidate",
+        json={
+            "chapter_id": chapter["id"],
+            "text": "# 第001章 First\nBody changed",
+            "passed": False,
+            "manual_required": True,
+            "issues": [
+                {
+                    "chapter": 1,
+                    "severity": "blocking",
+                    "owner": "admin",
+                    "description": "人工判断",
+                    "evidence": "测试证据",
+                    "fix_instruction": "不要发布",
+                }
+            ],
+        },
+    )
+    assert failed.status_code == 200
+    artifact_id = failed.json()["artifact_id"]
+    detail = client.get(f"/api/artifacts/{artifact_id}").json()
+    assert detail["latest_review"]["passed"] is False
+    assert detail["latest_review"]["manual_required"] is True
+
+    mutation = client.post("/api/test/mutate-chapter-source", json={"chapter_id": chapter["id"], "marker": "\n外部改动"})
+    assert mutation.status_code == 200
+    publish = client.post(f"/api/artifacts/{artifact_id}/publish", json={"approved_by_user": True})
+    assert publish.status_code == 400
+    assert publish.json()["detail"] in {"Review did not pass; force requires force_reason", "Source file hash changed; rescan and regenerate candidate"}
+
+    paused = client.post("/api/test/seed-budget-paused-job")
+    assert paused.status_code == 200
+    assert paused.json()["status"] == "paused_budget"
+    run_once = client.post("/api/jobs/run-once")
+    assert run_once.status_code == 200
+    assert run_once.json()["succeeded"] >= 1
 
     get_settings.cache_clear()
     reset_engine()

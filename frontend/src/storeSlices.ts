@@ -54,6 +54,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
   selectedChapterId: storedNumber(STORAGE_KEYS.selectedChapterId),
   selectedSourceFileId: storedNumber(STORAGE_KEYS.selectedSourceFileId),
   openChapterTabIds: storedNumberArray(STORAGE_KEYS.openChapterTabIds),
+  recentChapterIds: storedNumberArray(STORAGE_KEYS.recentChapterIds),
   chapterFilter: storedString(STORAGE_KEYS.chapterFilter) ?? '',
   setSelectedChapterId: (id) => {
     storeValue(STORAGE_KEYS.selectedChapterId, id);
@@ -63,6 +64,20 @@ export const createDocumentSlice: SliceCreator = (set) => ({
         ? state.openChapterTabIds
         : [id, ...state.openChapterTabIds.filter((item) => item !== id)].slice(0, 8);
       storeJson(STORAGE_KEYS.openChapterTabIds, openChapterTabIds);
+      if (id !== null) {
+        const recentChapterIds = [id, ...state.recentChapterIds.filter((item) => item !== id)].slice(0, 8);
+        storeJson(STORAGE_KEYS.recentChapterIds, recentChapterIds);
+        return {
+          selectedChapterId: id,
+          selectedSourceFileId: null,
+          openChapterTabIds,
+          recentChapterIds,
+          selectedAnnotationId: null,
+          selectedAnnotationIds: [],
+          draftAnnotationSelection: undefined,
+          activeArtifactId: null,
+        };
+      }
       return {
         selectedChapterId: id,
         selectedSourceFileId: null,
@@ -74,6 +89,12 @@ export const createDocumentSlice: SliceCreator = (set) => ({
       };
     });
   },
+  rememberChapter: (id) =>
+    set((state) => {
+      const recentChapterIds = [id, ...state.recentChapterIds.filter((item) => item !== id)].slice(0, 8);
+      storeJson(STORAGE_KEYS.recentChapterIds, recentChapterIds);
+      return { recentChapterIds };
+    }),
   setSelectedSourceFileId: (id) => {
     storeValue(STORAGE_KEYS.selectedSourceFileId, id);
     storeValue(STORAGE_KEYS.selectedChapterId, null);
@@ -162,6 +183,7 @@ export const createUiSlice: SliceCreator = (set) => ({
 });
 
 export const createTaskFeedbackSlice: SliceCreator = (set) => ({
+  workspaceBookmarks: loadWorkspaceBookmarks(),
   taskLog: [
     {
       id: 1,
@@ -174,4 +196,63 @@ export const createTaskFeedbackSlice: SliceCreator = (set) => ({
     set((state) => ({
       taskLog: [{ ...entry, id: Date.now() }, ...state.taskLog].slice(0, 12),
     })),
+  rememberWorkspace: (workspace, name) =>
+    set((state) => {
+      const id = workspace.root;
+      const existing = state.workspaceBookmarks.find((item) => item.id === id);
+      const bookmark = {
+        id,
+        name: name?.trim() || existing?.name || defaultWorkspaceName(workspace.root),
+        path: workspace.root,
+        layout: workspace.layout,
+        lastOpenedAt: new Date().toISOString(),
+        counts: workspace.detected_counts ?? {},
+      };
+      const workspaceBookmarks = [bookmark, ...state.workspaceBookmarks.filter((item) => item.id !== id)].slice(0, 12);
+      storeJson(STORAGE_KEYS.workspaceBookmarks, workspaceBookmarks);
+      return { workspaceBookmarks };
+    }),
+  renameWorkspaceBookmark: (id, name) =>
+    set((state) => {
+      const workspaceBookmarks = state.workspaceBookmarks.map((item) =>
+        item.id === id ? { ...item, name: name.trim() || item.name } : item,
+      );
+      storeJson(STORAGE_KEYS.workspaceBookmarks, workspaceBookmarks);
+      return { workspaceBookmarks };
+    }),
+  removeWorkspaceBookmark: (id) =>
+    set((state) => {
+      const workspaceBookmarks = state.workspaceBookmarks.filter((item) => item.id !== id);
+      storeJson(STORAGE_KEYS.workspaceBookmarks, workspaceBookmarks);
+      return { workspaceBookmarks };
+    }),
 });
+
+function loadWorkspaceBookmarks() {
+  const raw = storedString(STORAGE_KEYS.workspaceBookmarks);
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((item): item is WorkbenchState['workspaceBookmarks'][number] => {
+        if (!item || typeof item !== 'object') {
+          return false;
+        }
+        const candidate = item as Record<string, unknown>;
+        return typeof candidate.id === 'string' && typeof candidate.name === 'string' && typeof candidate.path === 'string';
+      })
+      .slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+function defaultWorkspaceName(path: string): string {
+  const normalized = path.replace(/\\/g, '/').split('/').filter(Boolean);
+  return normalized.at(-1) || '未命名作品';
+}

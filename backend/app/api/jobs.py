@@ -1,15 +1,18 @@
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.db.models import Event, Job, ModelCall, PublishDecision
+from backend.app.db.models import Artifact, Chapter, Event, Job, ModelCall, PublishDecision, Review
 from backend.app.db.session import get_db
 from backend.app.core.config import get_settings
 from backend.app.services.budget import BudgetGuard
 from backend.app.services.worker import JobWorker
+from backend.app.services.workspace import workspace_runtime_root
+from backend.tools.model_usage_report import collect_model_usage_report
 
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -17,6 +20,10 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 def _clamp_limit(limit: int) -> int:
     return max(1, min(limit, 200))
+
+
+def _clamp_report_limit(limit: int) -> int:
+    return max(1, min(limit, 2000))
 
 
 def _loads_json(value: str | None, fallback: Any) -> Any:
@@ -79,6 +86,44 @@ def list_model_calls(limit: int = 50, session: Session = Depends(get_db)) -> lis
         }
         for call in calls
     ]
+
+
+@router.get("/model-usage-report")
+def model_usage_report(days: int = 30, limit: int = 500, session: Session = Depends(get_db)) -> dict:
+    report_limit = _clamp_report_limit(limit)
+    since = None
+    if days > 0:
+        since = datetime.now(UTC) - timedelta(days=days)
+
+    calls_stmt = select(ModelCall).order_by(ModelCall.created_at.desc(), ModelCall.id.desc()).limit(report_limit)
+    jobs_stmt = select(Job).order_by(Job.created_at.desc(), Job.id.desc()).limit(report_limit)
+    artifacts_stmt = select(Artifact).order_by(Artifact.created_at.desc(), Artifact.id.desc()).limit(report_limit)
+    reviews_stmt = select(Review).order_by(Review.created_at.desc(), Review.id.desc()).limit(report_limit)
+    if since is not None:
+        calls_stmt = calls_stmt.where(ModelCall.created_at >= since)
+        jobs_stmt = jobs_stmt.where(Job.created_at >= since)
+        artifacts_stmt = artifacts_stmt.where(Artifact.created_at >= since)
+        reviews_stmt = reviews_stmt.where(Review.created_at >= since)
+
+    calls = list(session.scalars(calls_stmt))
+    jobs = list(session.scalars(jobs_stmt))
+    artifacts = list(session.scalars(artifacts_stmt))
+    reviews = list(session.scalars(reviews_stmt))
+    decisions = list(session.scalars(select(PublishDecision).order_by(PublishDecision.id.desc()).limit(report_limit)))
+    chapters = list(session.execute(select(Chapter.id, Chapter.chapter_no, Chapter.title)))
+    chapter_lookup = {
+        chapter_id: {"chapter_no": chapter_no, "title": title}
+        for chapter_id, chapter_no, title in chapters
+    }
+    return collect_model_usage_report(
+        calls,
+        jobs,
+        reviews=reviews,
+        artifacts=artifacts,
+        decisions=decisions,
+        runtime_root=workspace_runtime_root(),
+        chapter_lookup=chapter_lookup,
+    )
 
 
 @router.get("/events")

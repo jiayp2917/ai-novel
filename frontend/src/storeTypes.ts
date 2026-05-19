@@ -1,4 +1,4 @@
-import type { ActiveView, InspectorTab, SelectionRange, TaskEntry, ThemeMode } from './types';
+import type { ActiveView, InspectorTab, SelectionRange, TaskEntry, ThemeMode, WorkspaceBookmark, WorkspaceStatus } from './types';
 
 export type WorkbenchState = {
   activeView: ActiveView;
@@ -16,6 +16,8 @@ export type WorkbenchState = {
   chapterFilter: string;
   inspectorTab: InspectorTab;
   taskLog: TaskEntry[];
+  workspaceBookmarks: WorkspaceBookmark[];
+  recentChapterIds: number[];
   setActiveView: (view: ActiveView) => void;
   setTheme: (theme: ThemeMode) => void;
   toggleTheme: () => void;
@@ -35,4 +37,8 @@ export type WorkbenchState = {
   setChapterFilter: (value: string) => void;
   setInspectorTab: (tab: InspectorTab) => void;
   pushTask: (entry: Omit<TaskEntry, 'id'>) => void;
+  rememberWorkspace: (workspace: WorkspaceStatus, name?: string) => void;
+  renameWorkspaceBookmark: (id: string, name: string) => void;
+  removeWorkspaceBookmark: (id: string) => void;
+  rememberChapter: (id: number) => void;
 };

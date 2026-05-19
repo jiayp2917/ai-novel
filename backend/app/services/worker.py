@@ -11,6 +11,7 @@ from backend.app.services.pipeline.planner import PipelineTaskType
 from backend.app.services.revision import RevisionService
 
 RUNNABLE_JOB_TYPES = {
+    "test_budget_resume",
     "revise_from_annotations",
     PipelineTaskType.PIPELINE_RUN.value,
     PipelineTaskType.GENERATE_CHAPTER_DRAFT.value,
@@ -114,7 +115,12 @@ class JobWorker:
             job = self.session.get(Job, job_id)
             if job is None:
                 return {"id": job_id, "status": "missing", "error": "Job missing"}
-            if job.type == "revise_from_annotations":
+            if job.type == "test_budget_resume":
+                job.status = "succeeded"
+                job.result_json = '{"resumed": true}'
+                job.error = None
+                self.session.commit()
+            elif job.type == "revise_from_annotations":
                 RevisionService(self.session).run_revision_job(job_id)
             else:
                 PipelineTaskExecutor(self.session).run_job(job_id)
@@ -134,7 +140,12 @@ def run_job_in_new_session(job_id: int) -> dict:
             job = session.get(Job, job_id)
             if job is None:
                 return {"id": job_id, "status": "missing", "error": "Job missing"}
-            if job.type == "revise_from_annotations":
+            if job.type == "test_budget_resume":
+                job.status = "succeeded"
+                job.result_json = '{"resumed": true}'
+                job.error = None
+                session.commit()
+            elif job.type == "revise_from_annotations":
                 RevisionService(session).run_revision_job(job_id)
             else:
                 PipelineTaskExecutor(session).run_job(job_id)

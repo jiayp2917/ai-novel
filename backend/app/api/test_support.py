@@ -5,10 +5,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
-from backend.app.db.models import Chapter, Review, SourceFile
+from backend.app.db.models import Artifact, Chapter, Job, Review, SourceFile
 from backend.app.db.session import get_db
 from backend.app.services.artifacts import ArtifactStore
-from backend.app.services.workspace import get_active_workspace_info
+from backend.app.services.workspace import WorkspaceResolver, get_active_workspace_info
 
 
 router = APIRouter(prefix="/api/test", tags=["test-support"])
@@ -21,11 +21,25 @@ class SeedCandidateRequest(BaseModel):
 
 class SeedReviewedCandidateRequest(SeedCandidateRequest):
     passed: bool = True
+    manual_required: bool = False
+    issues: list[dict] = []
 
 
 class SeedProposalRequest(BaseModel):
     source_file_id: int
     text: str
+
+
+class SeedReviewRequest(BaseModel):
+    artifact_id: int
+    passed: bool = True
+    manual_required: bool = False
+    issues: list[dict] = []
+
+
+class MutateChapterSourceRequest(BaseModel):
+    chapter_id: int
+    marker: str = "\n\n测试：模拟正文已被外部修改。"
 
 
 @router.post("/seed-candidate")
@@ -59,9 +73,9 @@ def seed_reviewed_candidate(payload: SeedReviewedCandidateRequest, session: Sess
     review = Review(
         artifact_id=artifact.id,
         passed=payload.passed,
-        issues_json="[]",
-        evidence_count=0,
-        manual_required=False,
+        issues_json=json.dumps(payload.issues, ensure_ascii=False),
+        evidence_count=sum(1 for issue in payload.issues if str(issue.get("evidence") or "").strip()),
+        manual_required=payload.manual_required,
         candidate_hash=artifact.sha256,
         base_source_file_hash=artifact.base_source_file_hash,
         base_chapter_version_id=artifact.base_chapter_version_id,
@@ -69,6 +83,54 @@ def seed_reviewed_candidate(payload: SeedReviewedCandidateRequest, session: Sess
     session.add(review)
     session.commit()
     return {"artifact_id": artifact.id, "chapter_id": chapter.id, "review_id": review.id}
+
+
+@router.post("/seed-review")
+def seed_review(payload: SeedReviewRequest, session: Session = Depends(get_db)) -> dict:
+    _assert_test_environment()
+    artifact = session.get(Artifact, payload.artifact_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    review = Review(
+        artifact_id=artifact.id,
+        passed=payload.passed,
+        issues_json=json.dumps(payload.issues, ensure_ascii=False),
+        evidence_count=sum(1 for issue in payload.issues if str(issue.get("evidence") or "").strip()),
+        manual_required=payload.manual_required,
+        candidate_hash=artifact.sha256,
+        base_source_file_hash=artifact.base_source_file_hash,
+        base_chapter_version_id=artifact.base_chapter_version_id,
+    )
+    session.add(review)
+    session.commit()
+    return {"artifact_id": artifact.id, "review_id": review.id, "passed": review.passed}
+
+
+@router.post("/mutate-chapter-source")
+def mutate_chapter_source(payload: MutateChapterSourceRequest, session: Session = Depends(get_db)) -> dict:
+    _assert_test_environment()
+    chapter = session.get(Chapter, payload.chapter_id)
+    if chapter is None or not chapter.active:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    source_path = WorkspaceResolver().resolve_source_path(chapter.source_file.path)
+    original = source_path.read_text(encoding="utf-8-sig")
+    updated = original + payload.marker
+    source_path.write_text(updated, encoding="utf-8")
+    return {"chapter_id": chapter.id, "source_file_id": chapter.source_file_id, "chars_added": len(payload.marker)}
+
+
+@router.post("/seed-budget-paused-job")
+def seed_budget_paused_job(session: Session = Depends(get_db)) -> dict:
+    _assert_test_environment()
+    job = Job(
+        type="test_budget_resume",
+        status="paused_budget",
+        payload_json=json.dumps({"test_budget_pause": True}, ensure_ascii=False),
+        error="今日调用额度已暂停",
+    )
+    session.add(job)
+    session.commit()
+    return {"job_id": job.id, "status": job.status}
 
 
 @router.post("/seed-proposal")

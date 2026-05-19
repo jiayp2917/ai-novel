@@ -124,6 +124,41 @@ def test_scan_creates_new_version_when_chapter_changes(tmp_path: Path) -> None:
     assert chapter.current_version_id == versions[-1].id
 
 
+def test_chapter_versions_api_lists_current_version_first(tmp_path: Path, monkeypatch) -> None:
+    from fastapi.testclient import TestClient
+
+    content = tmp_path / "content"
+    chapter_path = content / "chapters" / "book.md"
+    write(chapter_path, "# \u7b2c001\u7ae0 First\nAlpha")
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("CONTENT_ROOT", str(content))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
+    from backend.app.core.config import get_settings
+    from backend.app.db.session import get_engine, reset_engine
+    from backend.app.main import app
+
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    client = TestClient(app)
+
+    assert client.post("/api/library/scan").status_code == 200
+    write(chapter_path, "# \u7b2c001\u7ae0 First\nAlpha changed")
+    assert client.post("/api/library/scan").status_code == 200
+    chapter = client.get("/api/chapters").json()[0]
+
+    response = client.get(f"/api/chapters/{chapter['id']}/versions")
+
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 2
+    assert versions[0]["is_current"] is True
+    assert versions[0]["body_hash"] != versions[1]["body_hash"]
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_scan_does_not_version_unchanged_chapter_when_same_file_changes(tmp_path: Path) -> None:
     content = tmp_path / "content"
     chapter_path = content / "chapters" / "book.md"

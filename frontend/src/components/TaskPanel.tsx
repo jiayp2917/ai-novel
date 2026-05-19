@@ -9,6 +9,7 @@ export function TaskPanel() {
   const cost = useCostDashboard();
   const jobs = useJobs();
   const latestTask = tasks[0];
+  const pausedBudgetJobs = (jobs.data ?? []).filter((job) => job.status === 'paused_budget');
 
   return (
     <footer className={expanded ? 'task-panel task-panel--expanded' : 'task-panel'}>
@@ -28,6 +29,7 @@ export function TaskPanel() {
         </div>
       )}
       <div className="cost-dashboard">
+        {pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
         {cost.isSuccess ? (
           <>
             <span>调用 {cost.data.today_model_calls}</span>

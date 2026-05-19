@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.db.models import Chapter, SourceFile
+from backend.app.db.models import Chapter, ChapterVersion, SourceFile
 from backend.app.db.session import get_db
 from backend.app.schemas import ChapterContentRead, ChapterRead, SourceFileContentRead, SourceFileRead
 from backend.app.services.library import LibraryScanner
@@ -78,3 +78,31 @@ def get_chapter_content(chapter_id: int, session: Session = Depends(get_db)) -> 
         "text": full_text[chapter.range_start : chapter.range_end],
         "offset_unit": "python_code_point",
     }
+
+
+@router.get("/chapters/{chapter_id}/versions")
+def list_chapter_versions(chapter_id: int, session: Session = Depends(get_db)) -> list[dict]:
+    chapter = session.get(Chapter, chapter_id)
+    if chapter is None or not chapter.active:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    versions = session.scalars(
+        select(ChapterVersion)
+        .where(ChapterVersion.chapter_id == chapter.id)
+        .order_by(ChapterVersion.created_at.desc(), ChapterVersion.id.desc())
+    ).all()
+    return [
+        {
+            "id": version.id,
+            "chapter_id": version.chapter_id,
+            "source_file_id": version.source_file_id,
+            "title": version.title,
+            "body_hash": version.body_hash,
+            "source_file_hash": version.source_file_hash,
+            "text_snapshot_path": version.text_snapshot_path,
+            "range_start": version.range_start,
+            "range_end": version.range_end,
+            "created_at": version.created_at,
+            "is_current": version.id == chapter.current_version_id,
+        }
+        for version in versions
+    ]

@@ -75,7 +75,7 @@ def main() -> int:
 def run_validation(options: ValidationOptions) -> dict[str, Any]:
     if options.start_chapter > options.end_chapter:
         raise ValueError("start-chapter must be <= end-chapter")
-    load_key_file(options.key_file, override=True)
+    load_key_file(options.key_file, override=False)
     runtime_root = options.workspace / "runtime" / "production_validation"
     app_db_path = runtime_root / "app.db"
     stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
@@ -490,12 +490,12 @@ def _chapter_results(jobs: list[Job], reviews: list[Review]) -> list[dict[str, A
         reviews_by_artifact[review.artifact_id].append(review)
     results = []
     for chapter_no, chapter_jobs in sorted(by_chapter.items()):
-        artifact_ids = []
+        artifact_ids: set[int] = set()
         for job in chapter_jobs:
             merged = {**_loads(job.payload_json, {}), **_loads(job.result_json or "{}", {})}
             raw = merged.get("artifact_id")
             if isinstance(raw, int):
-                artifact_ids.append(raw)
+                artifact_ids.add(raw)
         chapter_reviews = [review for artifact_id in artifact_ids for review in reviews_by_artifact.get(artifact_id, [])]
         issue_count = 0
         for review in chapter_reviews:

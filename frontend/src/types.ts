@@ -11,7 +11,7 @@ export type ActiveView =
 
 export type ThemeMode = 'dark' | 'light';
 
-export type InspectorTab = 'annotations' | 'candidates' | 'review' | 'memory';
+export type InspectorTab = 'annotations' | 'candidates' | 'history' | 'review' | 'memory';
 
 export type WorkspaceStatus = {
   root: string;
@@ -29,6 +29,15 @@ export type WorkspaceStatus = {
     label: string;
     exists: boolean;
   }>;
+};
+
+export type WorkspaceBookmark = {
+  id: string;
+  name: string;
+  path: string;
+  layout: WorkspaceStatus['layout'];
+  lastOpenedAt: string;
+  counts: Record<string, number>;
 };
 
 export type HealthPayload = {
@@ -64,6 +73,20 @@ export type Chapter = {
 export type ChapterContent = Chapter & {
   text: string;
   offset_unit: 'python_code_point';
+};
+
+export type ChapterVersion = {
+  id: number;
+  chapter_id: number;
+  source_file_id: number;
+  title: string;
+  body_hash: string;
+  source_file_hash: string;
+  text_snapshot_path: string | null;
+  range_start: number;
+  range_end: number;
+  created_at: string;
+  is_current: boolean;
 };
 
 export type Annotation = {

@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const sandboxPath = String.raw`D:\2917\numeric-monster\runtime\sandbox_workspace`;
 const apiBaseUrl = 'http://127.0.0.1:18080';
 
-test('new user can scan, read, annotate, reject unsafe publish, and publish sandbox chapter', async ({ page }) => {
+test('new user 10-minute path can add workspace, scan, read, save draft, review, diff, and see history', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
   await page.goto('/');
@@ -12,7 +12,9 @@ test('new user can scan, read, annotate, reject unsafe publish, and publish sand
   await expect(page.getByText('小说编辑器').first()).toBeVisible();
 
   await switchWorkspace(page);
-  await expect(page.locator('.workspace-stats').getByText('源文件：4', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '作品列表与最近打开' })).toBeVisible();
+  await expect(page.locator('.workspace-current')).toContainText('sandbox_workspace');
+  await expect(page.locator('.workspace-stats').getByText('素材文件：4', { exact: true })).toBeVisible();
   await expect(page.locator('.workspace-stats').getByText('正文：2', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: '正文编写' }).click();
@@ -25,10 +27,33 @@ test('new user can scan, read, annotate, reject unsafe publish, and publish sand
   await page.reload();
   await expect(page.locator('.annotation-card').filter({ hasText: '新手路径：确认开篇人物位置清晰。' })).toBeVisible();
 
+  await page.getByRole('button', { name: '编辑草稿' }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.type('\n新手路径草稿保存验证。');
+  await page.getByRole('button', { name: '保存草稿' }).click();
+  await expect(page.locator('.task-latest')).toContainText('保存草稿');
+  await openSidebarIfClosed(page);
+  await page.getByRole('button', { name: '版本' }).click();
+  await expect(page.locator('.version-history')).toContainText('已保存草稿');
+  await expect(page.locator('.history-card').filter({ hasText: '草稿 #' })).toBeVisible();
+
+  await page.getByRole('button', { name: '候选' }).click();
+  const draftId = await activeDraftId(page);
+  await seedReview(page, draftId, { passed: true });
+  await page.getByRole('button', { name: '查看改动' }).click();
+  await expect(page.locator('.diff-preview')).toContainText('新手路径草稿保存验证');
+
   const themeBefore = await page.locator('html').getAttribute('data-theme');
   await page.getByRole('button', { name: themeBefore === 'dark' ? '浅色' : '深色' }).click();
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', themeBefore === 'dark' ? 'light' : 'dark');
+});
+
+test('safety gates reject mismatched drafts, settings proposals, and publish sandbox chapter only after checks', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
 
   const chapterOne = await chapterByNo(page, 1);
   const chapterTwo = await chapterByNo(page, 2);
@@ -37,31 +62,31 @@ test('new user can scan, read, annotate, reject unsafe publish, and publish sand
 
   await page.getByRole('button', { name: '修复发布' }).click();
   await openChapter(page, '002');
-  await page.getByPlaceholder('手动输入 artifact_id').fill(String(mismatch.artifact_id));
-  await page.getByRole('button', { name: '绑定候选' }).click();
-  await expect(page.getByText('候选不属于当前章节，不能在此处审核、查看差异或发布。')).toBeVisible();
-  await expect(page.getByRole('button', { name: '查看差异' })).toBeDisabled();
+  await page.getByPlaceholder('手动输入草稿编号').fill(String(mismatch.artifact_id));
+  await page.getByRole('button', { name: '绑定草稿' }).click();
+  await expect(page.getByText('草稿不属于当前章节，不能在这里检查、查看改动或写回。')).toBeVisible();
+  await expect(page.getByRole('button', { name: '查看改动' })).toBeDisabled();
 
   await page.getByRole('button', { name: '设定/章纲' }).click();
   await page.locator('.source-row').filter({ hasText: '01-设定' }).click();
   const setting = await firstSource(page, 'settings');
   const settingContent = await sourceContent(page, setting.id);
   const proposal = await seedProposal(page, setting.id, `${settingContent.text}\n\n测试提案。`);
-  await page.getByPlaceholder('手动输入 artifact_id').fill(String(proposal.artifact_id));
-  await page.getByRole('button', { name: '绑定候选' }).click();
-  await expect(page.getByRole('button', { name: '提案不直接发布' })).toBeDisabled();
+  await page.getByPlaceholder('手动输入草稿编号').fill(String(proposal.artifact_id));
+  await page.getByRole('button', { name: '绑定草稿' }).click();
+  await expect(page.getByRole('button', { name: '提案不直接写回' })).toBeDisabled();
 
   await page.getByRole('button', { name: '修复发布' }).click();
   await openChapter(page, '002');
   const beforePublish = await chapterContent(page, chapterTwo.id);
   const publishMarker = '\n\n发布门沙盒验证：正文只通过候选写回。';
   const publishSeed = await seedReviewedCandidate(page, chapterTwo.id, `${beforePublish.text}${publishMarker}`);
-  await page.getByPlaceholder('手动输入 artifact_id').fill(String(publishSeed.artifact_id));
-  await page.getByRole('button', { name: '绑定候选' }).click();
-  await page.getByRole('button', { name: '查看差异' }).click();
+  await page.getByPlaceholder('手动输入草稿编号').fill(String(publishSeed.artifact_id));
+  await page.getByRole('button', { name: '绑定草稿' }).click();
+  await page.getByRole('button', { name: '查看改动' }).click();
   await expect(page.locator('.diff-preview')).toContainText('发布门沙盒验证');
-  await page.getByRole('button', { name: '人工确认发布' }).click();
-  await expect(page.getByText(`候选 #${publishSeed.artifact_id} 已通过发布门写回。`)).toBeVisible();
+  await page.getByRole('button', { name: '确认写回正文' }).click();
+  await expect(page.locator('.task-latest')).toContainText('已写回正文');
 
   const afterPublish = await chapterContent(page, chapterTwo.id);
   expect(afterPublish.text).toContain('发布门沙盒验证');
@@ -158,7 +183,7 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(1280);
   expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(720);
 
-  await page.getByRole('button', { name: '切换编辑草稿' }).click();
+  await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
   await page.locator('.cm-content').click();
   await page.keyboard.type('连续输入验证');
   await expect(page.locator('.cm-content')).toContainText('连续输入验证');
@@ -167,6 +192,76 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   await page.keyboard.press('Control+A');
   const selectedTextLength = await page.evaluate(() => window.getSelection()?.toString().length ?? 0);
   expect(selectedTextLength).toBeGreaterThan(50);
+});
+
+test('review failure keeps draft unpublished and explains whether it needs manual judgment', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  await page.getByRole('button', { name: '修复发布' }).click();
+  await openChapter(page, '001');
+
+  const chapter = await chapterByNo(page, 1);
+  const content = await chapterContent(page, chapter.id);
+  const failed = await seedReviewedCandidate(page, chapter.id, `${content.text}\n\n失败审核验证。`, {
+    passed: false,
+    manual_required: true,
+    issues: [
+      {
+        chapter: 1,
+        severity: 'blocking',
+        owner: 'admin',
+        description: '需要人工判断的测试问题',
+        evidence: '失败审核验证',
+        fix_instruction: '不要发布',
+      },
+    ],
+  });
+
+  await page.getByPlaceholder('手动输入草稿编号').fill(String(failed.artifact_id));
+  await page.getByRole('button', { name: '绑定草稿' }).click();
+  await expect(page.locator('.artifact-trace')).toContainText('需人工判断');
+  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeDisabled();
+  await page.getByText('查看检查问题').click();
+  await expect(page.locator('.artifact-review-detail')).toContainText('需要人工判断的测试问题');
+});
+
+test('publish hash mismatch tells the writer to rescan and regenerate the draft', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  await page.getByRole('button', { name: '修复发布' }).click();
+  await openChapter(page, '001');
+
+  const chapter = await chapterByNo(page, 1);
+  const content = await chapterContent(page, chapter.id);
+  const seeded = await seedReviewedCandidate(page, chapter.id, `${content.text}\n\nhash mismatch 验证。`);
+  await page.getByPlaceholder('手动输入草稿编号').fill(String(seeded.artifact_id));
+  await page.getByRole('button', { name: '绑定草稿' }).click();
+  await page.getByRole('button', { name: '查看改动' }).click();
+  await expect(page.locator('.diff-preview')).toContainText('hash mismatch 验证');
+
+  await mutateChapterSource(page, chapter.id, '\n\n外部改动：触发 hash mismatch。');
+  await page.getByRole('button', { name: '确认写回正文' }).click();
+  await expect(page.locator('.task-latest')).toContainText('源文件已变化，请重新扫描并重新生成候选。', { timeout: 10000 });
+});
+
+test('budget pause is visible in author language and can be resumed from AI task page', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  const paused = await seedBudgetPausedJob(page);
+
+  await page.locator('.nav').getByRole('button', { name: '模型任务' }).click();
+  await expect(page.getByText('今日调用额度已暂停').first()).toBeVisible();
+  await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('今日调用额度已暂停');
+
+  await page.getByRole('button', { name: '继续执行任务' }).click();
+  await expect(page.locator('.task-latest')).toContainText('继续执行任务');
+  await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('已完成', { timeout: 10000 });
 });
 
 test('drag selection can create annotation from context menu', async ({ page }) => {
@@ -198,10 +293,10 @@ test('drag selection can create annotation from context menu', async ({ page }) 
 
 async function switchWorkspace(page: Page) {
   await page.getByRole('button', { name: '作品/工作区入口' }).click();
-  await expect(page.getByRole('heading', { name: '素材索引与短记忆' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '作品列表与最近打开' })).toBeVisible();
   await page.getByLabel('当前路径').fill(sandboxPath);
-  await page.getByRole('button', { name: '切换' }).click();
-  await expect(page.locator('.workspace-feedback')).toContainText('已切换到');
+  await page.getByRole('button', { name: '打开并扫描' }).click();
+  await expect(page.locator('.workspace-feedback')).toContainText('已打开作品');
   await expect(page.locator('.workspace-stats').getByText('正文：2', { exact: true })).toBeVisible();
 }
 
@@ -219,14 +314,27 @@ async function activeSearchTop(page: Page): Promise<number> {
 }
 
 async function createManualAnnotation(page: Page, quote: string, comment: string) {
-  const openSidebar = page.getByRole('button', { name: '打开侧栏' });
-  if (await openSidebar.isVisible()) {
-    await openSidebar.click();
-  }
+  await openSidebarIfClosed(page);
   await page.getByRole('button', { name: '手动创建批注' }).click();
   await page.getByPlaceholder('没有拖选时，可粘贴一段原文；系统会自动定位唯一匹配。').fill(quote);
   await page.getByPlaceholder('记录问题、判断或人工决策。').fill(comment);
   await page.getByRole('button', { name: '添加批注' }).click();
+}
+
+async function openSidebarIfClosed(page: Page) {
+  const openSidebar = page.getByRole('button', { name: '打开侧栏' });
+  if (await openSidebar.isVisible()) {
+    await openSidebar.click();
+  }
+}
+
+async function activeDraftId(page: Page): Promise<number> {
+  const value = await page.getByPlaceholder('手动输入草稿编号').inputValue();
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Active draft id not found: ${value}`);
+  }
+  return parsed;
 }
 
 async function chapterByNo(page: Page, chapterNo: number): Promise<{ id: number; chapter_no: number; title: string }> {
@@ -271,9 +379,20 @@ async function seedCandidate(page: Page, chapterId: number, text: string): Promi
   return (await response.json()) as { artifact_id: number };
 }
 
-async function seedReviewedCandidate(page: Page, chapterId: number, text: string): Promise<{ artifact_id: number }> {
+async function seedReviewedCandidate(
+  page: Page,
+  chapterId: number,
+  text: string,
+  options: { passed?: boolean; manual_required?: boolean; issues?: Array<Record<string, unknown>> } = {},
+): Promise<{ artifact_id: number }> {
   const response = await page.request.post(`${apiBaseUrl}/api/test/seed-reviewed-candidate`, {
-    data: { chapter_id: chapterId, text, passed: true },
+    data: {
+      chapter_id: chapterId,
+      text,
+      passed: options.passed ?? true,
+      manual_required: options.manual_required ?? false,
+      issues: options.issues ?? [],
+    },
   });
   expect(response.ok()).toBeTruthy();
   return (await response.json()) as { artifact_id: number };
@@ -285,4 +404,34 @@ async function seedProposal(page: Page, sourceFileId: number, text: string): Pro
   });
   expect(response.ok()).toBeTruthy();
   return (await response.json()) as { artifact_id: number };
+}
+
+async function seedReview(
+  page: Page,
+  artifactId: number,
+  options: { passed?: boolean; manual_required?: boolean; issues?: Array<Record<string, unknown>> } = {},
+): Promise<{ artifact_id: number; review_id: number; passed: boolean }> {
+  const response = await page.request.post(`${apiBaseUrl}/api/test/seed-review`, {
+    data: {
+      artifact_id: artifactId,
+      passed: options.passed ?? true,
+      manual_required: options.manual_required ?? false,
+      issues: options.issues ?? [],
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as { artifact_id: number; review_id: number; passed: boolean };
+}
+
+async function mutateChapterSource(page: Page, chapterId: number, marker: string): Promise<void> {
+  const response = await page.request.post(`${apiBaseUrl}/api/test/mutate-chapter-source`, {
+    data: { chapter_id: chapterId, marker },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
+async function seedBudgetPausedJob(page: Page): Promise<{ job_id: number; status: string }> {
+  const response = await page.request.post(`${apiBaseUrl}/api/test/seed-budget-paused-job`);
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as { job_id: number; status: string };
 }

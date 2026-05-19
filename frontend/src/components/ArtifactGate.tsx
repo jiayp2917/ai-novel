@@ -35,18 +35,10 @@ export function ArtifactGate({
   const selectedArtifact = useArtifact(artifactId);
   const publishDecisions = usePublishDecisions();
   const selectedPublishDecision = (publishDecisions.data ?? []).find((decision) => decision.artifact_id === artifactId);
-  const validation = validateArtifactContext(selectedArtifact.data, {
-    baseChapterId,
-    baseSourceFileId,
-    artifactKind,
-  });
+  const validation = validateArtifactContext(selectedArtifact.data, { baseChapterId, baseSourceFileId, artifactKind });
   const canOperate = Boolean(artifactId && selectedArtifact.data && validation.valid && !selectedArtifact.isLoading);
   const publishBlockedReason = selectedArtifact.data
-    ? publishBlockReason({
-        artifact: selectedArtifact.data,
-        allowPublish,
-        diffReady: Boolean(diffText),
-      })
+    ? publishBlockReason({ artifact: selectedArtifact.data, allowPublish, diffReady: Boolean(diffText) })
     : null;
   const canPublish = canOperate && !publishBlockedReason;
 
@@ -71,28 +63,27 @@ export function ArtifactGate({
         method: 'POST',
         body: JSON.stringify({}),
       }),
-    onMutate: () => pushTask({ label: '审核候选', status: 'running', detail: `正在审核候选 #${artifactId}。` }),
-    onSuccess: (result) =>
-      {
-        void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
-        void queryClient.invalidateQueries({ queryKey: ['model-calls'] });
-        pushTask({
-        label: '审核候选',
+    onMutate: () => pushTask({ label: '检查草稿', status: 'running', detail: `正在检查草稿 #${artifactId}。` }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
+      void queryClient.invalidateQueries({ queryKey: ['model-calls'] });
+      pushTask({
+        label: '检查草稿',
         status: result.passed ? 'succeeded' : 'failed',
-        detail: `审核 #${result.review_id}：${result.passed ? '通过' : '未通过'}。`,
-        });
-      },
-    onError: (error: Error) => pushTask({ label: '审核候选', status: 'failed', detail: error.message }),
+        detail: `检查 #${result.review_id}：${result.passed ? '通过' : '需修改或人工判断'}。`,
+      });
+    },
+    onError: (error: Error) => pushTask({ label: '检查草稿', status: 'failed', detail: error.message }),
   });
 
   const diffMutation = useMutation({
     mutationFn: () => apiRequest<{ diff: string }>(`/api/artifacts/${artifactId}/diff`),
-    onMutate: () => pushTask({ label: '生成差异', status: 'running', detail: `正在生成候选 #${artifactId} 的 diff。` }),
+    onMutate: () => pushTask({ label: '查看改动', status: 'running', detail: `正在整理草稿 #${artifactId} 的改动对比。` }),
     onSuccess: (result) => {
       setDiffText(result.diff);
-      pushTask({ label: '生成差异', status: 'succeeded', detail: `候选 #${artifactId} 的差异已生成。` });
+      pushTask({ label: '查看改动', status: 'succeeded', detail: `草稿 #${artifactId} 的改动对比已生成。` });
     },
-    onError: (error: Error) => pushTask({ label: '生成差异', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '查看改动', status: 'failed', detail: error.message }),
   });
 
   const publishMutation = useMutation({
@@ -101,7 +92,7 @@ export function ArtifactGate({
         method: 'POST',
         body: JSON.stringify({ approved_by_user: true }),
       }),
-    onMutate: () => pushTask({ label: '发布候选', status: 'running', detail: `发布门正在写回候选 #${artifactId}。` }),
+    onMutate: () => pushTask({ label: '确认写回', status: 'running', detail: `正在把草稿 #${artifactId} 写回正文。` }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['source-file-content'] });
       void queryClient.invalidateQueries({ queryKey: ['chapter-content'] });
@@ -110,18 +101,19 @@ export function ArtifactGate({
       void queryClient.invalidateQueries({ queryKey: ['memory-items'] });
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       void queryClient.invalidateQueries({ queryKey: ['publish-decisions'] });
+      void queryClient.invalidateQueries({ queryKey: ['chapter-versions'] });
       void queryClient.invalidateQueries({ queryKey: ['events'] });
-      pushTask({ label: '发布候选', status: 'succeeded', detail: `候选 #${artifactId} 已通过发布门写回。` });
+      pushTask({ label: '确认写回', status: 'succeeded', detail: `草稿 #${artifactId} 已写回正文，并已生成备份。` });
     },
-    onError: (error: Error) => pushTask({ label: '发布候选', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '确认写回', status: 'failed', detail: error.message }),
   });
 
   return (
     <div className="artifact-gate">
       <p className="form-hint">
         {artifactKind === 'candidate'
-          ? '候选保存在 runtime/artifacts。下一步：选择候选 -> 审核 -> 查看差异 -> 人工确认发布。'
-          : '提案保存在 runtime/artifacts。设定和章纲只审核与查看差异，不通过这里直接发布。'}
+          ? '草稿会先保存在草稿箱。建议顺序：选择草稿 -> 检查草稿 -> 查看改动 -> 确认写回正文。'
+          : '设定和章纲只保存为提案，可检查和查看改动，但不会在这里直接覆盖源文件。'}
       </p>
       <CandidateSelector
         artifactId={artifactId}
@@ -139,10 +131,10 @@ export function ArtifactGate({
       />
       <div className="action-row">
         <button type="button" className="secondary-button" onClick={() => reviewMutation.mutate()} disabled={!canOperate || reviewMutation.isPending}>
-          审核候选
+          检查草稿
         </button>
         <button type="button" className="secondary-button" onClick={() => diffMutation.mutate()} disabled={!canOperate || diffMutation.isPending}>
-          查看差异
+          查看改动
         </button>
         {allowPublish ? (
           <button
@@ -152,16 +144,16 @@ export function ArtifactGate({
             disabled={!canPublish || publishMutation.isPending}
             title={publishBlockedReason ?? undefined}
           >
-            人工确认发布
+            确认写回正文
           </button>
         ) : (
-          <button type="button" className="secondary-button" disabled title="设定和章纲目前只生成提案，不在前端直接覆盖源文件。">
-            提案不直接发布
+          <button type="button" className="secondary-button" disabled title="设定和章纲只生成提案，不在这里覆盖源文件。">
+            提案不直接写回
           </button>
         )}
       </div>
-      {artifactId && selectedArtifact.isLoading && <p className="form-hint">正在校验候选归属...</p>}
-      {artifactId && selectedArtifact.isError && <p className="form-hint form-hint--error">候选不存在，不能继续操作。</p>}
+      {artifactId && selectedArtifact.isLoading && <p className="form-hint">正在校验草稿归属...</p>}
+      {artifactId && selectedArtifact.isError && <p className="form-hint form-hint--error">草稿不存在，不能继续操作。</p>}
       {!validation.valid && <p className="form-hint form-hint--error">{validation.message}</p>}
       {selectedArtifact.data && (
         <ArtifactTrace
@@ -201,29 +193,29 @@ function ArtifactTrace({
   const publishBlockedReason = publishBlockReason({ artifact, allowPublish, diffReady });
 
   return (
-    <section className="artifact-trace" aria-label="候选追踪">
+    <section className="artifact-trace" aria-label="草稿追踪">
       <div className="artifact-trace-grid">
-        <span><strong>artifact</strong>#{artifact.id} · {artifact.kind}</span>
-        <span><strong>源 hash</strong>{shortHash(artifact.base_source_file_hash)}</span>
-        <span><strong>候选 hash</strong>{shortHash(artifact.sha256)}</span>
+        <span><strong>草稿</strong>#{artifact.id} · {artifact.kind}</span>
+        <span><strong>源文件</strong>{shortHash(artifact.base_source_file_hash)}</span>
+        <span><strong>草稿</strong>{shortHash(artifact.sha256)}</span>
         <span><strong>章节版本</strong>{artifact.base_chapter_version_id ?? '无'}</span>
-        <span><strong>审核</strong>{review ? (review.passed ? '通过' : review.manual_required ? '需人工处理' : '未通过') : '未审核'}</span>
-        <span><strong>diff</strong>{diffReady || publishDecision?.diff_path ? '已生成' : '未生成'}</span>
-        <span><strong>备份</strong>{publishDecision?.backup_path ?? '发布后生成'}</span>
-        <span><strong>发布决策</strong>{publishDecision ? `#${publishDecision.id}` : '暂无'}</span>
+        <span><strong>检查</strong>{review ? reviewLabel(review.passed, review.manual_required) : '未检查'}</span>
+        <span><strong>改动</strong>{diffReady || publishDecision?.diff_path ? '已查看' : '未查看'}</span>
+        <span><strong>备份</strong>{publishDecision?.backup_path ?? '写回后生成'}</span>
+        <span><strong>写回</strong>{publishDecision ? `#${publishDecision.id}` : '暂无'}</span>
       </div>
-      {publishBlockedReason && <p className="form-hint form-hint--error">不能发布：{publishBlockedReason}</p>}
+      {publishBlockedReason && <p className="form-hint form-hint--error">暂不能写回：{publishBlockedReason}</p>}
       {review && !review.passed && review.issues.length > 0 && (
         <details className="artifact-review-detail">
-          <summary>查看审核问题 JSON</summary>
+          <summary>查看检查问题</summary>
           <pre>{JSON.stringify(review.issues, null, 2)}</pre>
         </details>
       )}
       {publishDecision && (
         <div className="artifact-publish-detail">
-          <span>diff：{publishDecision.diff_path}</span>
-          <span>backup：{publishDecision.backup_path}</span>
-          {publishDecision.force && <span>强制发布原因：{publishDecision.force_reason || '未填写'}</span>}
+          <span>改动记录：{publishDecision.diff_path}</span>
+          <span>备份：{publishDecision.backup_path}</span>
+          {publishDecision.force && <span>强制写回原因：{publishDecision.force_reason || '未填写'}</span>}
         </div>
       )}
     </section>
@@ -240,25 +232,32 @@ function publishBlockReason({
   diffReady: boolean;
 }): string | null {
   if (!allowPublish || artifact.kind !== 'candidate') {
-    return '设定/章纲提案只能人工采纳，不走普通正文发布门。';
+    return '设定/章纲提案只能人工采纳，不在这里写回正文。';
   }
   if (!artifact.latest_review) {
-    return '候选还没有审核记录。';
+    return '草稿还没有检查记录。';
   }
   if (!artifact.latest_review.passed) {
-    return artifact.latest_review.manual_required ? '审核要求人工处理。' : '审核未通过。';
+    return artifact.latest_review.manual_required ? '检查结果需要人工判断。' : '检查未通过。';
   }
   if (!diffReady && !artifact.latest_publish) {
-    return '尚未在前端查看 diff。';
+    return '尚未查看改动对比。';
   }
   if (artifact.latest_publish) {
-    return '该候选已有发布记录，请重新生成候选后再发布。';
+    return '这个草稿已经写回过，请保存新的草稿后再写回。';
   }
   return null;
 }
 
 function shortHash(value: string | null): string {
   return value ? `${value.slice(0, 10)}...` : '无';
+}
+
+function reviewLabel(passed: boolean, manualRequired: boolean): string {
+  if (passed) {
+    return '检查通过';
+  }
+  return manualRequired ? '需人工判断' : '需修改';
 }
 
 function PublishGateChecklist({
@@ -277,14 +276,14 @@ function PublishGateChecklist({
   const reviewPassed = Boolean(artifact?.latest_review?.passed);
   const published = Boolean(artifact?.latest_publish);
   const items = [
-    { label: '已选择候选', done: artifactSelected && contextValid },
-    { label: allowPublish ? '审核已通过' : '提案可审核，不直接发布', done: allowPublish ? reviewPassed : true },
-    { label: '差异已生成', done: diffReady },
-    { label: allowPublish ? '等待人工确认发布' : '设定/章纲保持人工采纳', done: allowPublish ? published : true },
+    { label: '已选择草稿', done: artifactSelected && contextValid },
+    { label: allowPublish ? '检查已通过' : '提案可检查，不直接写回', done: allowPublish ? reviewPassed : true },
+    { label: '已查看改动', done: diffReady },
+    { label: allowPublish ? '等待确认写回正文' : '设定/章纲保持人工采纳', done: allowPublish ? published : true },
   ];
 
   return (
-    <div className="publish-checklist" aria-label="发布门校验清单">
+    <div className="publish-checklist" aria-label="写回检查清单">
       {items.map((item) => (
         <span className={item.done ? 'publish-check publish-check--done' : 'publish-check'} key={item.label}>
           {item.done ? '✓' : '·'} {item.label}
@@ -304,19 +303,19 @@ function validateArtifactContext(
   if (artifact.kind !== expected.artifactKind) {
     return {
       valid: false,
-      message: `候选类型不匹配：当前需要 ${expected.artifactKind}，实际是 ${artifact.kind}。`,
+      message: `草稿类型不匹配：当前需要 ${expected.artifactKind}，实际是 ${artifact.kind}。`,
     };
   }
   if (expected.baseChapterId !== undefined && artifact.base_chapter_id !== expected.baseChapterId) {
     return {
       valid: false,
-      message: '候选不属于当前章节，不能在此处审核、查看差异或发布。',
+      message: '草稿不属于当前章节，不能在这里检查、查看改动或写回。',
     };
   }
   if (expected.baseSourceFileId !== undefined && artifact.base_source_file_id !== expected.baseSourceFileId) {
     return {
       valid: false,
-      message: '候选不属于当前源文件，不能在此处审核或查看差异。',
+      message: '提案不属于当前文件，不能在这里检查或查看改动。',
     };
   }
   return { valid: true, message: '' };
@@ -353,28 +352,24 @@ function CandidateSelector({
   return (
     <section className="candidate-panel">
       <div className="candidate-stepper">
-        <span className={artifactId ? 'step step--done' : 'step'}>1 选择候选</span>
-        <span className="step">2 审核</span>
-        <span className="step">3 差异</span>
-        <span className="step">4 发布</span>
+        <span className={artifactId ? 'step step--done' : 'step'}>1 选择草稿</span>
+        <span className="step">2 检查</span>
+        <span className="step">3 改动</span>
+        <span className="step">4 写回</span>
       </div>
       <div className="manual-artifact">
         <input
           value={manualId}
-          onChange={(event) => setManualId(event.target.value)}
-          placeholder="手动输入 artifact_id"
+          onChange={(event) => setManualId(event.target.value.replace(/[^\d]/g, ''))}
+          placeholder="手动输入草稿编号"
         />
         <button
           type="button"
           className="secondary-button"
-          onClick={() => {
-            const parsed = Number.parseInt(manualId, 10);
-            if (Number.isFinite(parsed) && parsed > 0) {
-              setArtifactId(parsed);
-            }
-          }}
+          onClick={() => setArtifactId(manualId ? Number.parseInt(manualId, 10) : null)}
+          disabled={manualId.trim() === ''}
         >
-          绑定候选
+          绑定草稿
         </button>
       </div>
       <div className="candidate-list">
@@ -386,23 +381,22 @@ function CandidateSelector({
             onClick={() => setArtifactId(candidate.id)}
           >
             <strong>#{candidate.id}</strong>
-            <span>{candidate.latest_review ? (candidate.latest_review.passed ? '审核通过' : '审核未过') : '未审核'}</span>
-            <span>{publishStatusLabel(candidate.latest_publish, artifactKind, allowPublish)}</span>
+            <span>{artifactKind === 'candidate' ? '草稿' : '提案'} · {reviewStatus(candidate.latest_review)}</span>
+            <small>{candidate.latest_publish ? '已写回' : allowPublish ? '未写回' : '不直接写回'}</small>
           </button>
         ))}
-        {candidates.length === 0 && <p className="muted">暂无当前对象候选。可以生成候选或手动绑定 artifact_id。</p>}
+        {candidates.length === 0 && <p className="muted">暂无草稿。先在写作界面保存草稿，或生成审核快照。</p>}
       </div>
     </section>
   );
 }
 
-function publishStatusLabel(
-  latestPublish: { published_at: string } | null,
-  artifactKind: string,
-  allowPublish: boolean,
-) {
-  if (!allowPublish || artifactKind !== 'candidate') {
-    return '不可直接发布';
+function reviewStatus(review: { passed: boolean; manual_required: boolean } | null): string {
+  if (!review) {
+    return '未检查';
   }
-  return latestPublish ? '已发布' : '未发布';
+  if (review.passed) {
+    return '检查通过';
+  }
+  return review.manual_required ? '需人工判断' : '需修改';
 }

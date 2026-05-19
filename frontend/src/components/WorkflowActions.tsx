@@ -227,9 +227,10 @@ export function JobList({ compact = false }: { compact?: boolean }) {
         {(jobs.data ?? []).map((job) => (
           <article className={`job-card job-card--${job.status}`} key={job.id}>
             <div>
-              <strong>#{job.id} {job.type}</strong>
-              <span>{job.status}</span>
+              <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
+              <span>{jobStatusLabel(job.status)}</span>
             </div>
+            {job.status === 'paused_budget' && <p>今日调用额度已暂停。查看原因后，可在 AI 助手页点击“继续执行任务”。</p>}
             {job.error && <p>{job.error}</p>}
             {job.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
           </article>
@@ -238,4 +239,34 @@ export function JobList({ compact = false }: { compact?: boolean }) {
       </div>
     </section>
   );
+}
+
+function jobTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    revise_from_annotations: '按批注修订草稿',
+    test_budget_resume: '预算暂停恢复测试',
+    pipeline_run: '自动流水线',
+    generate_chapter_draft: '生成章节草稿',
+    review_chapter_candidate: '检查章节草稿',
+    fix_chapter_candidate: '修订章节草稿',
+    publish_chapter_candidate: '确认写回正文',
+    summarize_published_chapter: '整理章节记忆',
+  };
+  return labels[type] ?? type;
+}
+
+function jobStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    queued: '等待执行',
+    running: '执行中',
+    succeeded: '已完成',
+    done: '已完成',
+    approved: '已通过',
+    manual_required: '需人工处理',
+    failed: '失败',
+    failed_terminal: '失败',
+    failed_retryable: '可重试',
+    paused_budget: '今日调用额度已暂停',
+  };
+  return labels[status] ?? status;
 }

@@ -314,6 +314,27 @@ def test_jobs_api_lists_jobs_and_cost_dashboard(tmp_path: Path, monkeypatch: pyt
     monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
     get_settings.cache_clear()
     reset_engine()
+
+
+def test_worker_can_resume_test_budget_paused_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    with Session(get_engine()) as session:
+        job = Job(type="test_budget_resume", status="paused_budget", payload_json='{"test_budget_pause": true}', error="paused")
+        session.add(job)
+        session.commit()
+
+        result = JobWorker(session).run_once()
+
+        assert result["started"] == 1
+        assert result["succeeded"] == 1
+        session.refresh(job)
+        assert job.status == "succeeded"
+        assert job.error is None
+    get_settings.cache_clear()
+    reset_engine()
     Base.metadata.create_all(get_engine())
     with Session(get_engine()) as session:
         session.add(Job(type="revise_from_annotations", status="queued", payload_json='{"chapter_id": 1}'))
@@ -370,6 +391,7 @@ def test_jobs_api_lists_jobs_and_cost_dashboard(tmp_path: Path, monkeypatch: pyt
     jobs = client.get("/api/jobs")
     dashboard = client.get("/api/jobs/cost-dashboard")
     calls = client.get("/api/jobs/model-calls")
+    usage_report = client.get("/api/jobs/model-usage-report")
     events = client.get("/api/jobs/events")
     decisions = client.get("/api/jobs/publish-decisions")
 
@@ -382,6 +404,12 @@ def test_jobs_api_lists_jobs_and_cost_dashboard(tmp_path: Path, monkeypatch: pyt
     calls_payload = calls.json()
     assert calls_payload[0]["usage"] == {}
     assert calls_payload[1]["usage"]["total_tokens"] == 9
+    assert usage_report.status_code == 200
+    usage_payload = usage_report.json()
+    assert usage_payload["summary"]["model_calls"] == 2
+    assert usage_payload["role_usage"][0]["role"] in {"reviewer", "writer"}
+    assert "role_quality" in usage_payload
+    assert "context_budget" in usage_payload
     assert events.status_code == 200
     assert events.json()[0]["payload"]["diff_path"] == "diffs/artifact_7.diff"
     assert decisions.status_code == 200

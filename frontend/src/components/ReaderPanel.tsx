@@ -36,6 +36,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const setCatalogPanelOpen = useWorkbenchStore((state) => state.setCatalogPanelOpen);
   const setWritingFullscreen = useWorkbenchStore((state) => state.setWritingFullscreen);
   const setSelectedChapterId = useWorkbenchStore((state) => state.setSelectedChapterId);
+  const recentChapterIds = useWorkbenchStore((state) => state.recentChapterIds);
   const closeChapterTab = useWorkbenchStore((state) => state.closeChapterTab);
   const setDraftAnnotationSelection = useWorkbenchStore((state) => state.setDraftAnnotationSelection);
   const setActiveArtifactId = useWorkbenchStore((state) => state.setActiveArtifactId);
@@ -48,6 +49,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const [editing, setEditing] = useState(false);
   const [draftActive, setDraftActive] = useState(false);
   const [draftText, setDraftText] = useState('');
+  const [jumpValue, setJumpValue] = useState('');
   const queryClient = useQueryClient();
   const chapters = useChapters();
   const content = useChapterContent(selectedChapterId);
@@ -142,9 +144,9 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
     },
     onMutate: () =>
       pushTask({
-        label: content.data ? '保存正文候选' : '保存源文件提案',
+        label: content.data ? '保存草稿' : '保存提案',
         status: 'running',
-        detail: '保存到 runtime/artifacts，不覆盖源文件。',
+        detail: '正在保存到草稿箱，不会覆盖正式正文。',
       }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
@@ -152,14 +154,14 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
       setRightPanelOpen(true);
       setInspectorTab('candidates');
       pushTask({
-        label: content.data ? '保存正文候选' : '保存源文件提案',
+        label: content.data ? '保存草稿' : '保存提案',
         status: 'succeeded',
-        detail: `候选 #${result.artifact_id} 已创建，右侧栏已打开，可继续审核或查看差异。`,
+        detail: content.data ? '草稿已保存，可继续检查、对比改动或确认写回。' : '提案已保存，可继续检查和对比。',
       });
     },
     onError: (error: Error) =>
       pushTask({
-        label: content.data ? '保存正文候选' : '保存源文件提案',
+        label: content.data ? '保存草稿' : '保存提案',
         status: 'failed',
         detail: error.message,
       }),
@@ -193,6 +195,40 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
       .filter((chapter): chapter is NonNullable<typeof chapter> => Boolean(chapter)),
     [chapters.data, openChapterTabIds],
   );
+  const sortedChapters = useMemo(
+    () => [...(chapters.data ?? [])].sort((a, b) => a.chapter_no - b.chapter_no),
+    [chapters.data],
+  );
+  const currentChapterIndex = selectedChapterId === null ? -1 : sortedChapters.findIndex((chapter) => chapter.id === selectedChapterId);
+  const previousChapter = currentChapterIndex > 0 ? sortedChapters[currentChapterIndex - 1] : null;
+  const nextChapter = currentChapterIndex >= 0 && currentChapterIndex < sortedChapters.length - 1 ? sortedChapters[currentChapterIndex + 1] : null;
+  const recentChapters = useMemo(
+    () => recentChapterIds
+      .map((id) => chapters.data?.find((chapter) => chapter.id === id))
+      .filter((chapter): chapter is NonNullable<typeof chapter> => Boolean(chapter))
+      .slice(0, 5),
+    [chapters.data, recentChapterIds],
+  );
+
+  const jumpToChapter = () => {
+    const normalized = jumpValue.trim();
+    if (!normalized) {
+      return;
+    }
+    const numeric = Number.parseInt(normalized, 10);
+    const target = sortedChapters.find((chapter) =>
+      Number.isFinite(numeric)
+        ? chapter.chapter_no === numeric
+        : chapter.title.includes(normalized),
+    );
+    if (!target) {
+      pushTask({ label: '章节跳转', status: 'failed', detail: `没有找到“${normalized}”对应的章节。` });
+      return;
+    }
+    setSelectedChapterId(target.id);
+    setJumpValue('');
+    pushTask({ label: '章节跳转', status: 'succeeded', detail: `已打开第 ${target.chapter_no} 章：${target.title}` });
+  };
 
   return (
     <main className={readerClasses}>
@@ -255,13 +291,46 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
             )}
             <span className="reader-tab">右键工具</span>
           </div>
-          {editing && <p className="form-hint">当前只是在编辑草稿；点击“保存候选”会写入 runtime/artifacts，不会直接覆盖源文件。</p>}
+          {editing && <p className="form-hint">当前只是在编辑草稿；点击“保存草稿”会进入草稿箱，不会直接覆盖正式正文。</p>}
         </div>
         <div className="reader-meta">
           <span>{activeContent ? `${activeText.length} 字符` : '等待选择'}</span>
           <span>批注 {activeAnnotations.length}</span>
           <span>{dirty ? '草稿未保存' : '源文件未改动'}</span>
           {variant === 'writing' && <span>{writingFullscreen ? '全屏写作' : '标准布局'}</span>}
+          {variant === 'writing' && (
+            <div className="chapter-jump">
+              <button type="button" className="icon-button" onClick={() => previousChapter && setSelectedChapterId(previousChapter.id)} disabled={!previousChapter}>
+                上一章
+              </button>
+              <input
+                aria-label="跳转章节"
+                value={jumpValue}
+                onChange={(event) => setJumpValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    jumpToChapter();
+                  }
+                }}
+                placeholder="章号/标题"
+              />
+              <button type="button" className="icon-button" onClick={jumpToChapter}>
+                跳转
+              </button>
+              <button type="button" className="icon-button" onClick={() => nextChapter && setSelectedChapterId(nextChapter.id)} disabled={!nextChapter}>
+                下一章
+              </button>
+            </div>
+          )}
+          {variant === 'writing' && recentChapters.length > 0 && (
+            <div className="recent-chapters" aria-label="最近打开章节">
+              {recentChapters.map((chapter) => (
+                <button type="button" className="reader-tab" key={chapter.id} onClick={() => setSelectedChapterId(chapter.id)}>
+                  {String(chapter.chapter_no).padStart(3, '0')}
+                </button>
+              ))}
+            </div>
+          )}
           {variant === 'writing' && (
             <button type="button" className="icon-button" onClick={toggleCatalog}>
               {catalogPanelOpen ? '隐藏目录' : '打开目录'}
@@ -273,7 +342,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
             </button>
           )}
           <button type="button" className="icon-button" onClick={() => saveDraftMutation.mutate()} disabled={!canSaveDraft || saveDraftMutation.isPending}>
-            保存候选
+            保存草稿
           </button>
           {content.data && (
             <button type="button" className="icon-button" onClick={() => snapshotMutation.mutate()} disabled={snapshotMutation.isPending}>

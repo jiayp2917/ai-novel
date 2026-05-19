@@ -10,6 +10,8 @@ export const STORAGE_KEYS = {
   writingFullscreen: 'novel-editor-writing-fullscreen',
   chapterFilter: 'novel-editor-chapter-filter',
   inspectorTab: 'novel-editor-inspector-tab',
+  workspaceBookmarks: 'novel-editor-workspace-bookmarks',
+  recentChapterIds: 'novel-editor-recent-chapter-ids',
 } as const;
 
 export function initialTheme(): ThemeMode {
@@ -85,6 +87,6 @@ export function initialActiveView(): ActiveView {
 
 export function initialInspectorTab(): InspectorTab {
   const raw = storedString(STORAGE_KEYS.inspectorTab);
-  const valid: InspectorTab[] = ['annotations', 'candidates', 'review', 'memory'];
+  const valid: InspectorTab[] = ['annotations', 'candidates', 'history', 'review', 'memory'];
   return valid.includes(raw as InspectorTab) ? (raw as InspectorTab) : 'annotations';
 }

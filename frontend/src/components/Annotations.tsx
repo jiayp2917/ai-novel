@@ -19,6 +19,7 @@ import {
   utf16ToCodePointOffset,
 } from '../utils';
 import { ArtifactGate } from './ArtifactGate';
+import { VersionHistory } from './VersionHistory';
 
 export function AnnotationComposer({
   chapterId,
@@ -215,6 +216,7 @@ export function AnnotationSidebar({
         {[
           ['annotations', '批注'],
           ['candidates', selectedChapterId ? '候选' : '提案'],
+          ['history', '版本'],
           ['review', '审核'],
           ['memory', '记忆'],
         ].map(([tab, label]) => (
@@ -329,6 +331,11 @@ export function AnnotationSidebar({
           ) : (
             <p className="muted">选择正文、设定或章纲后查看候选/提案。</p>
           )}
+        </div>
+      )}
+      {inspectorTab === 'history' && (
+        <div className="inspector-section inspector-section--fill inspector-section--history">
+          <VersionHistory chapterId={selectedChapterId} />
         </div>
       )}
       {inspectorTab === 'review' && (

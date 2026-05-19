@@ -12,6 +12,14 @@ from sqlalchemy import select
 
 from backend.app.db.models import Artifact, Job, ModelCall, PublishDecision, Review
 from backend.app.db.session import get_session_local
+from backend.app.services.pipeline.local_rules import (
+    TARGET_CHARS_HARD_MAX,
+    TARGET_CHARS_HARD_MIN,
+    TARGET_CHARS_MAX,
+    TARGET_CHARS_MIN,
+    count_chinese_chars,
+)
+from backend.app.services.workspace import workspace_runtime_root
 
 
 def main() -> int:
@@ -42,14 +50,23 @@ def render_report(
     artifacts: list[Artifact] | None = None,
     decisions: list[PublishDecision] | None = None,
 ) -> str:
+    report_data = collect_model_usage_report(
+        calls,
+        jobs,
+        reviews=reviews,
+        artifacts=artifacts,
+        decisions=decisions,
+        include_raw=True,
+    )
     reviews = reviews or []
     artifacts = artifacts or []
     decisions = decisions or []
-    by_route = _model_call_buckets(calls)
-    artifact_metrics = _artifact_metrics(artifacts)
-    review_metrics = _review_metrics(reviews, artifacts)
-    publish_metrics = _publish_metrics(decisions)
-    job_counts = Counter(job.status for job in jobs)
+    raw_metrics = report_data["_raw"]
+    by_route = raw_metrics["by_route"]
+    artifact_metrics = raw_metrics["artifact_metrics"]
+    review_metrics = raw_metrics["review_metrics"]
+    publish_metrics = raw_metrics["publish_metrics"]
+    job_counts = raw_metrics["job_counts"]
 
     lines = [
         "# 模型调用与流程统计报告",
@@ -112,6 +129,57 @@ def render_report(
     return "\n".join(lines) + "\n"
 
 
+def collect_model_usage_report(
+    calls: list[ModelCall],
+    jobs: list[Job],
+    *,
+    reviews: list[Review] | None = None,
+    artifacts: list[Artifact] | None = None,
+    decisions: list[PublishDecision] | None = None,
+    runtime_root: Path | None = None,
+    chapter_lookup: dict[int, dict[str, Any]] | None = None,
+    include_raw: bool = False,
+) -> dict[str, Any]:
+    reviews = reviews or []
+    artifacts = artifacts or []
+    decisions = decisions or []
+    runtime_root = runtime_root or _default_runtime_root()
+    by_route = _model_call_buckets(calls)
+    artifact_metrics = _artifact_metrics(artifacts)
+    review_metrics = _review_metrics(reviews, artifacts)
+    publish_metrics = _publish_metrics(decisions)
+    job_counts = Counter(job.status for job in jobs)
+
+    report = {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "usage_note": "本地 usage 是日志可见下限；真实消耗以供应商控制台为准。",
+        "summary": _summary(calls, jobs, by_route, job_counts),
+        "role_usage": _role_usage(by_route),
+        "role_quality": {
+            "reviewer": _reviewer_quality(review_metrics),
+            "writer": _writer_quality(artifacts, runtime_root),
+            "fixer": _fixer_quality(reviews, artifacts),
+        },
+        "context_budget": _context_budget(artifacts, runtime_root, chapter_lookup or {}),
+        "recommendations": _recommendations_data(review_metrics, artifact_metrics),
+        "publish": {
+            "total": publish_metrics["total"],
+            "published": publish_metrics["published"],
+            "user_approved": publish_metrics["user_approved"],
+            "forced": publish_metrics["forced"],
+        },
+    }
+    if include_raw:
+        report["_raw"] = {
+            "by_route": by_route,
+            "artifact_metrics": artifact_metrics,
+            "review_metrics": review_metrics,
+            "publish_metrics": publish_metrics,
+            "job_counts": job_counts,
+        }
+    return report
+
+
 def _model_call_buckets(calls: Iterable[ModelCall]) -> dict[tuple[str, str, str], dict[str, Any]]:
     by_route: dict[tuple[str, str, str], dict[str, Any]] = defaultdict(
         lambda: {
@@ -149,6 +217,246 @@ def _model_call_buckets(calls: Iterable[ModelCall]) -> dict[tuple[str, str, str]
         if call.error:
             bucket["errors"][_sanitize_error(call.error)] += 1
     return by_route
+
+
+def _summary(
+    calls: list[ModelCall],
+    jobs: list[Job],
+    by_route: dict[tuple[str, str, str], dict[str, Any]],
+    job_counts: Counter[str],
+) -> dict[str, Any]:
+    total_calls = len(calls)
+    succeeded = sum(1 for call in calls if call.status == "succeeded")
+    failed = sum(1 for call in calls if call.status == "failed")
+    paused_budget = sum(1 for call in calls if call.status == "paused_budget")
+    input_chars = sum(call.input_chars for call in calls)
+    output_chars = sum(call.output_chars for call in calls)
+    provider_tokens = sum(bucket["provider_tokens"] for bucket in by_route.values())
+    estimated_million_tokens = sum(bucket["estimated_million_tokens"] for bucket in by_route.values())
+    elapsed = sum(bucket["elapsed_seconds"] for bucket in by_route.values())
+    return {
+        "model_calls": total_calls,
+        "success": succeeded,
+        "failed": failed,
+        "paused_budget": paused_budget,
+        "success_rate": _ratio(succeeded, total_calls),
+        "input_chars": input_chars,
+        "output_chars": output_chars,
+        "provider_tokens": provider_tokens,
+        "estimated_million_tokens": estimated_million_tokens,
+        "avg_elapsed_seconds": elapsed / total_calls if total_calls else 0,
+        "jobs": {
+            "total": len(jobs),
+            "by_status": dict(sorted(job_counts.items())),
+        },
+    }
+
+
+def _role_usage(by_route: dict[tuple[str, str, str], dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for (role, provider, model), bucket in sorted(by_route.items()):
+        calls_count = bucket["calls"]
+        rows.append(
+            {
+                "role": role,
+                "provider": provider,
+                "model": model,
+                "calls": calls_count,
+                "success": bucket["success"],
+                "failed": bucket["failed"],
+                "paused_budget": bucket["paused_budget"],
+                "success_rate": _ratio(bucket["success"], calls_count),
+                "cache_hits": bucket["cache_hits"],
+                "input_chars": bucket["input_chars"],
+                "output_chars": bucket["output_chars"],
+                "avg_input_chars": bucket["input_chars"] / calls_count if calls_count else 0,
+                "avg_output_chars": bucket["output_chars"] / calls_count if calls_count else 0,
+                "provider_tokens": bucket["provider_tokens"],
+                "estimated_million_tokens": bucket["estimated_million_tokens"],
+                "avg_elapsed_seconds": bucket["elapsed_seconds"] / calls_count if calls_count else 0,
+                "usage_sources": dict(bucket["usage_sources"]),
+                "errors": [
+                    {"message": message, "count": count}
+                    for message, count in bucket["errors"].most_common(5)
+                ],
+            }
+        )
+    return rows
+
+
+def _reviewer_quality(metrics: dict[str, Any]) -> dict[str, Any]:
+    issue_count = metrics["issue_count"]
+    return {
+        "reviews": metrics["total"],
+        "passed": metrics["passed"],
+        "pass_rate": _ratio(metrics["passed"], metrics["total"]),
+        "manual_required": metrics["manual_required"],
+        "issues": issue_count,
+        "evidence_issues": metrics["evidence_issue_count"],
+        "no_evidence_issues": metrics["no_evidence_issue_count"],
+        "evidence_rate": _ratio(metrics["evidence_issue_count"], issue_count),
+        "local_rule_issues": metrics["source_counts"].get("local_rule", 0),
+        "json_parse_failed": metrics["parse_failed"],
+        "owner_counts": dict(metrics["owner_counts"]),
+        "severity_counts": dict(metrics["severity_counts"]),
+        "source_counts": dict(metrics["source_counts"]),
+    }
+
+
+def _writer_quality(artifacts: list[Artifact], runtime_root: Path) -> dict[str, Any]:
+    candidates = [
+        artifact
+        for artifact in artifacts
+        if artifact.kind == "candidate" and _metadata(artifact).get("task_type") == "generate_chapter_draft"
+    ]
+    passed = 0
+    too_short = 0
+    too_long = 0
+    unknown = 0
+    counts: list[dict[str, Any]] = []
+    for artifact in candidates:
+        count = _artifact_chinese_count(artifact, runtime_root)
+        if count is None:
+            unknown += 1
+            counts.append({"artifact_id": artifact.id, "base_chapter_id": artifact.base_chapter_id, "chinese_chars": None, "status": "unknown"})
+            continue
+        if count < TARGET_CHARS_HARD_MIN:
+            too_short += 1
+            status = "too_short"
+        elif count > TARGET_CHARS_HARD_MAX:
+            too_long += 1
+            status = "too_long"
+        else:
+            passed += 1
+            status = "passed"
+        counts.append({"artifact_id": artifact.id, "base_chapter_id": artifact.base_chapter_id, "chinese_chars": count, "status": status})
+    known = len(candidates) - unknown
+    return {
+        "candidate_count": len(candidates),
+        "known_count": known,
+        "unknown_count": unknown,
+        "word_count_passed": passed,
+        "word_count_failed": too_short + too_long,
+        "word_count_pass_rate": _ratio(passed, known),
+        "too_short": too_short,
+        "too_long": too_long,
+        "target_min": TARGET_CHARS_MIN,
+        "target_max": TARGET_CHARS_MAX,
+        "hard_min": TARGET_CHARS_HARD_MIN,
+        "hard_max": TARGET_CHARS_HARD_MAX,
+        "samples": counts[-20:],
+    }
+
+
+def _fixer_quality(reviews: list[Review], artifacts: list[Artifact]) -> dict[str, Any]:
+    review_by_artifact: dict[int, list[Review]] = defaultdict(list)
+    for review in reviews:
+        review_by_artifact[review.artifact_id].append(review)
+    for artifact_reviews in review_by_artifact.values():
+        artifact_reviews.sort(key=lambda review: (review.created_at, review.id or 0))
+
+    fix_artifacts = [
+        artifact
+        for artifact in artifacts
+        if artifact.kind == "candidate" and _metadata(artifact).get("task_type") == "fix_chapter_candidate"
+    ]
+    reviewed = 0
+    passed = 0
+    failed = 0
+    waiting = 0
+    unknown = 0
+    samples: list[dict[str, Any]] = []
+    for artifact in fix_artifacts:
+        artifact_reviews = review_by_artifact.get(artifact.id, [])
+        metadata = _metadata(artifact)
+        if artifact_reviews:
+            reviewed += 1
+            latest = artifact_reviews[-1]
+            if latest.passed:
+                passed += 1
+                status = "passed"
+            else:
+                failed += 1
+                status = "failed"
+            review_id = latest.id
+        else:
+            waiting += 1
+            status = "waiting_review"
+            review_id = None
+        if metadata.get("parent_artifact_id") is None:
+            unknown += 1
+        samples.append(
+            {
+                "artifact_id": artifact.id,
+                "base_chapter_id": artifact.base_chapter_id,
+                "parent_artifact_id": metadata.get("parent_artifact_id"),
+                "review_id": review_id,
+                "status": status,
+            }
+        )
+    return {
+        "fixed_candidate_count": len(fix_artifacts),
+        "reviewed_count": reviewed,
+        "passed": passed,
+        "failed": failed,
+        "waiting_review": waiting,
+        "unknown_count": unknown,
+        "rereview_pass_rate": _ratio(passed, reviewed),
+        "samples": samples[-20:],
+    }
+
+
+def _context_budget(artifacts: list[Artifact], runtime_root: Path, chapter_lookup: dict[int, dict[str, Any]]) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    total_reports = 0
+    degraded_count = 0
+    for artifact in artifacts:
+        metadata = _metadata(artifact)
+        reports = _context_reports_from_artifact(artifact, metadata, runtime_root)
+        for report in reports:
+            total_reports += 1
+            degraded = report.get("context_degraded") is True or bool(report.get("dropped_sections"))
+            if not degraded:
+                continue
+            degraded_count += 1
+            chapter_id = _int_or_none(report.get("chapter_id")) or artifact.base_chapter_id
+            chapter_info = chapter_lookup.get(chapter_id or -1, {})
+            records.append(
+                {
+                    "artifact_id": artifact.id,
+                    "base_chapter_id": artifact.base_chapter_id,
+                    "chapter_id": chapter_id,
+                    "chapter_no": chapter_info.get("chapter_no"),
+                    "chapter_title": chapter_info.get("title"),
+                    "task_type": report.get("task_type") or metadata.get("task_type") or artifact.kind,
+                    "budget": report.get("budget"),
+                    "input_chars": report.get("input_chars"),
+                    "selected_sections": _section_summary(report.get("selected_sections")),
+                    "dropped_sections": _section_summary(report.get("dropped_sections")),
+                    "reason": "超过本次 AI 输入预算，系统按优先级移除了低优先级上下文片段",
+                    "created_at": artifact.created_at.isoformat() if artifact.created_at else None,
+                }
+            )
+    records.sort(key=lambda item: (item.get("created_at") or "", item["artifact_id"]), reverse=True)
+    return {
+        "context_reports": total_reports,
+        "degraded_count": degraded_count,
+        "affected_chapters": records[:20],
+    }
+
+
+def _recommendations_data(review_metrics: dict[str, Any], artifact_metrics: dict[str, Any]) -> list[str]:
+    recommendations = [
+        "路由调整必须依赖足够样本；单次探测成功不等于岗位适配。",
+        "本地 token/usage 是日志可见下限，真实消耗以供应商控制台为准。",
+    ]
+    if review_metrics["no_evidence_issue_count"]:
+        recommendations.append("存在无证据问题，自动修复链路应继续转人工/admin，不进入 fixer。")
+    if review_metrics["parse_failed"]:
+        recommendations.append("存在审核 JSON 解析失败，应优先收紧 reviewer 提示词和结构化输出约束。")
+    if artifact_metrics["context_degraded"]:
+        recommendations.append("存在上下文裁剪记录，扩大生产批次前应检查被裁剪片段是否影响当前章节。")
+    return recommendations
 
 
 def _review_metrics(reviews: list[Review], artifacts: list[Artifact]) -> dict[str, Any]:
@@ -385,6 +693,78 @@ def _metadata(artifact: Artifact) -> dict[str, Any]:
     return _loads_json(artifact.metadata_json, {})
 
 
+def _default_runtime_root() -> Path:
+    try:
+        return workspace_runtime_root()
+    except Exception:
+        return Path("runtime")
+
+
+def _artifact_chinese_count(artifact: Artifact, runtime_root: Path) -> int | None:
+    path = _safe_artifact_path(runtime_root, artifact.path)
+    if path is None or not path.exists() or not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return count_chinese_chars(text)
+
+
+def _context_reports_from_artifact(artifact: Artifact, metadata: dict[str, Any], runtime_root: Path) -> list[dict[str, Any]]:
+    reports: list[dict[str, Any]] = []
+    inline_report = metadata.get("context_report")
+    if isinstance(inline_report, dict):
+        reports.append(inline_report)
+    if artifact.kind == "context_report":
+        path = _safe_artifact_path(runtime_root, artifact.path)
+        if path is not None and path.exists() and path.is_file():
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                payload = None
+            if isinstance(payload, dict):
+                reports.append(payload)
+        elif metadata.get("context_degraded") is True:
+            reports.append(metadata)
+    return reports
+
+
+def _safe_artifact_path(runtime_root: Path, relative_path: str) -> Path | None:
+    root = runtime_root.resolve()
+    try:
+        path = (root / relative_path).resolve()
+    except OSError:
+        return None
+    if path == root or root in path.parents:
+        return path
+    return None
+
+
+def _section_summary(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    sections: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        sections.append(
+            {
+                "name": str(item.get("name") or "unknown"),
+                "chars": int(_number(item.get("chars")) or 0),
+            }
+        )
+    return sections
+
+
+def _int_or_none(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
 def _loads_json(raw: str | None, fallback: Any) -> Any:
     try:
         payload = json.loads(raw or "")
@@ -432,6 +812,12 @@ def _pct(part: int | float, whole: int | float) -> str:
     if not whole:
         return "0%"
     return f"{(float(part) / float(whole) * 100):.1f}%"
+
+
+def _ratio(part: int | float, whole: int | float) -> float:
+    if not whole:
+        return 0.0
+    return float(part) / float(whole)
 
 
 if __name__ == "__main__":

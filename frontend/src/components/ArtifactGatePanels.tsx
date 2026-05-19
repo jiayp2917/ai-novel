@@ -159,7 +159,7 @@ export function CandidateSelector({
             <small>{candidate.latest_publish ? '已写回' : allowPublish ? '未写回' : '不直接写回'}</small>
           </button>
         ))}
-        {candidates.length === 0 && <p className="muted">暂无草稿。先在写作界面保存草稿，或生成审核快照。</p>}
+        {candidates.length === 0 && <p className="muted">暂无草稿。先在写作界面保存正文版本，或在 AI 工作台生成候选。</p>}
       </div>
     </section>
   );

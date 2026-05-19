@@ -86,6 +86,15 @@ def test_annotation_learner_rejects_unresolved_annotation(tmp_path: Path) -> Non
         AnnotationLearner(session).learn([annotation.id])
 
 
+def test_annotation_learner_reports_no_learnable_annotations(tmp_path: Path) -> None:
+    session = make_session()
+    result = AnnotationLearner(session).learn()
+
+    assert result["created"] == 0
+    assert result["learnable_annotations"] == 0
+    assert result["message"] == "没有可学习的已解决批注，请先在批注中标记为已解决。"
+
+
 def test_annotation_insight_api_list_and_update(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "content"))

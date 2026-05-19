@@ -26,8 +26,11 @@ class AnnotationLearner:
     def learn(self, annotation_ids: list[int] | None = None) -> dict:
         annotations = self._source_annotations(annotation_ids)
         created: list[AnnotationInsight] = []
+        learnable_count = 0
         for annotation in annotations:
             payloads = self._insights_from_annotation(annotation)
+            if payloads:
+                learnable_count += 1
             for payload in payloads:
                 if self._exists(payload["kind"], payload["content"]):
                     continue
@@ -35,7 +38,12 @@ class AnnotationLearner:
             if payloads:
                 annotation.status = "learned"
         self.session.commit()
-        return {"created": len(created), "insight_ids": [insight.id for insight in created]}
+        return {
+            "created": len(created),
+            "insight_ids": [insight.id for insight in created],
+            "learnable_annotations": learnable_count,
+            "message": self._learn_message(created_count=len(created), annotation_count=len(annotations), learnable_count=learnable_count),
+        }
 
     def list_insights(self) -> list[AnnotationInsight]:
         return list(self.session.scalars(select(AnnotationInsight).order_by(AnnotationInsight.id.desc())))
@@ -119,6 +127,15 @@ class AnnotationLearner:
 
     def _shorten(self, text: str) -> str:
         return text.strip()[:300]
+
+    def _learn_message(self, *, created_count: int, annotation_count: int, learnable_count: int) -> str:
+        if annotation_count == 0:
+            return "没有可学习的已解决批注，请先在批注中标记为已解决。"
+        if learnable_count == 0:
+            return "已解决批注中没有可沉淀的规则，请补充类型、说明或示例改写后再学习。"
+        if created_count == 0:
+            return "可学习批注已处理过，本次没有新增规则。"
+        return f"已新增 {created_count} 条记忆规则。"
 
 
 def publish_decision_ids(session: Session) -> list[int]:

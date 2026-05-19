@@ -39,14 +39,17 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
     }
     return Number.parseInt(match[1], 10);
   });
-  await openSidebarIfClosed(page);
-  await page.getByRole('button', { name: '版本', exact: true }).click();
+  await expect(page.locator('.annotations-panel')).toBeVisible();
+  await expect(page.locator('.inspector-tab--active')).toHaveText('版本');
   await expect(page.locator('.version-history')).toContainText('正文版本');
   const savedVersion = page.locator('.history-card').filter({ hasText: `#${versionId}` });
   await expect(savedVersion).toBeVisible();
-  await savedVersion.getByRole('button', { name: '切换查看' }).click();
+  await expect(savedVersion).toHaveClass(/history-card--active/);
+  await expect(savedVersion.getByRole('button', { name: '正在查看' })).toBeVisible();
   await expect(page.locator('.reader-header h1')).toContainText('历史版本');
   await expect(page.locator('.cm-content')).toContainText('新手路径正文版本保存验证');
+  await expect(savedVersion.getByRole('button', { name: '删除版本' })).toBeEnabled();
+  await expect(page.locator('.history-card--current').getByRole('button', { name: '当前正文不可删' })).toBeDisabled();
   page.once('dialog', (dialog) => dialog.accept());
   await savedVersion.getByRole('button', { name: '发布此版本' }).click();
   await expect(page.locator('.task-latest')).toContainText('已发布');
@@ -131,6 +134,13 @@ test('core views remain separated and writing layout does not use bottom overlay
   await expect(page.locator('.inspector-tabs button')).toHaveText(['批注', '版本', '记忆']);
   await expect(page.locator('.inspector-tabs')).not.toContainText('候选');
   await expect(page.locator('.inspector-tabs')).not.toContainText('审核');
+  await expect(page.getByRole('button', { name: '审核快照' })).toHaveCount(0);
+  const menuBoxForSnapshot = await page.locator('.cm-content').boundingBox();
+  expect(menuBoxForSnapshot).not.toBeNull();
+  await page.mouse.click(menuBoxForSnapshot!.x + 80, menuBoxForSnapshot!.y + 80, { button: 'right' });
+  await expect(page.locator('.context-menu')).toBeVisible();
+  await expect(page.locator('.context-menu')).not.toContainText('生成审核快照');
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '收起侧栏' }).click();
   await expect(page.locator('.editor-shell')).toHaveClass(/inspector-hidden/);
 });
@@ -500,6 +510,31 @@ test('drag selection can create annotation from context menu', async ({ page }) 
   await page.getByPlaceholder('记录问题、判断或人工决策。').fill('拖选批注 E2E 验证。');
   await page.getByRole('button', { name: '添加批注' }).click();
   await expect(page.locator('.annotation-card').filter({ hasText: '拖选批注 E2E 验证。' })).toBeVisible();
+});
+
+test('memory learning gives feedback and learns only resolved annotations', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  await mainNav(page, '写作').click();
+  await openChapter(page, '001');
+  await openSidebarIfClosed(page);
+  await page.getByRole('button', { name: '记忆', exact: true }).click();
+  await page.getByRole('button', { name: '学习已解决批注' }).click();
+  await expect(page.locator('.insight-panel')).toContainText('没有可学习的已解决批注');
+
+  await page.getByRole('button', { name: '批注', exact: true }).click();
+  await createManualAnnotation(page, '李燃站在队伍最后', '学习路径：避免开篇人物位置描述过淡。');
+  const annotation = page.locator('.annotation-card').filter({ hasText: '学习路径：避免开篇人物位置描述过淡。' });
+  await expect(annotation).toBeVisible();
+  await annotation.getByRole('button', { name: '标为已处理' }).click();
+  await expect(annotation).toContainText('已处理');
+
+  await page.getByRole('button', { name: '记忆', exact: true }).click();
+  await page.getByRole('button', { name: '学习已解决批注' }).click();
+  await expect(page.locator('.insight-panel')).toContainText(/已新增 \d+ 条记忆规则|本次没有新增规则/);
 });
 
 async function switchWorkspace(page: Page) {

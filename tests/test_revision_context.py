@@ -298,6 +298,79 @@ def test_draft_candidate_api_creates_artifact_without_writing_source(tmp_path: P
     reset_engine()
 
 
+def test_delete_chapter_version_removes_non_current_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi.testclient import TestClient
+
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    seed_project(content_root)
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    with Session(get_engine()) as session:
+        LibraryScanner(session, content_root).scan()
+        chapter = session.scalars(select(Chapter)).first()
+        assert chapter is not None
+        chapter_id = chapter.id
+
+    client = TestClient(app)
+    draft = "# 第001章 First\nVersion to delete."
+    created = client.post(f"/api/chapters/{chapter_id}/draft-candidate", json={"text": draft})
+    assert created.status_code == 200
+    version_id = created.json()["version_id"]
+    with Session(get_engine()) as session:
+        version = session.get(ChapterVersion, version_id)
+        assert version is not None
+        assert version.text_snapshot_path is not None
+        snapshot_path = runtime_root / version.text_snapshot_path
+        assert snapshot_path.exists()
+
+    deleted = client.delete(f"/api/chapters/{chapter_id}/versions/{version_id}")
+
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+    with Session(get_engine()) as session:
+        assert session.get(ChapterVersion, version_id) is None
+    assert not snapshot_path.exists()
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_delete_current_chapter_version_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi.testclient import TestClient
+
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    seed_project(content_root)
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    with Session(get_engine()) as session:
+        LibraryScanner(session, content_root).scan()
+        chapter = session.scalars(select(Chapter)).first()
+        assert chapter is not None
+        chapter_id = chapter.id
+        current_version_id = chapter.current_version_id
+
+    client = TestClient(app)
+    deleted = client.delete(f"/api/chapters/{chapter_id}/versions/{current_version_id}")
+
+    assert deleted.status_code == 400
+    assert "Current chapter version cannot be deleted" in deleted.json()["detail"]
+    with Session(get_engine()) as session:
+        assert session.get(ChapterVersion, current_version_id) is not None
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_draft_proposal_api_creates_artifact_without_writing_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from fastapi.testclient import TestClient
 

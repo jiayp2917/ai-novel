@@ -69,6 +69,37 @@ class ChapterVersionService:
         )
         return {"chapter_id": chapter.id, "version_id": version.id, "diff": diff_text}
 
+    def delete_version(self, chapter_id: int, version_id: int) -> dict:
+        chapter, version = self._chapter_and_version(chapter_id, version_id)
+        if version.id == chapter.current_version_id:
+            raise ChapterVersionError("Current chapter version cannot be deleted")
+        snapshot_path = version.text_snapshot_path
+        deleted_snapshot = False
+        if snapshot_path:
+            path = self._runtime_safe_path(snapshot_path)
+            if path.exists():
+                path.unlink()
+                deleted_snapshot = True
+        self.session.delete(version)
+        self.session.add(
+            Event(
+                event_type="chapter_version_deleted",
+                entity_type="chapter_version",
+                entity_id=version_id,
+                payload_json=json.dumps(
+                    {
+                        "chapter_id": chapter.id,
+                        "source_file_id": chapter.source_file_id,
+                        "snapshot_path": snapshot_path,
+                        "deleted_snapshot": deleted_snapshot,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+        )
+        self.session.commit()
+        return {"chapter_id": chapter.id, "version_id": version_id, "deleted": True, "deleted_snapshot": deleted_snapshot}
+
     def publish_version(self, chapter_id: int, version_id: int, *, approved_by_user: bool) -> dict:
         if not approved_by_user:
             raise ChapterVersionError("Version publish requires approved_by_user=true")

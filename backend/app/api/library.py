@@ -115,6 +115,7 @@ def list_chapter_versions(chapter_id: int, session: Session = Depends(get_db)) -
                 version.id != chapter.current_version_id
                 and (version.text_snapshot_path or version.source_file_hash == chapter.source_file.sha256)
             ),
+            "can_delete": version.id != chapter.current_version_id,
         }
         for version in versions
     ]
@@ -153,6 +154,16 @@ def publish_chapter_version(
             version_id,
             approved_by_user=payload.approved_by_user,
         )
+    except ChapterVersionError as exc:
+        detail = str(exc)
+        status = 404 if detail in {"Chapter not found", "Chapter version not found"} else 400
+        raise HTTPException(status_code=status, detail=detail) from exc
+
+
+@router.delete("/chapters/{chapter_id}/versions/{version_id}")
+def delete_chapter_version(chapter_id: int, version_id: int, session: Session = Depends(get_db)) -> dict:
+    try:
+        return ChapterVersionService(session).delete_version(chapter_id, version_id)
     except ChapterVersionError as exc:
         detail = str(exc)
         status = 404 if detail in {"Chapter not found", "Chapter version not found"} else 400

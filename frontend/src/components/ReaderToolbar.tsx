@@ -20,8 +20,6 @@ type ReaderToolbarProps = {
   recentChapters: Chapter[];
   canSaveDraft: boolean;
   savingDraft: boolean;
-  hasChapter: boolean;
-  snapshotting: boolean;
   onSetEditing: (editing: boolean) => void;
   onStartEditing: () => void;
   onDiscardDraft: () => void;
@@ -31,7 +29,6 @@ type ReaderToolbarProps = {
   onToggleCatalog: () => void;
   onToggleFullscreen: () => void;
   onSaveDraft: () => void;
-  onSnapshot: () => void;
   onToggleRightPanel: () => void;
   onBackToCurrentVersion: () => void;
 };
@@ -56,8 +53,6 @@ export function ReaderToolbar({
   recentChapters,
   canSaveDraft,
   savingDraft,
-  hasChapter,
-  snapshotting,
   onSetEditing,
   onStartEditing,
   onDiscardDraft,
@@ -67,7 +62,6 @@ export function ReaderToolbar({
   onToggleCatalog,
   onToggleFullscreen,
   onSaveDraft,
-  onSnapshot,
   onToggleRightPanel,
   onBackToCurrentVersion,
 }: ReaderToolbarProps) {
@@ -149,11 +143,6 @@ export function ReaderToolbar({
         <button type="button" className="icon-button" onClick={onSaveDraft} disabled={!canSaveDraft || savingDraft}>
           保存正文版本
         </button>
-        {hasChapter && (
-          <button type="button" className="icon-button" onClick={onSnapshot} disabled={snapshotting}>
-            审核快照
-          </button>
-        )}
         <button type="button" className="icon-button" onClick={onToggleRightPanel}>
           {rightPanelOpen ? '收起侧栏' : '打开侧栏'}
         </button>

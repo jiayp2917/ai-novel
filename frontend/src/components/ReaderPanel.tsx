@@ -44,7 +44,6 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const recentChapterIds = useWorkbenchStore((state) => state.recentChapterIds);
   const closeChapterTab = useWorkbenchStore((state) => state.closeChapterTab);
   const setDraftAnnotationSelection = useWorkbenchStore((state) => state.setDraftAnnotationSelection);
-  const setActiveArtifactId = useWorkbenchStore((state) => state.setActiveArtifactId);
   const setInspectorTab = useWorkbenchStore((state) => state.setInspectorTab);
   const pushTask = useWorkbenchStore((state) => state.pushTask);
   const [searchQuery, setSearchQuery] = useState('');
@@ -175,11 +174,18 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       void queryClient.invalidateQueries({ queryKey: ['chapter-versions'] });
-      setActiveArtifactId(result.artifact_id);
+      if (content.data && result.version_id) {
+        setRightPanelOpen(true);
+        setInspectorTab('history');
+        setSelectedChapterVersionId(result.version_id);
+        setEditing(false);
+        setDraftActive(false);
+        setDraftText('');
+      }
       pushTask({
         label: content.data ? '保存正文版本' : '保存提案',
         status: 'succeeded',
-        detail: content.data ? `正文版本 #${result.version_id ?? result.artifact_id} 已保存。需要发布时，请在右侧“版本”中确认。` : `提案 #${result.artifact_id} 已保存。需要检查和对比时，请到资料库或 AI 工作台处理。`,
+        detail: content.data ? `正文版本 #${result.version_id ?? result.artifact_id} 已保存，可切换查看、发布或删除。` : `提案 #${result.artifact_id} 已保存。需要检查和对比时，请到资料库或 AI 工作台处理。`,
       });
     },
     onError: (error: Error) =>
@@ -188,19 +194,6 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         status: 'failed',
         detail: error.message,
       }),
-  });
-
-  const snapshotMutation = useMutation({
-    mutationFn: () =>
-      apiRequest<DraftResponse>(`/api/chapters/${content.data?.id}/snapshot-candidate`, {
-        method: 'POST',
-      }),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
-      setActiveArtifactId(result.artifact_id);
-      pushTask({ label: '生成审核快照', status: 'succeeded', detail: `候选 #${result.artifact_id} 已创建。请到 AI 工作台检查或写回。` });
-    },
-    onError: (error: Error) => pushTask({ label: '生成审核快照', status: 'failed', detail: error.message }),
   });
 
   const canSaveDraft = Boolean(activeContent && activeText.trim() && (content.data || isSourceProposal));
@@ -306,8 +299,6 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         recentChapters={recentChapters}
         canSaveDraft={canSaveDraft}
         savingDraft={saveDraftMutation.isPending}
-        hasChapter={Boolean(content.data)}
-        snapshotting={snapshotMutation.isPending}
         onSetEditing={setEditing}
         onStartEditing={startEditing}
         onDiscardDraft={() => {
@@ -321,7 +312,6 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         onToggleCatalog={toggleCatalog}
         onToggleFullscreen={toggleFullscreen}
         onSaveDraft={() => saveDraftMutation.mutate()}
-        onSnapshot={() => snapshotMutation.mutate()}
         onToggleRightPanel={toggleRightPanel}
         onBackToCurrentVersion={() => setSelectedChapterVersionId(null)}
       />
@@ -364,9 +354,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         dirty={dirty}
         canAnnotateSelection={canAnnotateSelection}
         canSaveDraft={canSaveDraft}
-        hasChapter={Boolean(content.data)}
         savingDraft={saveDraftMutation.isPending}
-        snapshotting={snapshotMutation.isPending}
         onCreateAnnotation={() => {
           setDraftAnnotationSelection(menuSelection);
           setInspectorTab('annotations');
@@ -375,7 +363,6 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         }}
         onStartEditing={startEditing}
         onSaveDraft={() => saveDraftMutation.mutate()}
-        onSnapshot={() => snapshotMutation.mutate()}
         onOpenSidebar={() => setRightPanelOpen(true)}
       />
     </main>

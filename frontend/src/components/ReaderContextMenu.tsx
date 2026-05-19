@@ -6,13 +6,10 @@ export function ReaderContextMenu({
   dirty,
   canAnnotateSelection,
   canSaveDraft,
-  hasChapter,
   savingDraft,
-  snapshotting,
   onCreateAnnotation,
   onStartEditing,
   onSaveDraft,
-  onSnapshot,
   onOpenSidebar,
 }: {
   menu: ContextMenuState;
@@ -20,13 +17,10 @@ export function ReaderContextMenu({
   dirty: boolean;
   canAnnotateSelection: boolean;
   canSaveDraft: boolean;
-  hasChapter: boolean;
   savingDraft: boolean;
-  snapshotting: boolean;
   onCreateAnnotation: () => void;
   onStartEditing: () => void;
   onSaveDraft: () => void;
-  onSnapshot: () => void;
   onOpenSidebar: () => void;
 }) {
   if (!menu) {
@@ -47,11 +41,6 @@ export function ReaderContextMenu({
       <button type="button" onClick={onSaveDraft} disabled={!canSaveDraft || savingDraft}>
         保存正文版本
       </button>
-      {hasChapter && (
-        <button type="button" onClick={onSnapshot} disabled={snapshotting}>
-          生成审核快照
-        </button>
-      )}
       <button type="button" onClick={onOpenSidebar}>
         打开右侧栏
       </button>

@@ -87,6 +87,7 @@ export type ChapterVersion = {
   is_current: boolean;
   can_preview: boolean;
   can_publish: boolean;
+  can_delete: boolean;
 };
 
 export type ChapterVersionContent = {

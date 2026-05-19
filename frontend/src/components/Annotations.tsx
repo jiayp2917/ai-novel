@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import { apiRequest } from '../api';
 import {
   useAnnotations,
@@ -14,28 +13,23 @@ import type { AnnotationUpdatePayload } from './AnnotationDetail';
 import { AnnotationComposer } from './AnnotationForm';
 import { InsightPanel } from './AnnotationInsightPanel';
 import { AnnotationList } from './AnnotationList';
-import { ArtifactGate } from './ArtifactGate';
 import { VersionHistory } from './VersionHistory';
 
 export function AnnotationSidebar({
   embedded = false,
-  showArtifactGate = true,
 }: {
   embedded?: boolean;
-  showArtifactGate?: boolean;
 } = {}) {
   const selectedChapterId = useWorkbenchStore((state) => state.selectedChapterId);
   const selectedSourceFileId = useWorkbenchStore((state) => state.selectedSourceFileId);
   const selectedAnnotationId = useWorkbenchStore((state) => state.selectedAnnotationId);
   const selectedAnnotationIds = useWorkbenchStore((state) => state.selectedAnnotationIds);
   const draftAnnotationSelection = useWorkbenchStore((state) => state.draftAnnotationSelection);
-  const activeArtifactId = useWorkbenchStore((state) => state.activeArtifactId);
   const inspectorTab = useWorkbenchStore((state) => state.inspectorTab);
   const setInspectorTab = useWorkbenchStore((state) => state.setInspectorTab);
   const setSelectedAnnotationId = useWorkbenchStore((state) => state.setSelectedAnnotationId);
   const toggleAnnotationSelection = useWorkbenchStore((state) => state.toggleAnnotationSelection);
   const setDraftAnnotationSelection = useWorkbenchStore((state) => state.setDraftAnnotationSelection);
-  const setActiveArtifactId = useWorkbenchStore((state) => state.setActiveArtifactId);
   const selectAnnotationForRevision = useWorkbenchStore((state) => state.selectAnnotationForRevision);
   const removeAnnotationFromSelection = useWorkbenchStore((state) => state.removeAnnotationFromSelection);
   const annotations = useAnnotations(selectedChapterId);
@@ -44,10 +38,9 @@ export function AnnotationSidebar({
   const sourceContent = useSourceFileContent(selectedSourceFileId);
   const activeAnnotations = selectedChapterId ? annotations.data ?? [] : sourceAnnotations.data ?? [];
   const activeContentText = chapterContent.data?.text ?? sourceContent.data?.text ?? '';
-  const activeArtifactKind = selectedChapterId ? 'candidate' : selectedSourceFileId ? 'proposal' : null;
   const queryClient = useQueryClient();
   const pushTask = useWorkbenchStore((state) => state.pushTask);
-  const [diffText, setDiffText] = useState('');
+  const safeInspectorTab = inspectorTab === 'history' || inspectorTab === 'memory' ? inspectorTab : 'annotations';
 
   const invalidateAnnotations = () => {
     void queryClient.invalidateQueries({ queryKey: ['annotations', selectedChapterId] });
@@ -126,13 +119,11 @@ export function AnnotationSidebar({
       <div className="inspector-tabs" role="tablist" aria-label="右侧工作栏">
         {[
           ['annotations', '批注'],
-          ['candidates', selectedChapterId ? '候选' : '提案'],
           ['history', '版本'],
-          ['review', '审核'],
           ['memory', '记忆'],
         ].map(([tab, label]) => (
           <button
-            className={inspectorTab === tab ? 'inspector-tab inspector-tab--active' : 'inspector-tab'}
+            className={safeInspectorTab === tab ? 'inspector-tab inspector-tab--active' : 'inspector-tab'}
             key={tab}
             type="button"
             onClick={() => setInspectorTab(tab as typeof inspectorTab)}
@@ -141,7 +132,7 @@ export function AnnotationSidebar({
           </button>
         ))}
       </div>
-      {inspectorTab === 'annotations' && (
+      {safeInspectorTab === 'annotations' && (
         <>
           <div className="annotation-compose-slot">
             {draftAnnotationSelection !== undefined ? (
@@ -191,46 +182,12 @@ export function AnnotationSidebar({
           />
         </>
       )}
-      {inspectorTab === 'candidates' && (
-        <div className="inspector-section inspector-section--fill">
-          <div className="compact-title">
-            <div>
-              <p className="eyebrow">候选与发布门</p>
-              <h3>{selectedChapterId ? '当前正文候选' : '当前源文件提案'}</h3>
-            </div>
-          </div>
-          {showArtifactGate && activeArtifactKind ? (
-            <ArtifactGate
-              artifactId={activeArtifactId}
-              setArtifactId={setActiveArtifactId}
-              diffText={diffText}
-              setDiffText={setDiffText}
-              baseChapterId={selectedChapterId ?? undefined}
-              baseSourceFileId={selectedSourceFileId ?? undefined}
-              artifactKind={activeArtifactKind}
-              allowPublish={Boolean(selectedChapterId)}
-            />
-          ) : (
-            <p className="muted">选择正文、设定或章纲后查看候选/提案。</p>
-          )}
-        </div>
-      )}
-      {inspectorTab === 'history' && (
+      {safeInspectorTab === 'history' && (
         <div className="inspector-section inspector-section--fill inspector-section--history">
           <VersionHistory chapterId={selectedChapterId} />
         </div>
       )}
-      {inspectorTab === 'review' && (
-        <div className="inspector-section inspector-section--fill">
-          <p className="eyebrow">审核视图</p>
-          <h3>审核记录与阻断原因</h3>
-          <p className="muted">审核中心负责证据约束 JSON 诊断。正文页只展示入口，不在此处直接调用模型。</p>
-          <button type="button" className="secondary-button" onClick={() => setInspectorTab('candidates')}>
-            先选择候选
-          </button>
-        </div>
-      )}
-      {inspectorTab === 'memory' && (
+      {safeInspectorTab === 'memory' && (
         <div className="inspector-section inspector-section--fill">
           <InsightPanel />
         </div>

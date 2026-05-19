@@ -96,6 +96,13 @@ export function initialActiveView(): ActiveView {
 
 export function initialInspectorTab(): InspectorTab {
   const raw = storedString(STORAGE_KEYS.inspectorTab);
+  const migrations: Record<string, InspectorTab> = {
+    candidates: 'annotations',
+    review: 'annotations',
+  };
+  if (raw && migrations[raw]) {
+    return migrations[raw];
+  }
   const valid: InspectorTab[] = ['annotations', 'candidates', 'history', 'review', 'memory'];
   return valid.includes(raw as InspectorTab) ? (raw as InspectorTab) : 'annotations';
 }

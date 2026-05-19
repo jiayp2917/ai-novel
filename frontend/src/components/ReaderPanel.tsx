@@ -152,12 +152,10 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       setActiveArtifactId(result.artifact_id);
-      setRightPanelOpen(true);
-      setInspectorTab('candidates');
       pushTask({
         label: content.data ? '保存草稿' : '保存提案',
         status: 'succeeded',
-        detail: content.data ? '草稿已保存，可继续检查、对比改动或确认写回。' : '提案已保存，可继续检查和对比。',
+        detail: content.data ? `草稿 #${result.artifact_id} 已保存。需要检查、查看改动或写回时，请到 AI 工作台处理。` : `提案 #${result.artifact_id} 已保存。需要检查和对比时，请到资料库或 AI 工作台处理。`,
       });
     },
     onError: (error: Error) =>
@@ -176,9 +174,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       setActiveArtifactId(result.artifact_id);
-      setRightPanelOpen(true);
-      setInspectorTab('candidates');
-      pushTask({ label: '生成审核快照', status: 'succeeded', detail: `候选 #${result.artifact_id} 已创建。` });
+      pushTask({ label: '生成审核快照', status: 'succeeded', detail: `候选 #${result.artifact_id} 已创建。请到 AI 工作台检查或写回。` });
     },
     onError: (error: Error) => pushTask({ label: '生成审核快照', status: 'failed', detail: error.message }),
   });

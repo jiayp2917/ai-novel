@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../api';
 import { useChapters, useHealth, useSources, useWorkspace } from '../hooks';
 import { useWorkbenchStore } from '../store';
@@ -22,6 +22,7 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
   const [lastResult, setLastResult] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const syncedWorkspaceRoot = useRef<string | null>(null);
 
   const current = workspace.data ?? workspaceStatusFromHealth(health.data);
   const sourceCount = sources.data?.length ?? 0;
@@ -33,7 +34,8 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
   );
 
   useEffect(() => {
-    if (workspace.data?.root) {
+    if (workspace.data?.root && syncedWorkspaceRoot.current !== workspace.data.root) {
+      syncedWorkspaceRoot.current = workspace.data.root;
       setPath(workspace.data.root);
     }
   }, [workspace.data?.root]);

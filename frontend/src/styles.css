@@ -230,8 +230,10 @@ pre {
 .main {
   min-width: 0;
   min-height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
@@ -318,10 +320,12 @@ pre {
   flex: 1;
   overflow: auto;
   padding: 24px;
+  padding-bottom: 72px;
 }
 
 .page-editor {
   padding: 0;
+  padding-bottom: 0;
   overflow: hidden;
 }
 
@@ -558,12 +562,12 @@ pre {
 .editor-shell {
   height: calc(100vh - 102px);
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 320px;
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
   overflow: hidden;
 }
 
 .editor-shell.inspector-hidden {
-  grid-template-columns: 220px minmax(0, 1fr) 0;
+  grid-template-columns: 260px minmax(0, 1fr) 0;
 }
 
 .editor-shell.inspector-hidden .inspector {
@@ -572,7 +576,7 @@ pre {
 }
 
 .editor-shell.catalog-hidden {
-  grid-template-columns: 0 minmax(0, 1fr) 320px;
+  grid-template-columns: 0 minmax(0, 1fr) 300px;
 }
 
 .editor-shell.catalog-hidden.inspector-hidden,
@@ -640,12 +644,46 @@ pre {
 .catalog-section h3,
 .volume-title {
   display: flex;
+  width: 100%;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.catalog-toggle,
+.volume-title {
+  min-height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+}
+
+.catalog-toggle:hover,
+.volume-title:hover {
+  color: var(--ink);
+}
+
+.catalog-arrow {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  transition: transform 0.16s ease;
+}
+
+.catalog-arrow--open {
+  transform: rotate(90deg);
+}
+
+.catalog-toggle strong,
+.volume-title strong {
+  margin-left: auto;
+  font-size: 11px;
 }
 
 .source-row,
@@ -911,7 +949,7 @@ pre {
 
 .inspector-tabs {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   padding: 8px;
   border-bottom: 1px solid var(--line);
@@ -1800,12 +1838,12 @@ textarea {
 }
 
 .task-panel {
+  position: relative;
+  z-index: 35;
   width: 100%;
-  max-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 18px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -1813,12 +1851,14 @@ textarea {
   box-shadow: none;
 }
 
-.task-panel--expanded {
+.task-panel__bar {
   width: 100%;
-  max-height: 220px;
-  display: grid;
-  align-items: stretch;
-  padding: 8px 18px;
+  height: 43px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px;
+  overflow: hidden;
 }
 
 :root[data-theme="dark"] .task-panel {
@@ -1846,14 +1886,46 @@ textarea {
   white-space: nowrap;
 }
 
-.task-panel:not(.task-panel--expanded) .cost-dashboard {
+.task-panel .cost-dashboard {
   max-width: min(260px, 22vw);
   flex-wrap: nowrap;
   overflow: hidden;
 }
 
-.task-panel:not(.task-panel--expanded) .cost-dashboard span:nth-child(n + 4) {
+.task-panel .cost-dashboard span:nth-child(n + 4) {
   display: none;
+}
+
+.task-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 16px;
+  right: 16px;
+  max-height: min(360px, calc(100vh - 130px));
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--popover-bg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.task-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cost-dashboard--popover {
+  max-width: none !important;
+  flex-wrap: wrap !important;
+}
+
+.cost-dashboard--popover span {
+  display: inline-flex !important;
 }
 
 .task-latest {
@@ -1892,7 +1964,7 @@ textarea {
 }
 
 .task-strip {
-  max-height: 96px;
+  max-height: 220px;
   overflow: auto;
 }
 
@@ -2005,12 +2077,12 @@ textarea {
   }
 
   .editor-shell {
-    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 
   .inspector {
     position: fixed;
-    top: 58px;
+    top: 102px;
     right: 0;
     bottom: 0;
     z-index: 45;
@@ -2025,6 +2097,12 @@ textarea {
     display: block;
     transform: translateX(100%);
     border-left: 0;
+  }
+
+  .task-popover {
+    left: 8px;
+    right: 8px;
+    max-height: min(320px, calc(100vh - 120px));
   }
 
   .span-3,

@@ -31,7 +31,7 @@ export const createNavigationSlice: SliceCreator = (set, get) => ({
         draftAnnotationSelection: view === 'planning' || view === 'writing' ? undefined : state.draftAnnotationSelection,
         activeArtifactId: view === 'writing' || view === 'planning' ? state.activeArtifactId : null,
         rightPanelOpen: view === 'planning' ? true : view === 'writing' ? false : state.rightPanelOpen,
-        inspectorTab: view === 'planning' ? 'candidates' as InspectorTab : state.inspectorTab,
+        inspectorTab: view === 'writing' ? 'annotations' as InspectorTab : view === 'planning' ? 'candidates' as InspectorTab : state.inspectorTab,
       };
       storeValue(STORAGE_KEYS.selectedChapterId, next.selectedChapterId);
       storeValue(STORAGE_KEYS.selectedSourceFileId, next.selectedSourceFileId);

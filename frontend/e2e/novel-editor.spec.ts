@@ -31,20 +31,28 @@ test('new user 10-minute path can add workspace, scan, read, save draft, review,
   await page.locator('.cm-content').click();
   await page.keyboard.type('\n新手路径草稿保存验证。');
   await page.getByRole('button', { name: '保存草稿' }).click();
-  await expect(page.locator('.task-latest')).toContainText('保存草稿');
-  await openSidebarIfClosed(page);
-  await page.getByRole('button', { name: '版本' }).click();
-  await expect(page.locator('.version-history')).toContainText('已保存草稿');
-  await expect(page.locator('.history-card').filter({ hasText: '草稿 #' })).toBeVisible();
-
-  await page.getByRole('button', { name: '候选' }).click();
-  const draftId = await activeDraftId(page);
+  await expect(page.locator('.task-latest')).toContainText(/草稿 #\d+ 已保存/);
+  const draftId = await page.locator('.task-latest').innerText().then((text) => {
+    const match = text.match(/#(\d+)/);
+    if (!match) {
+      throw new Error(`Draft id not found in task text: ${text}`);
+    }
+    return Number.parseInt(match[1], 10);
+  });
+  await mainNav(page, 'AI 工作台').click();
+  await page.getByPlaceholder('手动输入草稿编号').fill(String(draftId));
+  await page.getByRole('button', { name: '绑定草稿' }).click();
   await page.getByRole('button', { name: '查看改动' }).click();
   await expect(page.locator('.diff-preview')).toContainText('新手路径草稿保存验证');
   await expect(page.locator('.artifact-trace')).toContainText('人工草稿，可选检查');
   await expect(page.getByRole('button', { name: '确认写回正文' })).toBeEnabled();
   await page.getByRole('button', { name: '确认写回正文' }).click();
   await expect(page.locator('.task-latest')).toContainText('已写回正文');
+  await mainNav(page, '写作').click();
+  await page.getByRole('button', { name: '打开侧栏' }).click();
+  await page.getByRole('button', { name: '版本' }).click();
+  await expect(page.locator('.version-history')).toContainText('已保存草稿');
+  await expect(page.locator('.history-card').filter({ hasText: '草稿 #' })).toBeVisible();
   const chapterAfterManualPublish = await chapterContent(page, 1);
   expect(chapterAfterManualPublish.text).toContain('新手路径草稿保存验证');
 
@@ -73,6 +81,7 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   await expect(page.getByRole('button', { name: '查看改动' })).toBeDisabled();
 
   await mainNav(page, '资料库').click();
+  await page.locator('.catalog-toggle').filter({ hasText: '小说设定' }).click();
   await page.locator('.source-row').filter({ hasText: '01-设定' }).click();
   const setting = await firstSource(page, 'settings');
   const settingContent = await sourceContent(page, setting.id);
@@ -122,6 +131,9 @@ test('core views remain separated and writing layout does not use bottom overlay
 
   await page.getByRole('button', { name: '打开侧栏' }).click();
   await expect(page.locator('.annotations-panel')).toBeVisible();
+  await expect(page.locator('.inspector-tabs button')).toHaveText(['批注', '版本', '记忆']);
+  await expect(page.locator('.inspector-tabs')).not.toContainText('候选');
+  await expect(page.locator('.inspector-tabs')).not.toContainText('审核');
   await page.getByRole('button', { name: '收起侧栏' }).click();
   await expect(page.locator('.editor-shell')).toHaveClass(/inspector-hidden/);
 });
@@ -144,6 +156,21 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   await expect(page.locator('.chapter-row').filter({ hasText: '001' })).toHaveCount(0);
   await expect(page.locator('.chapter-row').filter({ hasText: '002' })).toHaveCount(1);
   await page.getByPlaceholder('章号或标题').fill('');
+
+  const outlineToggle = page.locator('.catalog-toggle').filter({ hasText: '章纲' });
+  await expect(outlineToggle).toHaveAttribute('aria-expanded', 'false');
+  await outlineToggle.click();
+  await expect(outlineToggle).toHaveAttribute('aria-expanded', 'true');
+  await outlineToggle.click();
+  await expect(outlineToggle).toHaveAttribute('aria-expanded', 'false');
+
+  const volumeToggle = page.locator('.volume-title').first();
+  await expect(volumeToggle).toBeVisible();
+  await expect(volumeToggle).toHaveAttribute('aria-expanded', 'true');
+  await volumeToggle.click();
+  await expect(volumeToggle).toHaveAttribute('aria-expanded', 'false');
+  await volumeToggle.click();
+  await expect(volumeToggle).toHaveAttribute('aria-expanded', 'true');
 
   const expandedRatio = await page.evaluate(() => {
     const content = document.querySelector('.cm-content')?.getBoundingClientRect();
@@ -210,6 +237,32 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   await page.keyboard.press('Control+A');
   const selectedTextLength = await page.evaluate(() => window.getSelection()?.toString().length ?? 0);
   expect(selectedTextLength).toBeGreaterThan(50);
+});
+
+test('status drawer floats without resizing writing area and long pages can scroll to bottom', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  await mainNav(page, '写作').click();
+  await openChapter(page, '001');
+  const before = await readerPanelBox(page);
+  await page.locator('.task-toggle').click();
+  await expect(page.locator('.task-popover')).toBeVisible();
+  const after = await readerPanelBox(page);
+  expect(Math.abs(after.width - before.width)).toBeLessThan(2);
+  expect(Math.abs(after.height - before.height)).toBeLessThan(2);
+  await expect(page.locator('.cm-content')).toBeVisible();
+  await page.locator('.task-popover').getByRole('button', { name: '关闭' }).click();
+  await expect(page.locator('.task-popover')).toHaveCount(0);
+
+  await mainNav(page, '设置/模型').click();
+  await page.evaluate(() => {
+    const pageElement = document.querySelector('.page.active');
+    pageElement?.scrollTo({ top: pageElement.scrollHeight });
+  });
+  await expect(page.getByText('查看调用边界')).toBeVisible();
 });
 
 test('review failure keeps draft unpublished and explains whether it needs manual judgment', async ({ page }) => {
@@ -504,6 +557,13 @@ async function activeSearchVisible(page: Page): Promise<boolean> {
 
 async function readerPanelWidth(page: Page): Promise<number> {
   return page.evaluate(() => document.querySelector('.reader-panel')?.getBoundingClientRect().width ?? 0);
+}
+
+async function readerPanelBox(page: Page): Promise<{ width: number; height: number }> {
+  return page.evaluate(() => {
+    const rect = document.querySelector('.reader-panel')?.getBoundingClientRect();
+    return { width: Math.round(rect?.width ?? 0), height: Math.round(rect?.height ?? 0) };
+  });
 }
 
 async function createManualAnnotation(page: Page, quote: string, comment: string) {

@@ -91,8 +91,8 @@ def seed_ai_candidate(payload: SeedAiCandidateRequest, session: Session = Depend
 @router.post("/reset-sandbox-workspace")
 def reset_sandbox_workspace() -> dict:
     _assert_test_environment()
-    reset_e2e_workspace()
     reset_engine()
+    reset_e2e_workspace()
     return {"status": "ok"}
 
 

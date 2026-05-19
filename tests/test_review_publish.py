@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -137,6 +138,54 @@ def test_publish_requires_approval_and_passed_review(tmp_path: Path, monkeypatch
     get_settings.cache_clear()
 
 
+def test_manual_editor_draft_can_publish_without_review(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session, artifact, content_root, _ = setup_candidate(tmp_path, monkeypatch)
+    artifact.metadata_json = json.dumps(
+        {"source": "manual_editor_draft", "requires_ai_review": False},
+        ensure_ascii=False,
+    )
+    session.commit()
+
+    result = ReviewPublishService(session, model_client=FakeReviewer("{}")).publish_artifact(
+        artifact.id,
+        approved_by_user=True,
+    )
+    published = (content_root / "chapters" / "book.md").read_text(encoding="utf-8")
+
+    assert "Alpha revised target text." in published
+    assert (get_settings().runtime_root / result["backup_path"]).exists()
+    assert (get_settings().runtime_root / result["diff_path"]).exists()
+    assert session.scalar(select(PublishDecision).where(PublishDecision.artifact_id == artifact.id)) is not None
+    get_settings.cache_clear()
+
+
+def test_ai_candidate_still_requires_review(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session, artifact, _, _ = setup_candidate(tmp_path, monkeypatch)
+
+    with pytest.raises(ReviewPublishError, match="Publish requires a review"):
+        ReviewPublishService(session, model_client=FakeReviewer("{}")).publish_artifact(
+            artifact.id,
+            approved_by_user=True,
+        )
+    get_settings.cache_clear()
+
+
+def test_manual_source_flag_without_requires_false_still_requires_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, artifact, _, _ = setup_candidate(tmp_path, monkeypatch)
+    artifact.metadata_json = json.dumps({"source": "manual_editor_draft"}, ensure_ascii=False)
+    session.commit()
+
+    with pytest.raises(ReviewPublishError, match="Publish requires a review"):
+        ReviewPublishService(session, model_client=FakeReviewer("{}")).publish_artifact(
+            artifact.id,
+            approved_by_user=True,
+        )
+    get_settings.cache_clear()
+
+
 def test_publish_rejects_tampered_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     session, artifact, _, _ = setup_candidate(tmp_path, monkeypatch)
     service = ReviewPublishService(session, model_client=FakeReviewer('{"passed": true, "issues": []}'))
@@ -215,6 +264,29 @@ def test_publish_replaces_only_target_chapter_and_records_audit(tmp_path: Path, 
     assert (get_settings().runtime_root / result["diff_path"]).exists()
     assert session.scalar(select(PublishDecision)) is not None
     assert session.scalar(select(Event).where(Event.event_type == "artifact_published")) is not None
+    get_settings.cache_clear()
+
+
+def test_publish_preserves_next_chapter_heading_when_candidate_lacks_trailing_newline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, artifact, content_root, _ = setup_candidate(tmp_path, monkeypatch)
+    path = get_settings().runtime_root / artifact.path
+    path.write_text("# 第001章 First\nAlpha revised target text.", encoding="utf-8")
+    artifact.sha256 = sha256_file(path)
+    artifact.metadata_json = json.dumps(
+        {"source": "manual_editor_draft", "requires_ai_review": False},
+        ensure_ascii=False,
+    )
+    session.commit()
+
+    ReviewPublishService(session, model_client=FakeReviewer("{}")).publish_artifact(artifact.id, approved_by_user=True)
+    published = (content_root / "chapters" / "book.md").read_text(encoding="utf-8")
+
+    assert "text.\n# 第002章 Second" in published
+    scan_result = LibraryScanner(session, content_root).scan()
+    assert scan_result["chapters_seen"] == 2
     get_settings.cache_clear()
 
 

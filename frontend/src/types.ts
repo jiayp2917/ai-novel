@@ -4,10 +4,8 @@ export type ActiveView =
   | 'writing'
   | 'planning'
   | 'pipeline'
-  | 'review'
-  | 'memory'
-  | 'fix_publish'
-  | 'models';
+  | 'ai'
+  | 'settings';
 
 export type ThemeMode = 'dark' | 'light';
 
@@ -253,6 +251,8 @@ export type ModelUsageReport = {
   }>;
   role_quality: {
     reviewer: {
+      sample_count: number;
+      insufficient_data: boolean;
       reviews: number;
       passed: number;
       pass_rate: number;
@@ -268,6 +268,8 @@ export type ModelUsageReport = {
       source_counts: Record<string, number>;
     };
     writer: {
+      sample_count: number;
+      insufficient_data: boolean;
       candidate_count: number;
       known_count: number;
       unknown_count: number;
@@ -288,6 +290,8 @@ export type ModelUsageReport = {
       }>;
     };
     fixer: {
+      sample_count: number;
+      insufficient_data: boolean;
       fixed_candidate_count: number;
       reviewed_count: number;
       passed: number;
@@ -414,6 +418,11 @@ export type SkillInfo = {
   enabled: boolean;
   path: string;
   sha256: string;
+  last_used_at: string | null;
+  last_used_task_type: string | null;
+  last_used_artifact_id: number | null;
+  last_used_chapter_id: number | null;
+  included_in_latest_context: boolean;
 };
 
 export type SkillsPayload = {

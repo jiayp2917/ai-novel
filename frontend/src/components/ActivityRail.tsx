@@ -3,14 +3,11 @@ import { useWorkbenchStore } from '../store';
 
 const items: Array<{ id: ActiveView; label: string; title: string }> = [
   { id: 'home', label: '首', title: '首页' },
-  { id: 'writing', label: '写', title: '正文编写' },
-  { id: 'planning', label: '纲', title: '设定章纲' },
+  { id: 'writing', label: '写', title: '写作' },
+  { id: 'planning', label: '资', title: '资料库' },
+  { id: 'ai', label: 'AI', title: 'AI 工作台' },
   { id: 'pipeline', label: '流', title: '自动流水线' },
-  { id: 'review', label: '审', title: '审核中心' },
-  { id: 'fix_publish', label: '发', title: '修复发布' },
-  { id: 'memory', label: '记', title: '记忆库' },
-  { id: 'models', label: '模', title: '模型任务' },
-  { id: 'workspace', label: '工', title: '工作区' },
+  { id: 'settings', label: '设', title: '设置/模型' },
 ];
 
 export function ActivityRail() {

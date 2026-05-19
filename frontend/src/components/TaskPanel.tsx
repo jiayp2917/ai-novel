@@ -37,7 +37,7 @@ export function TaskPanel() {
             <span>输入 {cost.data.input_chars}</span>
             <span>输出 {cost.data.output_chars}</span>
             <span>缓存 {cost.data.cache_hits}</span>
-            <span>真实usage {cost.data.provider_usage_count}</span>
+            <span>供应商用量记录 {cost.data.provider_usage_count}</span>
             <span>运行 {cost.data.running_jobs}</span>
           </>
         ) : (

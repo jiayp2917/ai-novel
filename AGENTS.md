@@ -13,7 +13,7 @@ Read these files before substantial work:
 - `CLAUDE.md`: coding rules and local engineering constraints.
 - `PRD.md`: product requirements and intended user workflows.
 - `README.md`: current startup and usage instructions.
-- `D:\2917\plan\小说编辑器局部重构详细计划.md`: current refactor roadmap.
+- `D:\2917\plan\remake1.0.md`: current refactor roadmap.
 
 ## Non-Negotiable Safety Rules
 

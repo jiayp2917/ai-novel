@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -282,6 +283,9 @@ def test_draft_candidate_api_creates_artifact_without_writing_source(tmp_path: P
         assert artifact is not None
         assert artifact.kind == "candidate"
         assert artifact.base_chapter_id == chapter_id
+        metadata = json.loads(artifact.metadata_json)
+        assert metadata["source"] == "manual_editor_draft"
+        assert metadata["requires_ai_review"] is False
         assert (runtime_root / artifact.path).read_text(encoding="utf-8") == draft
     assert (content_root / "chapters" / "book.md").read_text(encoding="utf-8") == original
     get_settings.cache_clear()

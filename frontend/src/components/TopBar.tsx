@@ -39,14 +39,12 @@ export function TopBar() {
 function activeViewLabel(view: string) {
   const labels: Record<string, string> = {
     home: '首页工作台',
-    writing: '正文编写',
-    planning: '设定与章纲',
+    writing: '写作',
+    planning: '资料库',
+    ai: 'AI 工作台',
     pipeline: '自动流水线',
-    review: '审核中心',
-    fix_publish: '修复发布',
-    memory: '记忆库',
-    models: '模型与任务',
-    workspace: '工作区管理',
+    settings: '设置/模型',
+    workspace: '作品/工作区入口',
   };
   return labels[view] ?? '工作台';
 }

@@ -1,33 +1,29 @@
 import { useEffect } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { TaskPanel } from './components/TaskPanel';
 import { useCostDashboard, useHealth } from './hooks';
 import { DashboardPage } from './pages/DashboardPage';
-import { MemoryPage, ModelsPage, PipelinePage, PlanningPage, PublishPage, ReviewPage, WorkspacePage, WritingPage } from './pages/CorePages';
+import { AiWorkbenchPage, PipelinePage, PlanningPage, SettingsModelsPage, WorkspacePage, WritingPage } from './pages/CorePages';
 import { useWorkbenchStore } from './store';
 import type { ActiveView } from './types';
 
 const navItems: Array<{ id: ActiveView; icon: string; label: string }> = [
-  { id: 'home', icon: '⌂', label: '首页工作台' },
-  { id: 'workspace', icon: '▦', label: '作品/工作区入口' },
-  { id: 'writing', icon: '✎', label: '正文编写' },
-  { id: 'planning', icon: '☷', label: '设定/章纲' },
+  { id: 'home', icon: '⌂', label: '首页' },
+  { id: 'writing', icon: '✎', label: '写作' },
+  { id: 'planning', icon: '☷', label: '资料库' },
+  { id: 'ai', icon: '◇', label: 'AI 工作台' },
   { id: 'pipeline', icon: '⇄', label: '自动流水线' },
-  { id: 'review', icon: '✓', label: '审核中心' },
-  { id: 'fix_publish', icon: '⇪', label: '修复发布' },
-  { id: 'memory', icon: '◇', label: '记忆库' },
-  { id: 'models', icon: '⚙', label: '模型任务' },
+  { id: 'settings', icon: '⚙', label: '设置/模型' },
 ];
 
 const viewTitles: Record<ActiveView, string> = {
   home: '首页工作台',
   workspace: '作品/工作区入口',
-  writing: '正文编写',
-  planning: '设定/章纲',
+  writing: '写作',
+  planning: '资料库',
   pipeline: '自动流水线',
-  review: '审核中心',
-  fix_publish: '修复发布',
-  memory: '记忆库',
-  models: '模型任务',
+  ai: 'AI 工作台',
+  settings: '设置/模型',
 };
 
 export function App() {
@@ -78,21 +74,21 @@ export function App() {
             <span className="chip blue" title={workspaceRoot}>当前工作区：{workspaceRoot}</span>
             <span className="chip">今日调用 {cost.data?.today_model_calls ?? 0} 次</span>
             <button className="btn" type="button" onClick={toggleTheme}>{theme === 'dark' ? '浅色' : '深色'}</button>
-            <button className="btn" type="button" onClick={() => setActiveView('workspace')}>工作区</button>
-            <button className="btn primary" type="button" onClick={() => setActiveView('models')}>新建模型任务</button>
+            <button className="btn" type="button" onClick={() => setActiveView('settings')}>工作区</button>
+            <button className="btn primary" type="button" onClick={() => setActiveView('ai')}>AI 工作台</button>
           </div>
         </header>
         <TaskPanel />
 
-        {activeView === 'home' && <DashboardPage />}
-        {activeView === 'workspace' && <WorkspacePage />}
-        {activeView === 'writing' && <WritingPage />}
-        {activeView === 'planning' && <PlanningPage />}
-        {activeView === 'pipeline' && <PipelinePage />}
-        {activeView === 'review' && <ReviewPage />}
-        {activeView === 'fix_publish' && <PublishPage />}
-        {activeView === 'memory' && <MemoryPage />}
-        {activeView === 'models' && <ModelsPage />}
+        <ErrorBoundary>
+          {activeView === 'home' && <DashboardPage />}
+          {activeView === 'workspace' && <WorkspacePage />}
+          {activeView === 'writing' && <WritingPage />}
+          {activeView === 'planning' && <PlanningPage />}
+          {activeView === 'pipeline' && <PipelinePage />}
+          {activeView === 'ai' && <AiWorkbenchPage />}
+          {activeView === 'settings' && <SettingsModelsPage />}
+        </ErrorBoundary>
       </main>
     </div>
   );

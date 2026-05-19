@@ -3,32 +3,47 @@ import { useMemo, useState } from 'react';
 import { apiRequest, queryClient } from '../api';
 import { useChapters, useCostDashboard, usePipelineRuns } from '../hooks';
 import { useWorkbenchStore } from '../store';
-import type { PipelineRun, PipelineRunCreatePayload } from '../types';
+import type { Job, PipelineRun, PipelineRunCreatePayload } from '../types';
 
 const modeLabels: Record<PipelineRunCreatePayload['mode'], string> = {
-  review_only: '只审核候选',
-  generate_missing: '缺失正文生成',
-  review_fix: '审核 + 修复候选',
-  full_auto: '全自动生成审核修复',
+  review_only: '只检查已有草稿',
+  generate_missing: '只补齐缺失草稿',
+  review_fix: '检查并生成修订草稿',
+  full_auto: '全自动生成、检查、修订',
+};
+
+const modeDescriptions: Record<PipelineRunCreatePayload['mode'], string> = {
+  review_only: '适合已经有草稿，只想批量检查问题。',
+  generate_missing: '适合缺章或短稿，只生成候选，不自动写回。',
+  review_fix: '适合已有草稿，希望系统检查后按问题生成修订候选。',
+  full_auto: '适合沙盒或明确授权的批量流程；正式写回仍受发布门控制。',
 };
 
 const statusLabels: Record<string, string> = {
-  planned: '已规划',
-  queued: '排队中',
-  context_built: '上下文已构建',
-  draft_generated: '候选已生成',
+  planned: '等待开始',
+  queued: '等待执行',
+  context_built: '上下文已准备',
+  draft_generated: '草稿已生成',
   local_validated: '本地规则已通过',
-  reviewed: '已审核',
-  fixing: '修复中',
-  approved: '已批准',
-  published: '已发布',
-  summarized: '记忆已更新',
-  done: '完成',
+  reviewed: '已检查',
+  fixing: '正在修订',
+  approved: '可进入写回确认',
+  published: '已写回',
+  summarized: '记忆已整理',
+  done: '已完成',
   paused: '已暂停',
-  manual_required: '待人工处理',
-  paused_budget: '预算暂停',
-  failed_retryable: '可重试失败',
-  failed_terminal: '终止失败',
+  manual_required: '需要人工判断',
+  paused_budget: '今日调用额度已暂停',
+  failed_retryable: '失败，可重试',
+  failed_terminal: '已终止',
+};
+
+const taskLabels: Record<string, string> = {
+  generate_chapter_draft: '生成草稿',
+  review_chapter_candidate: '检查草稿',
+  fix_chapter_candidate: '修订草稿',
+  publish_chapter_candidate: '写回确认',
+  summarize_published_chapter: '整理记忆',
 };
 
 export function PipelineView() {
@@ -38,9 +53,10 @@ export function PipelineView() {
   const pushTask = useWorkbenchStore((state) => state.pushTask);
   const setActiveView = useWorkbenchStore((state) => state.setActiveView);
   const chapterCount = chapters.data?.length ?? 0;
+  const defaultEnd = Math.min(10, Math.max(1, chapterCount || 10));
   const [form, setForm] = useState<PipelineRunCreatePayload>({
     start_chapter: 1,
-    end_chapter: Math.min(3, Math.max(1, chapterCount || 3)),
+    end_chapter: defaultEnd,
     mode: 'review_fix',
     chunk_size: 3,
     max_fix_rounds: 2,
@@ -51,6 +67,7 @@ export function PipelineView() {
     () => runs.data?.find((run) => run.id === selectedRunId) ?? runs.data?.[0] ?? null,
     [runs.data, selectedRunId],
   );
+  const selectedSummary = selectedRun ? summarizeRun(selectedRun) : null;
 
   const createRun = useMutation({
     mutationFn: () =>
@@ -60,9 +77,9 @@ export function PipelineView() {
       }),
     onSuccess: (run) => {
       setSelectedRunId(run.id);
-      queryClient.invalidateQueries({ queryKey: ['pipeline-runs'] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      pushTask({ label: '自动流水线', status: 'succeeded', detail: `已创建第 ${form.start_chapter}-${form.end_chapter} 章任务` });
+      void queryClient.invalidateQueries({ queryKey: ['pipeline-runs'] });
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      pushTask({ label: '自动流水线', status: 'succeeded', detail: `已创建第 ${form.start_chapter}-${form.end_chapter} 章任务。` });
     },
     onError: (error: Error) => pushTask({ label: '自动流水线', status: 'failed', detail: error.message }),
   });
@@ -72,11 +89,27 @@ export function PipelineView() {
       apiRequest<PipelineRun>(`/api/pipeline/runs/${runId}/${action}`, { method: 'POST' }),
     onSuccess: (run) => {
       setSelectedRunId(run.id);
-      queryClient.invalidateQueries({ queryKey: ['pipeline-runs'] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      pushTask({ label: '自动流水线', status: 'succeeded', detail: `任务 ${run.id} 状态：${statusText(run.status)}` });
+      void queryClient.invalidateQueries({ queryKey: ['pipeline-runs'] });
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      pushTask({ label: '自动流水线', status: 'succeeded', detail: `流水线 #${run.id}：${statusText(run.status)}。` });
     },
     onError: (error: Error) => pushTask({ label: '自动流水线', status: 'failed', detail: error.message }),
+  });
+
+  const runJobsMutation = useMutation({
+    mutationFn: () =>
+      apiRequest<{ started: number; succeeded: number; failed: number }>('/api/jobs/run-once', { method: 'POST' }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['pipeline-runs'] });
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      void queryClient.invalidateQueries({ queryKey: ['cost-dashboard'] });
+      pushTask({
+        label: '执行流水线',
+        status: result.failed ? 'failed' : 'succeeded',
+        detail: `本次启动 ${result.started} 个任务，完成 ${result.succeeded} 个，失败 ${result.failed} 个。`,
+      });
+    },
+    onError: (error: Error) => pushTask({ label: '执行流水线', status: 'failed', detail: error.message }),
   });
 
   function updateNumber(name: keyof PipelineRunCreatePayload, value: string) {
@@ -85,18 +118,18 @@ export function PipelineView() {
   }
 
   return (
-    <main className="content-view">
+    <main className="content-view pipeline-workbench">
       <div className="view-header">
         <div>
           <p className="eyebrow">自动流水线</p>
-          <h1>章节范围生产、审核与修复</h1>
+          <h1>批量生成、检查和修订章节草稿</h1>
         </div>
         <div className="action-row">
           <button className="secondary-button" type="button" onClick={() => runs.refetch()}>
-            刷新状态
+            刷新进度
           </button>
-          <button className="secondary-button" type="button" onClick={() => setActiveView('models')}>
-            查看模型任务
+          <button className="secondary-button" type="button" onClick={() => setActiveView('settings')}>
+            查看 AI 设置
           </button>
         </div>
       </div>
@@ -105,141 +138,178 @@ export function PipelineView() {
         <div className="pipeline-summary">
           <span>已索引正文：{chapterCount} 章</span>
           <span>流水线任务：{runs.data?.length ?? 0}</span>
-          <span>今日模型调用：{cost.data?.today_model_calls ?? 0}</span>
+          <span>今日 AI 调用：{cost.data?.today_model_calls ?? 0}</span>
           <span>运行中任务：{cost.data?.running_jobs ?? 0}</span>
         </div>
       </section>
 
-      <div className="split-grid">
+      <section className="workflow-card">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">开始前确认</p>
+            <h2>按 4 步创建自动任务</h2>
+          </div>
+          <span className={form.dry_run ? 'chip ok' : 'chip warn'}>
+            {form.dry_run ? '只生成草稿和报告' : '允许进入写回确认'}
+          </span>
+        </div>
+        <div className="pipeline-wizard">
+          <label>
+            <strong>1. 章节范围</strong>
+            <span>建议先用 1-10 章沙盒验证。</span>
+            <div className="pipeline-range">
+              <input aria-label="起始章节" min={1} type="number" value={form.start_chapter} onChange={(event) => updateNumber('start_chapter', event.target.value)} />
+              <span>到</span>
+              <input aria-label="结束章节" min={1} type="number" value={form.end_chapter} onChange={(event) => updateNumber('end_chapter', event.target.value)} />
+            </div>
+          </label>
+          <label>
+            <strong>2. 选择模式</strong>
+            <span>{modeDescriptions[form.mode]}</span>
+            <select
+              aria-label="执行模式"
+              value={form.mode}
+              onChange={(event) => setForm((current) => ({ ...current, mode: event.target.value as PipelineRunCreatePayload['mode'] }))}
+            >
+              {Object.entries(modeLabels).map(([mode, label]) => (
+                <option key={mode} value={mode}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <strong>3. 分批和修订</strong>
+            <span>分片越小越稳，修订轮次越高越耗额度。</span>
+            <div className="pipeline-range">
+              <input aria-label="每批章节数" min={1} max={20} type="number" value={form.chunk_size} onChange={(event) => updateNumber('chunk_size', event.target.value)} />
+              <input aria-label="最大修订轮次" min={0} max={5} type="number" value={form.max_fix_rounds} onChange={(event) => updateNumber('max_fix_rounds', event.target.value)} />
+            </div>
+          </label>
+          <label className="pipeline-mode-card">
+            <strong>4. 写回策略</strong>
+            <span>开启后只生成草稿、检查结果和改动对比，不覆盖正文。</span>
+            <span className="checkbox-row">
+              <input type="checkbox" checked={form.dry_run} onChange={(event) => setForm((current) => ({ ...current, dry_run: event.target.checked }))} />
+              只预演流程，不写回正文
+            </span>
+          </label>
+        </div>
+        <div className="notice safe">所有 AI 输出都会先进入草稿/候选。正式正文写回仍必须经过发布门；设定和章纲只生成提案。</div>
+        <div className="action-row">
+          <button className="primary-button" type="button" onClick={() => createRun.mutate()} disabled={createRun.isPending}>
+            创建自动流水线
+          </button>
+          <button className="secondary-button" type="button" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending}>
+            运行一次队列
+          </button>
+        </div>
+      </section>
+
+      <div className="pipeline-detail-grid">
         <section className="workflow-card">
           <div className="section-title">
             <div>
-              <p className="eyebrow">创建任务</p>
-              <h2>选择章节范围和执行模式</h2>
+              <p className="eyebrow">任务列表</p>
+              <h2>最近自动任务</h2>
             </div>
           </div>
-          <div className="pipeline-form-preview" aria-label="自动流水线计划参数">
-            <label>
-              起始章节
-              <input min={1} type="number" value={form.start_chapter} onChange={(event) => updateNumber('start_chapter', event.target.value)} />
-            </label>
-            <label>
-              结束章节
-              <input min={1} type="number" value={form.end_chapter} onChange={(event) => updateNumber('end_chapter', event.target.value)} />
-            </label>
-            <label>
-              执行模式
-              <select value={form.mode} onChange={(event) => setForm((current) => ({ ...current, mode: event.target.value as PipelineRunCreatePayload['mode'] }))}>
-                {Object.entries(modeLabels).map(([mode, label]) => (
-                  <option key={mode} value={mode}>{label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              分片大小
-              <input min={1} max={20} type="number" value={form.chunk_size} onChange={(event) => updateNumber('chunk_size', event.target.value)} />
-            </label>
-            <label>
-              最大修复轮次
-              <input min={0} max={5} type="number" value={form.max_fix_rounds} onChange={(event) => updateNumber('max_fix_rounds', event.target.value)} />
-            </label>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={form.dry_run} onChange={(event) => setForm((current) => ({ ...current, dry_run: event.target.checked }))} />
-              dry-run，不写回正文
-            </label>
-          </div>
-          <p className="form-hint">
-            创建后可在“模型任务”页点击“运行任务队列”逐步执行。dry-run 不写回正文；真正写回仍必须走发布门，设定和章纲只生成提案。
-          </p>
-          <div className="action-row">
-            <button className="primary-button" type="button" onClick={() => createRun.mutate()} disabled={createRun.isPending}>
-              创建流水线任务
-            </button>
+          <div className="pipeline-run-list">
+            {runs.data?.map((run) => {
+              const summary = summarizeRun(run);
+              return (
+                <button
+                  className={`pipeline-run-item ${selectedRun?.id === run.id ? 'is-active' : ''}`}
+                  key={run.id}
+                  type="button"
+                  onClick={() => setSelectedRunId(run.id)}
+                >
+                  <strong>#{run.id} {modeLabels[(run.payload.mode as PipelineRunCreatePayload['mode'])] ?? run.payload.mode}</strong>
+                  <span>第 {String(run.payload.start_chapter)}-{String(run.payload.end_chapter)} 章 · {statusText(run.status)}</span>
+                  <small>{summary.done}/{summary.total} 个步骤完成 · {summary.manual} 个需人工判断 · {summary.failed} 个失败</small>
+                </button>
+              );
+            })}
+            {runs.isLoading && <p className="muted">正在加载自动任务...</p>}
+            {!runs.isLoading && !runs.data?.length && <p className="muted">还没有自动流水线任务。</p>}
           </div>
         </section>
 
         <section className="workflow-card">
           <div className="section-title">
             <div>
-              <p className="eyebrow">任务列表</p>
-              <h2>最近流水线任务</h2>
+              <p className="eyebrow">任务详情</p>
+              <h2>{selectedRun ? `流水线 #${selectedRun.id}` : '请选择一个任务'}</h2>
             </div>
+            {selectedRun && (
+              <div className="action-row">
+                <button className="secondary-button" type="button" onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'pause' })} disabled={mutateRun.isPending || selectedRun.status === 'paused'}>
+                  暂停
+                </button>
+                <button className="secondary-button" type="button" onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'resume' })} disabled={mutateRun.isPending || selectedRun.status !== 'paused'}>
+                  恢复
+                </button>
+                <button className="secondary-button" type="button" onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'retry' })} disabled={mutateRun.isPending || !['failed_retryable', 'paused_budget'].includes(selectedRun.status)}>
+                  重试
+                </button>
+                <button className="danger-button" type="button" onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'cancel' })} disabled={mutateRun.isPending || ['done', 'failed_terminal', 'manual_required'].includes(selectedRun.status)}>
+                  停止
+                </button>
+              </div>
+            )}
           </div>
-          <div className="pipeline-run-list">
-            {runs.data?.map((run) => (
-              <button
-                className={`pipeline-run-item ${selectedRun?.id === run.id ? 'is-active' : ''}`}
-                key={run.id}
-                type="button"
-                onClick={() => setSelectedRunId(run.id)}
-              >
-                <strong>#{run.id} {modeLabels[(run.payload.mode as PipelineRunCreatePayload['mode'])] ?? run.payload.mode}</strong>
-                <span>第 {String(run.payload.start_chapter)}-{String(run.payload.end_chapter)} 章 · {statusText(run.status)}</span>
-              </button>
-            ))}
-            {runs.isLoading && <p className="muted">正在加载流水线任务...</p>}
-            {!runs.isLoading && !runs.data?.length && <p className="muted">还没有流水线任务。</p>}
-          </div>
+          {selectedRun && selectedSummary ? (
+            <>
+              <div className="pipeline-progress">
+                <strong>{selectedSummary.done}/{selectedSummary.total}</strong>
+                <span>步骤完成</span>
+                <progress value={selectedSummary.done} max={Math.max(1, selectedSummary.total)} />
+              </div>
+              <div className="pipeline-status-grid">
+                <span>状态：{statusText(selectedRun.status)}</span>
+                <span>需人工判断：{selectedSummary.manual}</span>
+                <span>失败/暂停：{selectedSummary.failed}</span>
+                <span>预演模式：{selectedRun.payload.dry_run ? '是' : '否'}</span>
+              </div>
+              <div className="pipeline-chapter-timeline">
+                {groupTasksByChapter(selectedRun.child_tasks).map(([chapterNo, tasks]) => (
+                  <article className="pipeline-chapter-card" key={chapterNo}>
+                    <strong>第 {chapterNo} 章</strong>
+                    <div>
+                      {tasks.map((task) => (
+                        <span className={`pipeline-task-pill status-${task.status}`} key={task.id}>
+                          {taskTypeLabel(task.type)}：{statusText(task.status)}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <details className="advanced-details">
+                <summary>查看高级详情</summary>
+                <pre className="json-preview">{JSON.stringify(selectedRun, null, 2)}</pre>
+              </details>
+            </>
+          ) : (
+            <p className="muted">创建或选择任务后，这里会显示每章进度、失败原因和报告详情。</p>
+          )}
         </section>
       </div>
 
       <section className="workflow-card">
         <div className="section-title">
           <div>
-            <p className="eyebrow">任务详情</p>
-            <h2>{selectedRun ? `流水线 #${selectedRun.id}` : '请选择一个流水线任务'}</h2>
-          </div>
-          {selectedRun && (
-            <div className="action-row">
-              <button className="secondary-button" type="button" onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'pause' })} disabled={mutateRun.isPending || selectedRun.status === 'paused'}>
-                暂停
-              </button>
-              <button className="secondary-button" type="button" onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'resume' })} disabled={mutateRun.isPending || selectedRun.status !== 'paused'}>
-                恢复
-              </button>
-              <button className="secondary-button" type="button" onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'retry' })} disabled={mutateRun.isPending || !['failed_retryable', 'paused_budget'].includes(selectedRun.status)}>
-                重试
-              </button>
-              <button className="danger-button" type="button" onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'cancel' })} disabled={mutateRun.isPending || ['done', 'failed_terminal', 'manual_required'].includes(selectedRun.status)}>
-                取消
-              </button>
-            </div>
-          )}
-        </div>
-        {selectedRun ? (
-          <div className="pipeline-detail-grid">
-            <div className="model-output-map">
-              <span>状态：{statusText(selectedRun.status)}</span>
-              <span>模式：{String(selectedRun.payload.mode)}</span>
-              <span>章节：第 {String(selectedRun.payload.start_chapter)}-{String(selectedRun.payload.end_chapter)} 章</span>
-              <span>分片：{String(selectedRun.payload.chunk_size)} 章/批</span>
-              <span>dry-run：{selectedRun.payload.dry_run ? '是' : '否'}</span>
-              <span>input_hash：{String(selectedRun.payload.input_hash ?? '').slice(0, 16)}...</span>
-              {selectedRun.error && <span>错误：{selectedRun.error}</span>}
-            </div>
-            <pre className="json-preview">{JSON.stringify(selectedRun, null, 2)}</pre>
-          </div>
-        ) : (
-          <p className="muted">创建或选择任务后，这里会显示状态、参数、错误和子任务。</p>
-        )}
-      </section>
-
-      <section className="workflow-card">
-        <div className="section-title">
-          <div>
             <p className="eyebrow">安全节点</p>
-            <h2>自动任务必须经过的边界</h2>
+            <h2>自动任务的固定边界</h2>
           </div>
         </div>
         <div className="pipeline-lanes">
-          <span>1 构建上下文，记录预算</span>
-          <span>2 生成候选，保存 artifact</span>
-          <span>3 本地规则预检</span>
-          <span>4 证据约束审核 JSON</span>
-          <span>5 只修复 writer 问题</span>
-          <span>6 复审通过后进入发布门</span>
-          <span>7 dry-run 只生成 diff，正式模式才串行写回</span>
-          <span>8 发布后更新短记忆与运行报告</span>
+          <span>1 选择作品</span>
+          <span>2 选择章节范围</span>
+          <span>3 选择执行模式</span>
+          <span>4 设置预算和预演模式</span>
+          <span>5 生成草稿/候选</span>
+          <span>6 证据约束检查</span>
+          <span>7 只修复可修 writer 问题</span>
+          <span>8 报告和发布门确认</span>
         </div>
       </section>
     </main>
@@ -248,4 +318,25 @@ export function PipelineView() {
 
 function statusText(status: string): string {
   return statusLabels[status] ?? status;
+}
+
+function taskTypeLabel(type: string): string {
+  return taskLabels[type] ?? type;
+}
+
+function summarizeRun(run: PipelineRun): { total: number; done: number; manual: number; failed: number } {
+  const terminalDone = new Set(['approved', 'published', 'summarized', 'done']);
+  const manual = run.child_tasks.filter((task) => task.status === 'manual_required').length;
+  const failed = run.child_tasks.filter((task) => ['failed_terminal', 'failed_retryable', 'paused_budget'].includes(task.status)).length;
+  const done = run.child_tasks.filter((task) => terminalDone.has(task.status)).length;
+  return { total: run.child_tasks.length, done, manual, failed };
+}
+
+function groupTasksByChapter(tasks: Job[]): Array<[string, Job[]]> {
+  const groups = new Map<string, Job[]>();
+  for (const task of tasks) {
+    const chapterNo = typeof task.payload.chapter_no === 'number' ? String(task.payload.chapter_no).padStart(3, '0') : '未知';
+    groups.set(chapterNo, [...(groups.get(chapterNo) ?? []), task]);
+  }
+  return [...groups.entries()];
 }

@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
+from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.db.models import ModelCall
 from backend.app.services.budget import BudgetExceededError, BudgetGuard
 from backend.app.services.model_router import ModelRoute, ModelRouter
@@ -240,8 +242,8 @@ class ModelClient:
         if not path.exists():
             return None
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
+            data = json.loads(safe_read_text(path, encoding="utf-8"))
+        except (HTTPException, json.JSONDecodeError):
             return None
         content = data.get("content")
         return content if isinstance(content, str) else None
@@ -249,7 +251,7 @@ class ModelClient:
     def _write_cache(self, route: ModelRoute, prompt_hash: str, content: str) -> None:
         path = self._cache_path(route, prompt_hash)
         temp_path = path.with_suffix(path.suffix + ".tmp")
-        temp_path.write_text(json.dumps({"content": content}, ensure_ascii=False), encoding="utf-8")
+        safe_write_text(temp_path, json.dumps({"content": content}, ensure_ascii=False), encoding="utf-8")
         temp_path.replace(path)
 
     def _record_call(

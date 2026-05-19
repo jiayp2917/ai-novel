@@ -4,6 +4,7 @@ from typing import Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text
 from backend.app.db.models import Artifact, Chapter, Job
 from backend.app.repositories import Repository
 from backend.app.services.annotations import InvalidRequestError, NotFoundError
@@ -166,7 +167,7 @@ def create_snapshot_candidate_for_chapter(session: Session, chapter: Chapter) ->
     from backend.app.services.workspace import WorkspaceResolver
 
     source_path = WorkspaceResolver().resolve_source_path(chapter.source_file.path)
-    full_text = source_path.read_text(encoding="utf-8-sig")
+    full_text = safe_read_text(source_path, encoding="utf-8-sig")
     candidate_text = full_text[chapter.range_start : chapter.range_end]
     artifact = ArtifactStore(session).save_text(
         kind="candidate",

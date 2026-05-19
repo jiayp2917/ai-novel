@@ -1,9 +1,12 @@
+import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from backend.app.db.models import Artifact
 from backend.app.main import app
-from backend.app.services.skills import SkillLoader, parse_enabled
+from backend.app.services.skills import SkillLoader, parse_enabled, skill_usage_from_artifacts
 
 
 def write_skill(root: Path, relative: str, *, role: str, enabled: str = "true", body: str = "规则正文") -> None:
@@ -61,6 +64,64 @@ def test_skill_loader_lists_enabled_skills_with_metadata(tmp_path: Path) -> None
     assert payload[0]["role"] == "memory"
     assert payload[0]["path"] == "memory/clue_extraction.md"
     assert len(payload[0]["sha256"]) == 64
+    assert payload[0]["last_used_at"] is None
+    assert payload[0]["included_in_latest_context"] is False
+
+
+def test_skill_loader_enriches_recent_usage_from_context_reports(tmp_path: Path) -> None:
+    write_skill(tmp_path / "skills", "review/evidence_guard.md", role="reviewer", body="证据规则")
+    enabled = SkillLoader(tmp_path / "skills").list_enabled()[0]
+    runtime_root = tmp_path / "runtime"
+    artifact = Artifact(
+        id=7,
+        kind="candidate",
+        path="artifacts/candidate/a.md",
+        sha256="a" * 64,
+        base_chapter_id=3,
+        created_at=datetime(2026, 5, 19, tzinfo=UTC),
+        metadata_json=json.dumps(
+            {
+                "task_type": "review_chapter_candidate",
+                "context_report": {
+                    "chapter_id": 3,
+                    "task_type": "review_chapter_candidate",
+                    "skills": [
+                        {
+                            "name": enabled["name"],
+                            "version": enabled["version"],
+                            "role": enabled["role"],
+                            "scope": enabled["scope"],
+                            "enabled": True,
+                            "path": enabled["path"],
+                            "sha256": enabled["sha256"],
+                        }
+                    ],
+                },
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    payload = SkillLoader(tmp_path / "skills").list_enabled_with_usage([artifact], runtime_root)
+
+    assert payload[0]["last_used_task_type"] == "review_chapter_candidate"
+    assert payload[0]["last_used_artifact_id"] == 7
+    assert payload[0]["last_used_chapter_id"] == 3
+    assert payload[0]["included_in_latest_context"] is True
+
+
+def test_skill_usage_from_artifacts_ignores_runtime_escape(tmp_path: Path) -> None:
+    artifact = Artifact(
+        id=1,
+        kind="context_report",
+        path="../outside.json",
+        sha256="a" * 64,
+        metadata_json=json.dumps({"context_degraded": True}),
+    )
+
+    usage = skill_usage_from_artifacts([artifact], tmp_path / "runtime")
+
+    assert usage["by_path"] == {}
 
 
 def test_parse_enabled_accepts_common_disabled_values() -> None:

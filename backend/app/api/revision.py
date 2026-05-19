@@ -78,6 +78,7 @@ def create_draft_candidate(
         metadata={
             "purpose": "front_end_draft_candidate",
             "source": "manual_editor_draft",
+            "requires_ai_review": False,
             "chapter_no": chapter.chapter_no,
         },
         base_chapter=chapter,
@@ -114,6 +115,7 @@ def create_source_draft_proposal(
         metadata={
             "purpose": "front_end_source_draft_proposal",
             "source": "manual_editor_draft",
+            "requires_ai_review": False,
             "source_file_id": source_file.id,
         },
         base_source_file=source_file,

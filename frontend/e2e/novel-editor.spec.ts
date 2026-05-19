@@ -15,9 +15,9 @@ test('new user 10-minute path can add workspace, scan, read, save draft, review,
   await expect(page.getByRole('heading', { name: '作品列表与最近打开' })).toBeVisible();
   await expect(page.locator('.workspace-current')).toContainText('sandbox_workspace');
   await expect(page.locator('.workspace-stats').getByText('素材文件：4', { exact: true })).toBeVisible();
-  await expect(page.locator('.workspace-stats').getByText('正文：2', { exact: true })).toBeVisible();
+  await expect(page.locator('.workspace-stats').getByText('正文：10', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: '正文编写' }).click();
+  await page.getByRole('button', { name: '写作' }).click();
   await openChapter(page, '001');
   await expect(page.locator('.reader-header h1')).toContainText('第1章：开局觉醒');
   await expect(page.locator('.reader-panel')).toBeVisible();
@@ -39,9 +39,14 @@ test('new user 10-minute path can add workspace, scan, read, save draft, review,
 
   await page.getByRole('button', { name: '候选' }).click();
   const draftId = await activeDraftId(page);
-  await seedReview(page, draftId, { passed: true });
   await page.getByRole('button', { name: '查看改动' }).click();
   await expect(page.locator('.diff-preview')).toContainText('新手路径草稿保存验证');
+  await expect(page.locator('.artifact-trace')).toContainText('人工草稿，可选检查');
+  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeEnabled();
+  await page.getByRole('button', { name: '确认写回正文' }).click();
+  await expect(page.locator('.task-latest')).toContainText('已写回正文');
+  const chapterAfterManualPublish = await chapterContent(page, 1);
+  expect(chapterAfterManualPublish.text).toContain('新手路径草稿保存验证');
 
   const themeBefore = await page.locator('html').getAttribute('data-theme');
   await page.getByRole('button', { name: themeBefore === 'dark' ? '浅色' : '深色' }).click();
@@ -60,14 +65,14 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   const chapterOneContent = await chapterContent(page, chapterOne.id);
   const mismatch = await seedCandidate(page, chapterOne.id, chapterOneContent.text);
 
-  await page.getByRole('button', { name: '修复发布' }).click();
+  await mainNav(page, 'AI 工作台').click();
   await openChapter(page, '002');
   await page.getByPlaceholder('手动输入草稿编号').fill(String(mismatch.artifact_id));
   await page.getByRole('button', { name: '绑定草稿' }).click();
   await expect(page.getByText('草稿不属于当前章节，不能在这里检查、查看改动或写回。')).toBeVisible();
   await expect(page.getByRole('button', { name: '查看改动' })).toBeDisabled();
 
-  await page.getByRole('button', { name: '设定/章纲' }).click();
+  await mainNav(page, '资料库').click();
   await page.locator('.source-row').filter({ hasText: '01-设定' }).click();
   const setting = await firstSource(page, 'settings');
   const settingContent = await sourceContent(page, setting.id);
@@ -76,7 +81,7 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   await page.getByRole('button', { name: '绑定草稿' }).click();
   await expect(page.getByRole('button', { name: '提案不直接写回' })).toBeDisabled();
 
-  await page.getByRole('button', { name: '修复发布' }).click();
+  await mainNav(page, 'AI 工作台').click();
   await openChapter(page, '002');
   const beforePublish = await chapterContent(page, chapterTwo.id);
   const publishMarker = '\n\n发布门沙盒验证：正文只通过候选写回。';
@@ -100,12 +105,12 @@ test('core views remain separated and writing layout does not use bottom overlay
   await page.goto('/');
   await switchWorkspace(page);
 
-  for (const title of ['正文编写', '审核中心', '记忆库', '模型任务', '作品/工作区入口']) {
-    await page.locator('.nav').getByRole('button', { name: title }).click();
+  for (const title of ['首页', '写作', '资料库', 'AI 工作台', '自动流水线', '设置/模型']) {
+    await mainNav(page, title).click();
     await expect(page.locator('.crumb')).toContainText(title);
   }
 
-  await page.getByRole('button', { name: '正文编写' }).click();
+  await mainNav(page, '写作').click();
   await openChapter(page, '001');
   const widthRatio = await page.evaluate(() => {
     const reader = document.querySelector('.reader-panel')?.getBoundingClientRect();
@@ -127,7 +132,7 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   await page.goto('/');
   await switchWorkspace(page);
 
-  await page.getByRole('button', { name: '正文编写' }).click();
+  await mainNav(page, '写作').click();
   await openChapter(page, '001');
   await openChapter(page, '002');
   await expect(page.locator('.chapter-tab')).toHaveCount(2);
@@ -154,10 +159,12 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   expect(searchMatches).toBeGreaterThan(0);
   await expect(page.locator('.cm-search-match--active')).toHaveCount(1);
   const firstActiveTop = await activeSearchTop(page);
+  expect(await activeSearchVisible(page)).toBeTruthy();
   await page.getByRole('button', { name: '下一处' }).click();
   await expect(page.locator('.cm-search-match--active')).toHaveCount(1);
   const secondActiveTop = await activeSearchTop(page);
   expect(secondActiveTop).not.toBe(firstActiveTop);
+  expect(await activeSearchVisible(page)).toBeTruthy();
 
   await page.getByRole('button', { name: '隐藏目录' }).click();
   await expect(page.locator('.editor-shell')).toHaveClass(/catalog-hidden/);
@@ -173,8 +180,20 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
     return reader.width / window.innerWidth;
   });
   expect(fullscreenRatio).toBeGreaterThan(0.8);
+  await page.getByRole('button', { name: '退出全屏' }).click();
+  await expect(page.locator('.editor-shell')).not.toHaveClass(/writing-fullscreen/);
+  await page.getByRole('button', { name: '打开侧栏' }).click();
 
-  await page.mouse.click(420, 360, { button: 'right' });
+  const widthWithSidebar = await readerPanelWidth(page);
+  await page.getByRole('button', { name: '收起侧栏' }).click();
+  await expect(page.locator('.editor-shell')).toHaveClass(/inspector-hidden/);
+  const widthWithoutSidebar = await readerPanelWidth(page);
+  expect(widthWithoutSidebar).toBeGreaterThan(widthWithSidebar + 120);
+  await page.getByRole('button', { name: '打开侧栏' }).click();
+
+  const menuTargetBox = await page.locator('.cm-content').boundingBox();
+  expect(menuTargetBox).not.toBeNull();
+  await page.mouse.click(menuTargetBox!.x + 120, menuTargetBox!.y + 120, { button: 'right' });
   await expect(page.locator('.context-menu')).toBeVisible();
   const menuBox = await page.locator('.context-menu').boundingBox();
   expect(menuBox).not.toBeNull();
@@ -185,10 +204,9 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
 
   await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
   await page.locator('.cm-content').click();
-  await page.keyboard.type('连续输入验证');
-  await expect(page.locator('.cm-content')).toContainText('连续输入验证');
-  await page.keyboard.type('无需再次点击');
-  await expect(page.locator('.cm-content')).toContainText('连续输入验证无需再次点击');
+  const longInput = '连续输入二百字验收：这段文本用于验证正文编辑模式不会在输入一个字符后丢失焦点，作者可以像普通编辑器一样持续写作。系统只把内容保存在草稿里，不会直接覆盖正式正文。'.repeat(2);
+  await page.keyboard.type(longInput);
+  await expect(page.locator('.cm-content')).toContainText(longInput);
   await page.keyboard.press('Control+A');
   const selectedTextLength = await page.evaluate(() => window.getSelection()?.toString().length ?? 0);
   expect(selectedTextLength).toBeGreaterThan(50);
@@ -199,7 +217,7 @@ test('review failure keeps draft unpublished and explains whether it needs manua
   await page.evaluate(() => window.localStorage.clear());
   await page.goto('/');
   await switchWorkspace(page);
-  await page.getByRole('button', { name: '修复发布' }).click();
+  await mainNav(page, 'AI 工作台').click();
   await openChapter(page, '001');
 
   const chapter = await chapterByNo(page, 1);
@@ -227,12 +245,33 @@ test('review failure keeps draft unpublished and explains whether it needs manua
   await expect(page.locator('.artifact-review-detail')).toContainText('需要人工判断的测试问题');
 });
 
+test('unreviewed AI draft cannot be written back from the frontend', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  await mainNav(page, 'AI 工作台').click();
+  await openChapter(page, '001');
+
+  const chapter = await chapterByNo(page, 1);
+  const content = await chapterContent(page, chapter.id);
+  const seeded = await seedAiCandidate(page, chapter.id, `${content.text}\n\n未审核 AI 草稿写回拦截。`);
+  await page.getByPlaceholder('手动输入草稿编号').fill(String(seeded.artifact_id));
+  await page.getByRole('button', { name: '绑定草稿' }).click();
+  await expect(page.locator('.artifact-trace')).toContainText('未检查');
+  await expect(page.locator('.artifact-trace')).toContainText('草稿还没有检查记录');
+  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeDisabled();
+  await page.getByRole('button', { name: '查看改动' }).click();
+  await expect(page.locator('.diff-preview')).toContainText('未审核 AI 草稿写回拦截');
+  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeDisabled();
+});
+
 test('publish hash mismatch tells the writer to rescan and regenerate the draft', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
   await page.goto('/');
   await switchWorkspace(page);
-  await page.getByRole('button', { name: '修复发布' }).click();
+  await mainNav(page, 'AI 工作台').click();
   await openChapter(page, '001');
 
   const chapter = await chapterByNo(page, 1);
@@ -255,7 +294,8 @@ test('budget pause is visible in author language and can be resumed from AI task
   await switchWorkspace(page);
   const paused = await seedBudgetPausedJob(page);
 
-  await page.locator('.nav').getByRole('button', { name: '模型任务' }).click();
+  await page.reload();
+  await mainNav(page, '设置/模型').click();
   await expect(page.getByText('今日调用额度已暂停').first()).toBeVisible();
   await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('今日调用额度已暂停');
 
@@ -271,15 +311,118 @@ test('model task page shows quality trends and context budget warnings', async (
   await switchWorkspace(page);
   await seedModelQualityReport(page);
 
+  await page.reload();
   await openModelsView(page);
   await expect(page.locator('.quality-grid')).toBeVisible();
   await expect(page.locator('.quality-card')).toHaveCount(3);
   await expect(page.locator('.quality-card').nth(0)).toContainText('1');
   await expect(page.locator('.quality-card').nth(1)).toContainText('2000-2600');
   await expect(page.locator('.quality-card').nth(2)).toContainText('0');
+  await expect(page.locator('[aria-label="按分工统计"]')).toContainText('AI 检查');
+  await expect(page.locator('[aria-label="按分工统计"]')).toContainText('88');
   await expect(page.locator('.context-budget-list')).toBeVisible();
   await expect(page.locator('.context-budget-card')).toContainText('timeline');
   await expect(page.locator('.context-budget-card')).toContainText('500');
+  await page.getByText('查看 Skills').click();
+  await expect(page.locator('.skill-card').first()).toContainText(/参与最近一次记录的上下文|最近一次记录的上下文未使用/);
+  await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(2);
+});
+
+test('dark theme keeps core work areas dark without white card leaks', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  const theme = await page.locator('html').getAttribute('data-theme');
+  if (theme !== 'dark') {
+    await page.getByRole('button', { name: '深色' }).click();
+  }
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+  await mainNav(page, '写作').click();
+  await openChapter(page, '001');
+  await expect(page.locator('.reader-panel')).toBeVisible();
+  const contentBox = await page.locator('.cm-content').boundingBox();
+  expect(contentBox).not.toBeNull();
+  await page.mouse.click(contentBox!.x + 120, contentBox!.y + 120, { button: 'right' });
+  await expect(page.locator('.context-menu')).toBeVisible();
+
+  const colors = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const element = document.querySelector(selector);
+      return element ? getComputedStyle(element).backgroundColor : '';
+    };
+    return {
+      topbar: read('.topbar'),
+      button: read('.secondary-button'),
+      paper: read('.cm-content'),
+      editor: read('.editor-host'),
+      menu: read('.context-menu'),
+      card: read('.annotation-card'),
+      input: read('input'),
+    };
+  });
+  for (const [name, color] of Object.entries(colors)) {
+    expect(color, `${name} should not be pure white in dark theme`).not.toBe('rgb(255, 255, 255)');
+  }
+});
+
+test('pipeline wizard can create, pause, resume, run once, and show 10-chapter timeline', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  await mainNav(page, '自动流水线').click();
+  await expect(page.getByRole('heading', { name: '批量生成、检查和修订章节草稿' })).toBeVisible();
+  await expect(page.getByText('已索引正文：10 章')).toBeVisible();
+  await page.getByLabel('起始章节').fill('1');
+  await page.getByLabel('结束章节').fill('10');
+  await page.getByLabel('执行模式').selectOption('full_auto');
+  await page.getByLabel('每批章节数').fill('3');
+  await page.getByLabel('最大修订轮次').fill('2');
+  await page.getByRole('button', { name: '创建自动流水线' }).click();
+  await expect(page.locator('.task-latest')).toContainText('自动流水线');
+  await expect(page.locator('.pipeline-run-item').first()).toContainText('第 1-10 章');
+
+  await page.getByRole('button', { name: '暂停' }).click();
+  await expect(page.locator('.pipeline-status-grid')).toContainText('已暂停');
+  await page.getByRole('button', { name: '恢复' }).click();
+  await expect(page.locator('.pipeline-status-grid')).toContainText('等待执行');
+
+  await page.getByRole('button', { name: '运行一次队列' }).click();
+  await expect(page.locator('.task-latest')).toContainText('执行流水线');
+  await expect(page.locator('.pipeline-chapter-card')).toHaveCount(10);
+  await expect(page.locator('.pipeline-chapter-card').first()).toContainText('生成草稿');
+  await expect(page.locator('.pipeline-progress')).toContainText('/60');
+});
+
+test('pipeline page can cancel a run and display retryable failure state', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  await mainNav(page, '自动流水线').click();
+  await page.getByLabel('起始章节').fill('1');
+  await page.getByLabel('结束章节').fill('1');
+  await page.getByLabel('执行模式').selectOption('review_only');
+  await page.getByRole('button', { name: '创建自动流水线' }).click();
+  await expect(page.locator('.pipeline-run-item').first()).toContainText('第 1-1 章');
+
+  await page.getByRole('button', { name: '停止' }).click();
+  await expect(page.locator('.pipeline-status-grid')).toContainText('已终止');
+  await expect(page.locator('.pipeline-run-item').first()).toContainText('已终止');
+
+  const failed = await page.request.post(`${apiBaseUrl}/api/test/seed-failed-pipeline-run`);
+  expect(failed.ok()).toBeTruthy();
+  await page.reload();
+  await mainNav(page, '自动流水线').click();
+  await expect(page.locator('.pipeline-run-item').first()).toContainText('失败，可重试');
+  await expect(page.locator('.pipeline-status-grid')).toContainText('失败/暂停：1');
+  await expect(page.locator('.pipeline-chapter-card').first()).toContainText('失败，可重试');
 });
 
 test('drag selection can create annotation from context menu', async ({ page }) => {
@@ -288,7 +431,7 @@ test('drag selection can create annotation from context menu', async ({ page }) 
   await page.goto('/');
   await switchWorkspace(page);
 
-  await page.getByRole('button', { name: '正文编写' }).click();
+  await mainNav(page, '写作').click();
   await openChapter(page, '001');
   const contentBox = await page.locator('.cm-content').boundingBox();
   expect(contentBox).not.toBeNull();
@@ -310,16 +453,32 @@ test('drag selection can create annotation from context menu', async ({ page }) 
 });
 
 async function switchWorkspace(page: Page) {
-  await page.getByRole('button', { name: '作品/工作区入口' }).click();
-  await expect(page.getByRole('heading', { name: '作品列表与最近打开' })).toBeVisible();
-  await page.getByLabel('当前路径').fill(sandboxPath);
-  await page.getByRole('button', { name: '打开并扫描' }).click();
-  await expect(page.locator('.workspace-feedback')).toContainText('已打开作品');
-  await expect(page.locator('.workspace-stats').getByText('正文：2', { exact: true })).toBeVisible();
+  await mainNav(page, '设置/模型').click();
+  const workspaceCard = page.locator('.workspace-card').first();
+  await expect(workspaceCard.getByRole('heading', { name: '作品列表与最近打开' })).toBeVisible();
+  await openSandboxWorkspace(page, workspaceCard);
+  const feedback = workspaceCard.locator('.workspace-feedback');
+  const failed = await feedback.textContent().then((text) => text?.includes('打开失败')).catch(() => false);
+  if (failed) {
+    const reset = await page.request.post(`${apiBaseUrl}/api/test/reset-sandbox-workspace`);
+    expect(reset.ok()).toBeTruthy();
+    await openSandboxWorkspace(page, workspaceCard);
+  }
+  await expect(feedback).toContainText('已打开作品');
+  await expect(workspaceCard.locator('.workspace-stats').getByText('正文：10', { exact: true })).toBeVisible();
+}
+
+async function openSandboxWorkspace(page: Page, workspaceCard: ReturnType<Page['locator']>) {
+  await workspaceCard.getByLabel('当前路径').fill(sandboxPath);
+  await workspaceCard.getByRole('button', { name: '打开并扫描' }).click();
 }
 
 async function openModelsView(page: Page) {
-  await page.locator('.nav button').last().click();
+  await mainNav(page, '设置/模型').click();
+}
+
+function mainNav(page: Page, name: string) {
+  return page.locator('.nav button').filter({ hasText: name });
 }
 
 async function openChapter(page: Page, paddedNo: string) {
@@ -333,6 +492,18 @@ async function activeSearchTop(page: Page): Promise<number> {
     const active = document.querySelector('.cm-search-match--active')?.getBoundingClientRect();
     return Math.round(active?.top ?? -1);
   });
+}
+
+async function activeSearchVisible(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const active = document.querySelector('.cm-search-match--active')?.getBoundingClientRect();
+    if (!active) return false;
+    return active.top >= 0 && active.bottom <= window.innerHeight;
+  });
+}
+
+async function readerPanelWidth(page: Page): Promise<number> {
+  return page.evaluate(() => document.querySelector('.reader-panel')?.getBoundingClientRect().width ?? 0);
 }
 
 async function createManualAnnotation(page: Page, quote: string, comment: string) {
@@ -395,6 +566,14 @@ async function sourceContent(page: Page, sourceFileId: number): Promise<{ text: 
 
 async function seedCandidate(page: Page, chapterId: number, text: string): Promise<{ artifact_id: number }> {
   const response = await page.request.post(`${apiBaseUrl}/api/test/seed-candidate`, {
+    data: { chapter_id: chapterId, text },
+  });
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as { artifact_id: number };
+}
+
+async function seedAiCandidate(page: Page, chapterId: number, text: string): Promise<{ artifact_id: number }> {
+  const response = await page.request.post(`${apiBaseUrl}/api/test/seed-ai-candidate`, {
     data: { chapter_id: chapterId, text },
   });
   expect(response.ok()).toBeTruthy();

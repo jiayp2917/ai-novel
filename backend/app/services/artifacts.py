@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_write_text
 from backend.app.db.models import Artifact, Chapter, SourceFile
 from backend.app.repositories import Repository
 from backend.app.services.workspace import workspace_runtime_root
@@ -30,7 +31,7 @@ class ArtifactStore:
         directory.mkdir(parents=True, exist_ok=True)
         digest = sha256_text(text)
         path = directory / f"{kind}_{digest[:12]}{suffix}"
-        path.write_text(text, encoding="utf-8")
+        safe_write_text(path, text, encoding="utf-8")
         return self.create_from_file(
             kind=kind,
             path=path,

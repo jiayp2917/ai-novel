@@ -81,7 +81,16 @@ export function storeJson(key: string, value: unknown): void {
 
 export function initialActiveView(): ActiveView {
   const raw = storedString(STORAGE_KEYS.activeView);
-  const valid: ActiveView[] = ['home', 'workspace', 'writing', 'planning', 'pipeline', 'review', 'memory', 'fix_publish', 'models'];
+  const migrations: Record<string, ActiveView> = {
+    review: 'ai',
+    memory: 'ai',
+    fix_publish: 'ai',
+    models: 'settings',
+  };
+  if (raw && migrations[raw]) {
+    return migrations[raw];
+  }
+  const valid: ActiveView[] = ['home', 'workspace', 'writing', 'planning', 'pipeline', 'ai', 'settings'];
   return valid.includes(raw as ActiveView) ? (raw as ActiveView) : 'home';
 }
 

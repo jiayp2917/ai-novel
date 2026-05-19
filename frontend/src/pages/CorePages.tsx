@@ -124,7 +124,7 @@ export function PublishPage() {
   return (
     <section className="page active">
       <h2 className="page-title">修复发布</h2>
-      <p className="page-subtitle">发布门是唯一允许正文写回的入口，必须具备候选、审核报告、版本快照和 diff。</p>
+      <p className="page-subtitle">写回确认是唯一允许正文覆盖的入口，必须有草稿、检查记录、版本快照和改动对比。</p>
       <div className="publish-layout">
         <aside className="card catalog-card"><CatalogPanel /></aside>
         <div className="card">
@@ -156,6 +156,67 @@ export function ModelsPage() {
   return (
     <section className="page active">
       <ModelsView />
+    </section>
+  );
+}
+
+export function AiWorkbenchPage() {
+  const selectedChapterId = useWorkbenchStore((state) => state.selectedChapterId);
+  const chapterContent = useChapterContent(selectedChapterId);
+
+  return (
+    <section className="page active">
+      <h2 className="page-title">AI 工作台</h2>
+      <p className="page-subtitle">集中处理草稿检查、AI 修订、记忆整理与写回确认。人工写作不强制走 AI 检查。</p>
+      <div className="audit-layout">
+        <aside className="card catalog-card"><CatalogPanel /></aside>
+        <div className="card">
+          <div className="card-head"><h2>草稿检查与写回</h2><span className="chip warn">写回受控</span></div>
+          <div className="pad form-grid">
+            <SafetyBoundaryBanner compact />
+            {chapterContent.data ? (
+              <ChapterActions chapterId={chapterContent.data.id} mode="full" />
+            ) : (
+              <p className="muted">请选择一章正文。人工草稿可查看改动后写回；AI 草稿需要先检查。</p>
+            )}
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-head"><h2>记忆整理</h2><span className="chip blue">上下文</span></div>
+          <div className="pad">
+            <MemoryView />
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-head"><h2>最近任务</h2><span className="chip">队列</span></div>
+          <div className="pad">
+            <JobList compact />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function SettingsModelsPage() {
+  return (
+    <section className="page active">
+      <h2 className="page-title">设置/模型</h2>
+      <p className="page-subtitle">管理作品路径、模型连通性、调用统计和成本提示。高级信息默认留在这里。</p>
+      <div className="grid">
+        <div className="card span-5">
+          <div className="card-head"><h2>作品列表 / 最近打开</h2><span className="chip blue">本地</span></div>
+          <div className="pad">
+            <WorkspacePanel />
+          </div>
+        </div>
+        <div className="card span-7">
+          <div className="card-head"><h2>模型与调用质量</h2><span className="chip warn">高级</span></div>
+          <div className="pad">
+            <ModelsView />
+          </div>
+        </div>
+      </div>
     </section>
   );
 }

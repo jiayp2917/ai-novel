@@ -62,6 +62,7 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
         PipelineState.REVIEWED.value,
         PipelineState.FIXING.value,
         PipelineState.APPROVED.value,
+        PipelineState.PUBLISHED.value,
         PipelineState.SUMMARIZED.value,
         PipelineState.DONE.value,
         PipelineState.PAUSED.value,

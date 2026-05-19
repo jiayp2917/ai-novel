@@ -4,6 +4,7 @@ from typing import Any, Protocol
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
+from backend.app.core.file_utils import safe_read_text
 from backend.app.db.models import Artifact, Chapter, Review
 from backend.app.repositories import Repository
 from backend.app.services.annotations import NotFoundError
@@ -198,7 +199,7 @@ class ReviewerService:
         return chapter
 
     def _artifact_text(self, artifact: Artifact) -> str:
-        return self._runtime_safe_path(artifact.path).read_text(encoding="utf-8")
+        return safe_read_text(self._runtime_safe_path(artifact.path), encoding="utf-8")
 
     def _validate_artifact_file(self, artifact: Artifact) -> None:
         path = self._runtime_safe_path(artifact.path)

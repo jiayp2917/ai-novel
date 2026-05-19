@@ -8,7 +8,7 @@ export function SafetyBoundaryBanner({ compact = false }: { compact?: boolean })
       <div className="safety-banner__rules">
         <span>审核只判断</span>
         <span>设定/章纲只提案</span>
-        <span>发布前校验 hash、diff、备份</span>
+        <span>写回前校验版本、改动对比和备份</span>
       </div>
     </section>
   );

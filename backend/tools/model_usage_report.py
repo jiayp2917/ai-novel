@@ -287,6 +287,8 @@ def _role_usage(by_route: dict[tuple[str, str, str], dict[str, Any]]) -> list[di
 def _reviewer_quality(metrics: dict[str, Any]) -> dict[str, Any]:
     issue_count = metrics["issue_count"]
     return {
+        "sample_count": metrics["total"],
+        "insufficient_data": metrics["total"] == 0,
         "reviews": metrics["total"],
         "passed": metrics["passed"],
         "pass_rate": _ratio(metrics["passed"], metrics["total"]),
@@ -332,6 +334,8 @@ def _writer_quality(artifacts: list[Artifact], runtime_root: Path) -> dict[str, 
         counts.append({"artifact_id": artifact.id, "base_chapter_id": artifact.base_chapter_id, "chinese_chars": count, "status": status})
     known = len(candidates) - unknown
     return {
+        "sample_count": known,
+        "insufficient_data": known == 0,
         "candidate_count": len(candidates),
         "known_count": known,
         "unknown_count": unknown,
@@ -395,6 +399,8 @@ def _fixer_quality(reviews: list[Review], artifacts: list[Artifact]) -> dict[str
             }
         )
     return {
+        "sample_count": reviewed,
+        "insufficient_data": reviewed == 0,
         "fixed_candidate_count": len(fix_artifacts),
         "reviewed_count": reviewed,
         "passed": passed,

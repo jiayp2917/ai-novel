@@ -159,7 +159,7 @@ def test_chapter_versions_api_lists_current_version_first(tmp_path: Path, monkey
     reset_engine()
 
 
-def test_scan_does_not_version_unchanged_chapter_when_same_file_changes(tmp_path: Path) -> None:
+def test_scan_refreshes_unchanged_chapter_version_when_same_file_changes(tmp_path: Path) -> None:
     content = tmp_path / "content"
     chapter_path = content / "chapters" / "book.md"
     write(chapter_path, "# 第001章 First\nAlpha\n\n# 第2章 Second\nBeta")
@@ -167,13 +167,19 @@ def test_scan_does_not_version_unchanged_chapter_when_same_file_changes(tmp_path
     LibraryScanner(session, content).scan()
 
     chapter_one = session.scalar(select(Chapter).where(Chapter.chapter_no == 1))
+    first_version = chapter_one.current_version
+    assert first_version is not None
     first_versions = session.query(ChapterVersion).filter(ChapterVersion.chapter_id == chapter_one.id).count()
     write(chapter_path, "# 第001章 First\nAlpha\n\n# 第2章 Second\nBeta changed")
     LibraryScanner(session, content).scan()
+    session.refresh(chapter_one)
 
     second_versions = session.query(ChapterVersion).filter(ChapterVersion.chapter_id == chapter_one.id).count()
     assert first_versions == 1
-    assert second_versions == 1
+    assert second_versions == 2
+    assert chapter_one.current_version is not None
+    assert chapter_one.current_version.body_hash == first_version.body_hash
+    assert chapter_one.current_version.source_file_hash != first_version.source_file_hash
     assert chapter_one.range_start == 0
 
 
@@ -327,3 +333,26 @@ def test_scan_does_not_relocate_terminal_annotation_status(tmp_path: Path) -> No
 
     annotation = session.scalar(select(Annotation))
     assert annotation.status == "resolved"
+
+
+def test_scan_refreshes_unchanged_chapter_version_when_same_file_hash_changes(tmp_path: Path) -> None:
+    content = tmp_path / "content"
+    chapter_path = content / "chapters" / "book.md"
+    original = "# 第001章 First\nAlpha text.\n\n# 第002章 Second\nSecond unchanged."
+    write(chapter_path, original)
+    session = make_session()
+    LibraryScanner(session, content).scan()
+    chapter_two = session.scalar(select(Chapter).where(Chapter.chapter_no == 2))
+    assert chapter_two is not None
+    old_version = chapter_two.current_version
+    assert old_version is not None
+
+    changed = "# 第001章 First\nAlpha changed.\n\n# 第002章 Second\nSecond unchanged."
+    write(chapter_path, changed)
+    LibraryScanner(session, content).scan()
+    session.refresh(chapter_two)
+
+    assert chapter_two.current_version_id != old_version.id
+    assert chapter_two.current_version is not None
+    assert chapter_two.current_version.body_hash == old_version.body_hash
+    assert chapter_two.current_version.source_file_hash != old_version.source_file_hash

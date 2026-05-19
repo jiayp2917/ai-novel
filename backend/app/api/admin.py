@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from backend.app.db.models import Artifact
 from backend.app.db.session import get_db
 from backend.app.services.model_client import ChatMessage, ModelClient, ModelClientError
 from backend.app.services.model_router import ModelRouteNotFoundError, ModelRouter
 from backend.app.services.skills import SkillLoader
+from backend.app.services.workspace import workspace_runtime_root
 
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -72,5 +76,10 @@ def model_routes() -> dict:
 
 
 @router.get("/skills")
-def enabled_skills() -> dict:
-    return {"skills": SkillLoader().list_enabled()}
+def enabled_skills(session: Session = Depends(get_db)) -> dict:
+    loader = SkillLoader()
+    try:
+        artifacts = list(session.scalars(select(Artifact).order_by(Artifact.created_at.desc(), Artifact.id.desc()).limit(500)))
+    except SQLAlchemyError:
+        return {"skills": loader.list_enabled()}
+    return {"skills": loader.list_enabled_with_usage(artifacts, workspace_runtime_root())}

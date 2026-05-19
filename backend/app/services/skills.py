@@ -1,7 +1,10 @@
+import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from backend.app.core.file_utils import safe_read_text
 from backend.app.utils.hashing import sha256_text
 
 
@@ -65,11 +68,32 @@ class SkillLoader:
         for path in sorted(self.root.rglob("*.md")):
             skill = self._read(path)
             if skill.enabled:
-                items.append(skill_summary(skill))
+                items.append(_with_empty_usage(skill_summary(skill)))
+        return items
+
+    def list_enabled_with_usage(self, artifacts: list[Any], runtime_root: Path) -> list[dict[str, Any]]:
+        usage = skill_usage_from_artifacts(artifacts, runtime_root)
+        items = []
+        for item in self.list_enabled():
+            by_path = usage["by_path"].get(item["path"])
+            by_hash = usage["by_sha256"].get(item["sha256"])
+            latest = by_path or by_hash or {}
+            enriched = _with_empty_usage(item)
+            enriched.update(
+                {
+                    "last_used_at": latest.get("last_used_at"),
+                    "last_used_task_type": latest.get("last_used_task_type"),
+                    "last_used_artifact_id": latest.get("last_used_artifact_id"),
+                    "last_used_chapter_id": latest.get("last_used_chapter_id"),
+                    "included_in_latest_context": item["path"] in usage["latest_paths"]
+                    or item["sha256"] in usage["latest_sha256"],
+                }
+            )
+            items.append(enriched)
         return items
 
     def _read(self, path: Path) -> Skill:
-        text = path.read_text(encoding="utf-8")
+        text = safe_read_text(path, encoding="utf-8")
         metadata, content = parse_front_matter(text)
         relative = path.relative_to(self.root).as_posix()
         return Skill(
@@ -115,3 +139,119 @@ def skill_summary(skill: Skill) -> dict[str, Any]:
         "path": skill.path,
         "sha256": skill.sha256,
     }
+
+
+def _with_empty_usage(item: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(item)
+    enriched.setdefault("last_used_at", None)
+    enriched.setdefault("last_used_task_type", None)
+    enriched.setdefault("last_used_artifact_id", None)
+    enriched.setdefault("last_used_chapter_id", None)
+    enriched.setdefault("included_in_latest_context", False)
+    return enriched
+
+
+def skill_usage_from_artifacts(artifacts: list[Any], runtime_root: Path) -> dict[str, Any]:
+    by_path: dict[str, dict[str, Any]] = {}
+    by_sha256: dict[str, dict[str, Any]] = {}
+    latest_context_key = ""
+    latest_paths: set[str] = set()
+    latest_sha256: set[str] = set()
+
+    for artifact in artifacts:
+        metadata = _loads_json(getattr(artifact, "metadata_json", None), {})
+        reports = _context_reports(artifact, metadata, runtime_root)
+        for report in reports:
+            skills = report.get("skills")
+            if not isinstance(skills, list):
+                continue
+            created_at = getattr(artifact, "created_at", None)
+            task_type = report.get("task_type") or metadata.get("task_type")
+            chapter_id = report.get("chapter_id") or getattr(artifact, "base_chapter_id", None)
+            report_paths: set[str] = set()
+            report_sha256: set[str] = set()
+            for skill in skills:
+                if not isinstance(skill, dict):
+                    continue
+                path = str(skill.get("path") or "").strip()
+                sha256 = str(skill.get("sha256") or "").strip()
+                if not path and not sha256:
+                    continue
+                record = {
+                    "last_used_at": _datetime_to_json(created_at),
+                    "last_used_task_type": task_type,
+                    "last_used_artifact_id": getattr(artifact, "id", None),
+                    "last_used_chapter_id": chapter_id,
+                }
+                if path:
+                    report_paths.add(path)
+                    if _is_newer(record, by_path.get(path)):
+                        by_path[path] = record
+                if sha256:
+                    report_sha256.add(sha256)
+                    if _is_newer(record, by_sha256.get(sha256)):
+                        by_sha256[sha256] = record
+            created_key = _datetime_key(created_at)
+            if created_key >= latest_context_key:
+                latest_context_key = created_key
+                latest_paths = report_paths
+                latest_sha256 = report_sha256
+    return {
+        "by_path": by_path,
+        "by_sha256": by_sha256,
+        "latest_paths": latest_paths,
+        "latest_sha256": latest_sha256,
+    }
+
+
+def _context_reports(artifact: Any, metadata: dict[str, Any], runtime_root: Path) -> list[dict[str, Any]]:
+    reports: list[dict[str, Any]] = []
+    inline_report = metadata.get("context_report")
+    if isinstance(inline_report, dict):
+        reports.append(inline_report)
+    if getattr(artifact, "kind", None) == "context_report":
+        path = _safe_runtime_path(runtime_root, str(getattr(artifact, "path", "")))
+        if path is not None and path.exists() and path.is_file():
+            payload = _loads_json(safe_read_text(path, encoding="utf-8"), {})
+            if isinstance(payload, dict):
+                reports.append(payload)
+    return reports
+
+
+def _safe_runtime_path(runtime_root: Path, relative_path: str) -> Path | None:
+    root = runtime_root.resolve()
+    try:
+        path = (root / relative_path).resolve()
+    except OSError:
+        return None
+    if path == root or root in path.parents:
+        return path
+    return None
+
+
+def _loads_json(raw: str | None, fallback: Any) -> Any:
+    try:
+        payload = json.loads(raw or "")
+    except (TypeError, json.JSONDecodeError):
+        return fallback
+    if isinstance(fallback, dict):
+        return payload if isinstance(payload, dict) else fallback
+    return payload
+
+
+def _is_newer(candidate: dict[str, Any], current: dict[str, Any] | None) -> bool:
+    if current is None:
+        return True
+    return str(candidate.get("last_used_at") or "") >= str(current.get("last_used_at") or "")
+
+
+def _datetime_to_json(value: Any) -> str | None:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return None
+
+
+def _datetime_key(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return ""

@@ -3,6 +3,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text
 from backend.app.core.config import get_settings
 from backend.app.db.models import Annotation, SourceFile
 from backend.app.services.annotations import InvalidRequestError, NotFoundError
@@ -25,7 +26,7 @@ class SourceProposalService:
         if source_file.kind not in {"settings", "outlines"}:
             raise InvalidRequestError("Only settings and outlines can use source proposals")
         annotations = self._annotations(source_file_id, annotation_ids)
-        text = self.workspace.resolve_source_path(source_file.path).read_text(encoding="utf-8-sig")
+        text = safe_read_text(self.workspace.resolve_source_path(source_file.path), encoding="utf-8-sig")
         role = "outliner" if source_file.kind == "outlines" else "structural_fix"
         response = self.model_client.chat(
             role=role,

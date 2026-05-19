@@ -26,13 +26,13 @@ export function HomeView() {
   const chapterCount = chapters.data?.length ?? 0;
   const memoryCount = memory.data?.length ?? 0;
   const runningJobs = cost.data?.running_jobs ?? 0;
-  const reviewJobs = jobs.data?.filter((job) => job.type.includes('review')).length ?? 0;
+  const aiJobs = jobs.data?.filter((job) => job.type.includes('review') || job.type.includes('fix') || job.type.includes('memory')).length ?? 0;
 
   const modules: ModuleCard[] = [
     {
       view: 'writing',
       eyebrow: '正文',
-      title: '正文编写',
+      title: '写作',
       description: '打开章节、阅读正文、创建批注、生成草稿候选。正文区域保持最大化，模型操作不混入主写作区。',
       action: '进入写作台',
       metric: `${chapterCount} 章`,
@@ -54,43 +54,19 @@ export function HomeView() {
       metric: '阶段接入中',
     },
     {
-      view: 'review',
-      eyebrow: '审核',
-      title: '审核中心',
-      description: '对候选进行证据约束审核，查看 JSON 问题、owner 分类和阻断原因。',
-      action: '进入审核',
-      metric: `${reviewJobs} 任务`,
+      view: 'ai',
+      eyebrow: 'AI',
+      title: 'AI 工作台',
+      description: '集中处理草稿检查、AI 修订、记忆整理和写回确认。',
+      action: '打开 AI 工作台',
+      metric: `${aiJobs} 任务`,
     },
     {
-      view: 'fix_publish',
-      eyebrow: '修复 / 发布',
-      title: '修复发布',
-      description: '查看 diff、发布门、备份和写回状态。正式正文只允许通过发布门写回。',
-      action: '进入发布门',
-      metric: '安全写回',
-    },
-    {
-      view: 'memory',
-      eyebrow: '记忆',
-      title: '短记忆库',
-      description: '重建核心事实、章节卡、上下文预览，减少模型失忆和无效 token 消耗。',
-      action: '管理记忆',
-      metric: `${memoryCount} 条`,
-    },
-    {
-      view: 'models',
-      eyebrow: '模型',
-      title: '模型与任务',
-      description: '集中查看模型路由、连通性探测、任务队列、调用次数和成本统计。',
-      action: '查看模型任务',
-      metric: `${cost.data?.today_model_calls ?? 0} 次`,
-    },
-    {
-      view: 'workspace',
+      view: 'settings',
       eyebrow: '工作区',
-      title: '素材索引',
-      description: '切换工作区、扫描素材、识别旧目录和 content 目录布局。',
-      action: '管理工作区',
+      title: '设置/模型',
+      description: '切换工作区、扫描素材、查看模型路由和调用统计。',
+      action: '管理设置',
       metric: health.data?.workspace?.layout === 'legacy' ? '旧目录' : '工作区',
     },
   ];
@@ -131,8 +107,8 @@ export function HomeView() {
             <button className="primary-button" type="button" onClick={() => setActiveView('writing')}>
               开始正文编写
             </button>
-            <button className="secondary-button" type="button" onClick={() => setActiveView('models')}>
-              查看模型任务
+            <button className="secondary-button" type="button" onClick={() => setActiveView('ai')}>
+              打开 AI 工作台
             </button>
           </div>
           <div className="home-stats">
@@ -159,7 +135,7 @@ export function HomeView() {
         <div className="flow-card">
           <span>3</span>
           <strong>发布门</strong>
-          <p>只有正文候选满足审核、diff、备份和 hash 校验后可写回。</p>
+          <p>只有正文草稿满足检查、改动对比和备份校验后可写回。</p>
         </div>
         <div className="flow-card">
           <span>4</span>
@@ -189,22 +165,22 @@ export function HomeView() {
               <p className="eyebrow">最近工作</p>
               <h2>当前项目入口</h2>
             </div>
-            <button className="secondary-button" type="button" onClick={() => setActiveView('workspace')}>
+            <button className="secondary-button" type="button" onClick={() => setActiveView('settings')}>
               管理工作区
             </button>
           </div>
           <div className="home-list">
             <button type="button" onClick={() => setActiveView('writing')}>
-              <strong>正文编写</strong>
+              <strong>写作</strong>
               <span>{chapterCount} 章可用，右键批注，草稿保存为候选</span>
             </button>
             <button type="button" onClick={() => setActiveView('planning')}>
               <strong>设定/章纲</strong>
               <span>系统设定、小说设定、章纲只进入提案流程</span>
             </button>
-          <button type="button" onClick={() => setActiveView('models')}>
-            <strong>模型任务</strong>
-            <span>集中查看路由、探测、任务队列和 token 统计</span>
+          <button type="button" onClick={() => setActiveView('ai')}>
+            <strong>AI 工作台</strong>
+            <span>集中检查草稿、整理记忆和查看任务</span>
           </button>
           <button type="button" onClick={() => setActiveView('pipeline')}>
             <strong>自动流水线</strong>
@@ -222,8 +198,8 @@ export function HomeView() {
           <div className="home-rules">
             <span>正文不直接覆盖源文件</span>
             <span>设定/章纲只生成提案</span>
-            <span>模型调用需明确 token 消耗</span>
-            <span>发布前必须有候选、审核、备份和 diff</span>
+            <span>模型调用需明确本地用量记录和供应商消耗口径</span>
+            <span>写回前必须有草稿、检查、备份和改动对比</span>
           </div>
         </div>
       </section>

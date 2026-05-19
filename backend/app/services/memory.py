@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text
 from backend.app.db.models import AnnotationInsight, Chapter, MemoryItem, SourceFile
 from backend.app.repositories import Repository
 from backend.app.services.workspace import WorkspaceResolver
@@ -259,7 +260,7 @@ class MemoryService:
         )
 
     def _read_source(self, source: SourceFile) -> str:
-        return self.workspace.resolve_source_path(source.path).read_text(encoding="utf-8-sig")
+        return safe_read_text(self.workspace.resolve_source_path(source.path), encoding="utf-8-sig")
 
     def _read_chapter_text(self, source: SourceFile, chapter: Chapter) -> str:
         text = self._read_source(source)

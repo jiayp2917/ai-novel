@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text
 from backend.app.db.models import Chapter, ChapterVersion, SourceFile
 from backend.app.db.session import get_db
 from backend.app.schemas import ChapterContentRead, ChapterRead, SourceFileContentRead, SourceFileRead
@@ -28,7 +29,7 @@ def get_source_file(source_file_id: int, session: Session = Depends(get_db)) -> 
     if source_file is None or not source_file.active:
         raise HTTPException(status_code=404, detail="Source file not found")
     try:
-        text = WorkspaceResolver().resolve_source_path(source_file.path).read_text(encoding="utf-8-sig")
+        text = safe_read_text(WorkspaceResolver().resolve_source_path(source_file.path), encoding="utf-8-sig")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
@@ -63,7 +64,7 @@ def get_chapter_content(chapter_id: int, session: Session = Depends(get_db)) -> 
     if chapter is None or not chapter.active:
         raise HTTPException(status_code=404, detail="Chapter not found")
     try:
-        full_text = WorkspaceResolver().resolve_source_path(chapter.source_file.path).read_text(encoding="utf-8-sig")
+        full_text = safe_read_text(WorkspaceResolver().resolve_source_path(chapter.source_file.path), encoding="utf-8-sig")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {

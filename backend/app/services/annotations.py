@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text
 from backend.app.db.models import Annotation, Chapter, SourceFile
 from backend.app.repositories import Repository
 from backend.app.schemas import AnnotationRequest, AnnotationUpdate
@@ -240,11 +241,11 @@ class AnnotationService:
     def _chapter_text(self, chapter: Chapter) -> str:
         if chapter.current_version is None:
             raise InvalidRequestError("Chapter has no current version")
-        text = self.workspace.resolve_source_path(chapter.source_file.path).read_text(encoding="utf-8-sig")
+        text = safe_read_text(self.workspace.resolve_source_path(chapter.source_file.path), encoding="utf-8-sig")
         return text[chapter.range_start : chapter.range_end]
 
     def _source_text(self, source_file: SourceFile) -> str:
-        return self.workspace.resolve_source_path(source_file.path).read_text(encoding="utf-8-sig")
+        return safe_read_text(self.workspace.resolve_source_path(source_file.path), encoding="utf-8-sig")
 
     def _annotation_text_scope(self, annotation: Annotation) -> str:
         if annotation.chapter_id is not None:

@@ -4,11 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.core.config import get_settings
 from backend.app.db.models import Artifact, Chapter, Job, ModelCall, Review, SourceFile
-from backend.app.db.session import get_db
+from backend.app.db.session import get_db, reset_engine
 from backend.app.services.artifacts import ArtifactStore
+from backend.app.services.pipeline.runs import PipelineRunService
+from backend.app.services.pipeline.state_machine import PipelineState, PipelineStateMachine, job_payload
+from backend.app.services.skills import SkillLoader, skill_summary
 from backend.app.services.workspace import WorkspaceResolver, get_active_workspace_info
+from backend.tools.create_e2e_workspace import main as reset_e2e_workspace
 
 
 router = APIRouter(prefix="/api/test", tags=["test-support"])
@@ -17,6 +22,10 @@ router = APIRouter(prefix="/api/test", tags=["test-support"])
 class SeedCandidateRequest(BaseModel):
     chapter_id: int
     text: str
+
+
+class SeedAiCandidateRequest(SeedCandidateRequest):
+    task_type: str = "generate_chapter_draft"
 
 
 class SeedReviewedCandidateRequest(SeedCandidateRequest):
@@ -56,6 +65,35 @@ def seed_candidate(payload: SeedCandidateRequest, session: Session = Depends(get
     )
     session.commit()
     return {"artifact_id": artifact.id, "chapter_id": chapter.id}
+
+
+@router.post("/seed-ai-candidate")
+def seed_ai_candidate(payload: SeedAiCandidateRequest, session: Session = Depends(get_db)) -> dict:
+    _assert_test_environment()
+    chapter = session.get(Chapter, payload.chapter_id)
+    if chapter is None or not chapter.active:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    artifact = ArtifactStore(session).save_text(
+        kind="candidate",
+        text=payload.text,
+        metadata={
+            "purpose": "playwright_e2e_unreviewed_ai_seed",
+            "task_type": payload.task_type,
+            "source": "ai_generated_draft",
+            "requires_ai_review": True,
+        },
+        base_chapter=chapter,
+    )
+    session.commit()
+    return {"artifact_id": artifact.id, "chapter_id": chapter.id}
+
+
+@router.post("/reset-sandbox-workspace")
+def reset_sandbox_workspace() -> dict:
+    _assert_test_environment()
+    reset_e2e_workspace()
+    reset_engine()
+    return {"status": "ok"}
 
 
 @router.post("/seed-reviewed-candidate")
@@ -113,9 +151,9 @@ def mutate_chapter_source(payload: MutateChapterSourceRequest, session: Session 
     if chapter is None or not chapter.active:
         raise HTTPException(status_code=404, detail="Chapter not found")
     source_path = WorkspaceResolver().resolve_source_path(chapter.source_file.path)
-    original = source_path.read_text(encoding="utf-8-sig")
+    original = safe_read_text(source_path, encoding="utf-8-sig")
     updated = original + payload.marker
-    source_path.write_text(updated, encoding="utf-8")
+    safe_write_text(source_path, updated, encoding="utf-8")
     return {"chapter_id": chapter.id, "source_file_id": chapter.source_file_id, "chars_added": len(payload.marker)}
 
 
@@ -131,6 +169,34 @@ def seed_budget_paused_job(session: Session = Depends(get_db)) -> dict:
     session.add(job)
     session.commit()
     return {"job_id": job.id, "status": job.status}
+
+
+@router.post("/seed-failed-pipeline-run")
+def seed_failed_pipeline_run(session: Session = Depends(get_db)) -> dict:
+    _assert_test_environment()
+    run = PipelineRunService(session).create_run(
+        start_chapter=1,
+        end_chapter=1,
+        mode="review_only",
+        chunk_size=1,
+        max_fix_rounds=0,
+        dry_run=True,
+    )
+    run_job = session.get(Job, run["id"])
+    if run_job is None:
+        raise HTTPException(status_code=404, detail="Pipeline run not found")
+    child_ids = [int(item) for item in job_payload(run_job).get("child_task_ids", []) if isinstance(item, int)]
+    if not child_ids:
+        raise HTTPException(status_code=400, detail="Pipeline run has no child tasks")
+    child = session.get(Job, child_ids[0])
+    if child is None:
+        raise HTTPException(status_code=404, detail="Pipeline child task not found")
+    machine = PipelineStateMachine(session)
+    machine.transition(child, PipelineState.QUEUED)
+    machine.transition(child, PipelineState.FAILED_RETRYABLE, error="测试：模型返回格式错误")
+    machine.transition(run_job, PipelineState.FAILED_RETRYABLE, error="测试：子任务失败")
+    session.commit()
+    return {"run_id": run_job.id, "child_task_id": child.id, "status": run_job.status}
 
 
 @router.post("/seed-model-quality-report")
@@ -153,6 +219,7 @@ def seed_model_quality_report(session: Session = Depends(get_db)) -> dict:
                 "context_degraded": True,
                 "selected_sections": [{"name": "chapter_text", "chars": 800}],
                 "dropped_sections": [{"name": "timeline", "chars": 500}],
+                "skills": [skill_summary(skill) for skill in SkillLoader().load_for_task("generate_chapter_draft")],
             },
         },
         base_chapter=chapter,

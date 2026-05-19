@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.app.core.config import Settings, get_settings
+from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.utils.paths import safe_join
 
 
@@ -153,7 +154,8 @@ def set_active_workspace(path: Path) -> WorkspaceInfo:
     info = detect_workspace(resolved)
     if info.layout == UNSUPPORTED_LAYOUT:
         raise ValueError("Workspace does not contain supported source directories")
-    workspace_config_path().write_text(
+    safe_write_text(
+        workspace_config_path(),
         json.dumps(
             {
                 "active_workspace": str(info.root),
@@ -222,7 +224,7 @@ def _read_workspace_path() -> Path | None:
     if not path.exists():
         return None
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(safe_read_text(path, encoding="utf-8"))
     except json.JSONDecodeError:
         return None
     raw = payload.get("active_workspace") or payload.get("path")

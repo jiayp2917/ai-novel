@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.core.config import get_settings
 from backend.app.db.models import Artifact, Chapter, ChapterVersion, Event, PublishDecision, Review, SourceFile
 from backend.app.repositories import Repository
@@ -110,7 +111,7 @@ class ReviewPublishService:
         self._validate_artifact_file(artifact)
         diff_text = self._diff_text(artifact)
         path = self._runtime_path("diffs") / f"artifact_{artifact.id}.diff"
-        path.write_text(diff_text, encoding="utf-8")
+        safe_write_text(path, diff_text, encoding="utf-8")
         return {"artifact_id": artifact.id, "diff": diff_text, "path": path.relative_to(self.runtime_root).as_posix()}
 
     def _diff_text(self, artifact: Artifact) -> str:
@@ -138,24 +139,27 @@ class ReviewPublishService:
         self._validate_artifact_file(artifact)
         if not approved_by_user:
             raise ReviewPublishError("Publish requires approved_by_user=true")
-        review = self._latest_review(artifact.id)
-        if review is None:
-            raise ReviewPublishError("Publish requires a review")
-        if not review.passed and not (force and force_reason):
-            raise ReviewPublishError("Review did not pass; force requires force_reason")
-        if force and not force_reason:
-            raise ReviewPublishError("force_reason is required when force=true")
-        self._validate_review_binding(review, artifact)
         if artifact.base_source_file_id is None or artifact.base_source_file_hash is None:
             raise ReviewPublishError("Artifact has no base source file")
         self._validate_publish_source_kind(artifact)
+        review = self._latest_review(artifact.id)
+        if self._requires_ai_review_for_publish(artifact):
+            if review is None:
+                raise ReviewPublishError("Publish requires a review")
+            if not review.passed and not (force and force_reason):
+                raise ReviewPublishError("Review did not pass; force requires force_reason")
+            if force and not force_reason:
+                raise ReviewPublishError("force_reason is required when force=true")
+            self._validate_review_binding(review, artifact)
+        elif force and not force_reason:
+            raise ReviewPublishError("force_reason is required when force=true")
         with publish_locks.acquire(artifact.base_source_file_id):
             source_file = self.workspace.resolve_source_path(self._source_path(artifact))
             if sha256_file(source_file) != artifact.base_source_file_hash:
                 raise ReviewPublishError("Source file hash changed; rescan and regenerate candidate")
 
             candidate = self._artifact_text(artifact)
-            original = source_file.read_text(encoding="utf-8-sig")
+            original = safe_read_text(source_file, encoding="utf-8-sig")
             published_text = self._published_text(artifact, original, candidate)
             backup_path = self._backup_source(source_file)
             diff_info = self.write_diff_artifact(artifact.id)
@@ -166,7 +170,7 @@ class ReviewPublishService:
                 LibraryScanner(self.session).scan()
                 MemoryService(self.session).rebuild()
             except Exception:
-                self._atomic_write(source_file, backup_path.read_text(encoding="utf-8-sig"))
+                self._atomic_write(source_file, safe_read_text(backup_path, encoding="utf-8-sig"))
                 self.session.rollback()
                 self.session.add(
                     Event(
@@ -307,7 +311,7 @@ class ReviewPublishService:
         return artifact
 
     def _artifact_text(self, artifact: Artifact) -> str:
-        return self._runtime_safe_path(artifact.path).read_text(encoding="utf-8")
+        return safe_read_text(self._runtime_safe_path(artifact.path), encoding="utf-8")
 
     def _validate_artifact_file(self, artifact: Artifact) -> None:
         path = self._runtime_safe_path(artifact.path)
@@ -324,7 +328,7 @@ class ReviewPublishService:
         return path
 
     def _base_text(self, artifact: Artifact) -> str:
-        source = self.workspace.resolve_source_path(self._source_path(artifact)).read_text(encoding="utf-8-sig")
+        source = safe_read_text(self.workspace.resolve_source_path(self._source_path(artifact)), encoding="utf-8-sig")
         chapter = self._base_chapter(artifact)
         if chapter is None:
             return source
@@ -341,6 +345,8 @@ class ReviewPublishService:
             raise ReviewPublishError("Chapter candidate must start with a Markdown heading")
         if chapter.title and chapter.title not in candidate.splitlines()[0]:
             raise ReviewPublishError("Chapter title changed; regenerate candidate or force after review")
+        if version.range_end < len(original) and original[version.range_end :].startswith("#") and not candidate.endswith("\n"):
+            candidate = f"{candidate}\n"
         return original[: version.range_start] + candidate + original[version.range_end :]
 
     def _base_chapter(self, artifact: Artifact) -> Chapter | None:
@@ -385,6 +391,22 @@ class ReviewPublishService:
         if artifact.kind != "candidate" or not source.active or source.kind != "chapters" or artifact.base_chapter_id is None:
             raise ReviewPublishError("Only chapter artifacts can be published from this workflow")
 
+    def _requires_ai_review_for_publish(self, artifact: Artifact) -> bool:
+        metadata = self._artifact_metadata(artifact)
+        return not (
+            metadata.get("source") == "manual_editor_draft"
+            and metadata.get("requires_ai_review") is False
+            and artifact.kind == "candidate"
+            and artifact.base_chapter_id is not None
+        )
+
+    def _artifact_metadata(self, artifact: Artifact) -> dict[str, Any]:
+        try:
+            payload = json.loads(artifact.metadata_json or "{}")
+        except json.JSONDecodeError:
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
     def _latest_review(self, artifact_id: int) -> Review | None:
         return self.session.scalar(
             select(Review).where(Review.artifact_id == artifact_id).order_by(Review.id.desc())
@@ -403,7 +425,7 @@ class ReviewPublishService:
 
     def _atomic_write(self, path: Path, text: str) -> None:
         temp_path = path.with_name(f".{path.name}.tmp")
-        temp_path.write_text(text, encoding="utf-8")
+        safe_write_text(temp_path, text, encoding="utf-8")
         temp_path.replace(path)
 
 

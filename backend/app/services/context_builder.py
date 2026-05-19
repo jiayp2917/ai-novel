@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text
 from backend.app.core.config import get_settings
 from backend.app.db.models import Annotation, AnnotationInsight, Chapter, MemoryItem
 from backend.app.services.artifacts import ArtifactStore
@@ -209,7 +210,7 @@ class ContextBuilder:
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
     def _chapter_text(self, chapter: Chapter) -> str:
-        text = self.workspace.resolve_source_path(chapter.source_file.path).read_text(encoding="utf-8-sig")
+        text = safe_read_text(self.workspace.resolve_source_path(chapter.source_file.path), encoding="utf-8-sig")
         return text[chapter.range_start : chapter.range_end]
 
     def _memory_text(self, kind: str, scope: str, *, limit: int) -> str:

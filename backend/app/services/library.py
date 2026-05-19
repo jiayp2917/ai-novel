@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.file_utils import safe_read_text
 from backend.app.db.models import Chapter, ChapterVersion, MemoryItem, SourceFile
 from backend.app.schemas import ChapterCreate, ChapterVersionCreate, SourceFileCreate
 from backend.app.services.annotations import relocate_annotations_for_chapter
@@ -126,7 +127,7 @@ class LibraryScanner:
             "annotations_relocated": 0,
             "chapter_numbers": set(),
         }
-        markdown = path.read_text(encoding="utf-8-sig")
+        markdown = safe_read_text(path, encoding="utf-8-sig")
         source_hash = source_file.sha256
         for parsed in parse_chapters(markdown):
             stats["chapter_numbers"].add(parsed.chapter_no)
@@ -152,7 +153,7 @@ class LibraryScanner:
 
             body_hash = sha256_text(parsed.text)
             current = chapter.current_version
-            if current is None or current.body_hash != body_hash:
+            if current is None or current.body_hash != body_hash or current.source_file_hash != source_hash:
                 version = self.catalog.create_chapter_version(
                     ChapterVersionCreate(
                         chapter_id=chapter.id,

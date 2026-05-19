@@ -156,7 +156,7 @@ export function ChapterActions({
         />
       ) : (
         <p className="form-hint">
-          写作界面只负责正文、批注和候选生成。审核、差异与发布请进入“审核中心”或“修复发布”。
+          写作界面只负责正文、批注和草稿保存。草稿检查、差异与写回请进入“AI 工作台”。
           {artifactId ? ` 当前候选 #${artifactId} 已创建。` : ''}
         </p>
       )}

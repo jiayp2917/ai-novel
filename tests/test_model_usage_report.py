@@ -222,12 +222,18 @@ def test_collect_model_usage_report_returns_quality_and_context_details(tmp_path
     )
 
     assert report["summary"]["model_calls"] == 1
+    assert report["role_quality"]["reviewer"]["sample_count"] == 2
+    assert report["role_quality"]["reviewer"]["insufficient_data"] is False
     assert report["role_quality"]["reviewer"]["evidence_rate"] == 0.5
     assert report["role_quality"]["reviewer"]["no_evidence_issues"] == 1
     assert report["role_quality"]["writer"]["candidate_count"] == 2
+    assert report["role_quality"]["writer"]["sample_count"] == 2
+    assert report["role_quality"]["writer"]["insufficient_data"] is False
     assert report["role_quality"]["writer"]["word_count_passed"] == 1
     assert report["role_quality"]["writer"]["too_short"] == 1
     assert report["role_quality"]["fixer"]["fixed_candidate_count"] == 2
+    assert report["role_quality"]["fixer"]["sample_count"] == 1
+    assert report["role_quality"]["fixer"]["insufficient_data"] is False
     assert report["role_quality"]["fixer"]["rereview_pass_rate"] == 1.0
     assert report["role_quality"]["fixer"]["waiting_review"] == 1
     assert report["role_quality"]["fixer"]["unknown_count"] == 1
@@ -236,3 +242,11 @@ def test_collect_model_usage_report_returns_quality_and_context_details(tmp_path
     assert degraded["chapter_no"] == 1
     assert degraded["dropped_sections"] == [{"name": "timeline", "chars": 500}]
     assert "超过本次 AI 输入预算" in degraded["reason"]
+
+
+def test_collect_model_usage_report_marks_empty_quality_samples_as_insufficient() -> None:
+    report = collect_model_usage_report([], [], reviews=[], artifacts=[], decisions=[])
+
+    assert report["role_quality"]["reviewer"]["insufficient_data"] is True
+    assert report["role_quality"]["writer"]["insufficient_data"] is True
+    assert report["role_quality"]["fixer"]["insufficient_data"] is True

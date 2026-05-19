@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+key.txt
+
+# Local app/runtime state
+runtime/
+content/runtime/
+
+# In-repo legacy novel workspaces are local content, not system code.
+/00-系统/
+/01-设定/
+/02-正文/
+/03-章纲/
+
+# New-layout content placeholders may be tracked, but real source content is local.
+/content/settings/*
+!/content/settings/.gitkeep
+/content/outlines/*
+!/content/outlines/.gitkeep
+/content/chapters/*
+!/content/chapters/.gitkeep
+
+# Frontend dependencies/build outputs
+node_modules/
+dist/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Local editor/session files
+.claude/*.local.json

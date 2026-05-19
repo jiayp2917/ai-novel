@@ -1,0 +1,70 @@
+providers:
+  deepseek:
+    enabled: true
+    base_url: https://api.deepseek.com
+    api_key_env: DEEPSEEK_API_KEY
+    models:
+      - id: deepseek-v4-pro
+        enabled: true
+        cheap: false
+        supports_json: true
+        roles: [reviewer, arbiter]
+        default_max_tokens: 12000
+        low_cost_max_tokens: 4000
+      - id: deepseek-v4-flash
+        enabled: true
+        cheap: true
+        supports_json: true
+        roles: [reviewer, fixer, memory]
+        default_max_tokens: 8000
+        low_cost_max_tokens: 2500
+  kimi:
+    enabled: true
+    base_url: https://api.moonshot.cn/v1
+    api_key_env: KIMI_API_KEY
+    models:
+      - id: kimi-k2.6
+        enabled: true
+        cheap: false
+        supports_json: false
+        roles: [writer, fixer, quick_fix]
+        default_max_tokens: 10000
+        low_cost_max_tokens: 3500
+  qwen:
+    enabled: true
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: QWEN_API_KEY
+    models:
+      - id: qwen3.6-plus
+        enabled: true
+        cheap: false
+        supports_json: true
+        roles: [memory, long_context, reviewer]
+        default_max_tokens: 12000
+        low_cost_max_tokens: 3500
+      - id: qwen3.6-flash
+        enabled: true
+        cheap: true
+        supports_json: true
+        roles: [memory, long_context, reviewer]
+        default_max_tokens: 8000
+        low_cost_max_tokens: 2500
+      - id: qwen3.6-max-preview
+        enabled: true
+        cheap: false
+        supports_json: true
+        roles: [outliner, arbiter, structural_fix]
+        default_max_tokens: 16000
+        low_cost_max_tokens: 5000
+  glm:
+    enabled: true
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key_env: GLM_API_KEY
+    models:
+      - id: glm-5.1
+        enabled: true
+        cheap: false
+        supports_json: true
+        roles: [structural_fix, outliner, fixer]
+        default_max_tokens: 12000
+        low_cost_max_tokens: 4000

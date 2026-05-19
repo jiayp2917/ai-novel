@@ -1,0 +1,38 @@
+import type { ActiveView, InspectorTab, SelectionRange, TaskEntry, ThemeMode } from './types';
+
+export type WorkbenchState = {
+  activeView: ActiveView;
+  theme: ThemeMode;
+  selectedChapterId: number | null;
+  selectedSourceFileId: number | null;
+  openChapterTabIds: number[];
+  selectedAnnotationId: number | null;
+  selectedAnnotationIds: number[];
+  draftAnnotationSelection: SelectionRange | null | undefined;
+  activeArtifactId: number | null;
+  rightPanelOpen: boolean;
+  catalogPanelOpen: boolean;
+  writingFullscreen: boolean;
+  chapterFilter: string;
+  inspectorTab: InspectorTab;
+  taskLog: TaskEntry[];
+  setActiveView: (view: ActiveView) => void;
+  setTheme: (theme: ThemeMode) => void;
+  toggleTheme: () => void;
+  setSelectedChapterId: (id: number | null) => void;
+  setSelectedSourceFileId: (id: number | null) => void;
+  closeChapterTab: (id: number) => void;
+  setSelectedAnnotationId: (id: number | null) => void;
+  toggleAnnotationSelection: (id: number) => void;
+  selectAnnotationForRevision: (id: number) => void;
+  removeAnnotationFromSelection: (id: number) => void;
+  clearAnnotationSelection: () => void;
+  setDraftAnnotationSelection: (selection: SelectionRange | null | undefined) => void;
+  setActiveArtifactId: (id: number | null) => void;
+  setRightPanelOpen: (open: boolean) => void;
+  setCatalogPanelOpen: (open: boolean) => void;
+  setWritingFullscreen: (open: boolean) => void;
+  setChapterFilter: (value: string) => void;
+  setInspectorTab: (tab: InspectorTab) => void;
+  pushTask: (entry: Omit<TaskEntry, 'id'>) => void;
+};

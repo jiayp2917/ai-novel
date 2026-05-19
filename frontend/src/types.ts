@@ -212,6 +212,125 @@ export type ModelCallRecord = {
   created_at?: string;
 };
 
+export type ModelUsageReport = {
+  generated_at: string;
+  usage_note: string;
+  summary: {
+    model_calls: number;
+    success: number;
+    failed: number;
+    paused_budget: number;
+    success_rate: number;
+    input_chars: number;
+    output_chars: number;
+    provider_tokens: number;
+    estimated_million_tokens: number;
+    avg_elapsed_seconds: number;
+    jobs: {
+      total: number;
+      by_status: Record<string, number>;
+    };
+  };
+  role_usage: Array<{
+    role: string;
+    provider: string;
+    model: string;
+    calls: number;
+    success: number;
+    failed: number;
+    paused_budget: number;
+    success_rate: number;
+    cache_hits: number;
+    input_chars: number;
+    output_chars: number;
+    avg_input_chars: number;
+    avg_output_chars: number;
+    provider_tokens: number;
+    estimated_million_tokens: number;
+    avg_elapsed_seconds: number;
+    usage_sources: Record<string, number>;
+    errors: Array<{ message: string; count: number }>;
+  }>;
+  role_quality: {
+    reviewer: {
+      reviews: number;
+      passed: number;
+      pass_rate: number;
+      manual_required: number;
+      issues: number;
+      evidence_issues: number;
+      no_evidence_issues: number;
+      evidence_rate: number;
+      local_rule_issues: number;
+      json_parse_failed: number;
+      owner_counts: Record<string, number>;
+      severity_counts: Record<string, number>;
+      source_counts: Record<string, number>;
+    };
+    writer: {
+      candidate_count: number;
+      known_count: number;
+      unknown_count: number;
+      word_count_passed: number;
+      word_count_failed: number;
+      word_count_pass_rate: number;
+      too_short: number;
+      too_long: number;
+      target_min: number;
+      target_max: number;
+      hard_min: number;
+      hard_max: number;
+      samples: Array<{
+        artifact_id: number;
+        base_chapter_id: number | null;
+        chinese_chars: number | null;
+        status: string;
+      }>;
+    };
+    fixer: {
+      fixed_candidate_count: number;
+      reviewed_count: number;
+      passed: number;
+      failed: number;
+      waiting_review: number;
+      unknown_count: number;
+      rereview_pass_rate: number;
+      samples: Array<{
+        artifact_id: number;
+        base_chapter_id: number | null;
+        parent_artifact_id: unknown;
+        review_id: number | null;
+        status: string;
+      }>;
+    };
+  };
+  context_budget: {
+    context_reports: number;
+    degraded_count: number;
+    affected_chapters: Array<{
+      artifact_id: number;
+      base_chapter_id: number | null;
+      chapter_id: number | null;
+      chapter_no: number | null;
+      chapter_title: string | null;
+      task_type: string;
+      budget: number | null;
+      input_chars: number | null;
+      selected_sections: Array<{ name: string; chars: number }>;
+      dropped_sections: Array<{ name: string; chars: number }>;
+      reason: string;
+      created_at: string | null;
+    }>;
+  };
+  recommendations: string[];
+  publish: {
+    total: number;
+    published: number;
+    user_approved: number;
+    forced: number;
+  };
+};
+
 export type EventRecord = {
   id: number;
   event_type: string;

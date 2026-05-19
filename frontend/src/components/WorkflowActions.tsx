@@ -102,6 +102,7 @@ export function ChapterActions({
   });
 
   const showGeneration = mode !== 'publish';
+  const showSnapshotButton = mode !== 'writing';
   const showGate = mode !== 'writing';
   const title =
     mode === 'writing'
@@ -134,6 +135,13 @@ export function ChapterActions({
               运行任务一次
             </button>
           )}
+        </div>
+      )}
+      {showSnapshotButton && !showGeneration && (
+        <div className="action-row">
+          <button type="button" className="secondary-button" onClick={() => snapshotMutation.mutate()} disabled={snapshotMutation.isPending}>
+            从当前正文创建草稿
+          </button>
         </div>
       )}
       {preview && mode !== 'publish' && <pre className="json-preview">{JSON.stringify(preview, null, 2)}</pre>}

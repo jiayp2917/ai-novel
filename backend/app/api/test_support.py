@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
-from backend.app.db.models import Artifact, Chapter, Job, Review, SourceFile
+from backend.app.db.models import Artifact, Chapter, Job, ModelCall, Review, SourceFile
 from backend.app.db.session import get_db
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.workspace import WorkspaceResolver, get_active_workspace_info
@@ -131,6 +131,85 @@ def seed_budget_paused_job(session: Session = Depends(get_db)) -> dict:
     session.add(job)
     session.commit()
     return {"job_id": job.id, "status": job.status}
+
+
+@router.post("/seed-model-quality-report")
+def seed_model_quality_report(session: Session = Depends(get_db)) -> dict:
+    _assert_test_environment()
+    chapter = session.query(Chapter).filter(Chapter.active.is_(True)).order_by(Chapter.chapter_no).first()
+    if chapter is None:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    writer = ArtifactStore(session).save_text(
+        kind="candidate",
+        text="# 第001章\n" + ("字" * 2000),
+        metadata={
+            "purpose": "playwright_model_quality_seed",
+            "task_type": "generate_chapter_draft",
+            "context_report": {
+                "chapter_id": chapter.id,
+                "task_type": "generate_chapter_draft",
+                "budget": 1200,
+                "input_chars": 1100,
+                "context_degraded": True,
+                "selected_sections": [{"name": "chapter_text", "chars": 800}],
+                "dropped_sections": [{"name": "timeline", "chars": 500}],
+            },
+        },
+        base_chapter=chapter,
+    )
+    fixed = ArtifactStore(session).save_text(
+        kind="candidate",
+        text="# 第001章\n" + ("字" * 2100),
+        metadata={
+            "purpose": "playwright_model_quality_seed",
+            "task_type": "fix_chapter_candidate",
+            "parent_artifact_id": writer.id,
+        },
+        base_chapter=chapter,
+    )
+    session.add_all(
+        [
+            Review(
+                artifact_id=writer.id,
+                passed=False,
+                issues_json=json.dumps(
+                    [
+                        {"owner": "writer", "severity": "medium", "evidence": "原文证据", "source": "model_review"},
+                        {"owner": "admin", "severity": "blocking", "evidence": "", "source": "model_review"},
+                    ],
+                    ensure_ascii=False,
+                ),
+                evidence_count=1,
+                manual_required=True,
+                candidate_hash=writer.sha256,
+                base_source_file_hash=writer.base_source_file_hash,
+                base_chapter_version_id=writer.base_chapter_version_id,
+            ),
+            Review(
+                artifact_id=fixed.id,
+                passed=True,
+                issues_json="[]",
+                evidence_count=0,
+                manual_required=False,
+                candidate_hash=fixed.sha256,
+                base_source_file_hash=fixed.base_source_file_hash,
+                base_chapter_version_id=fixed.base_chapter_version_id,
+            ),
+            ModelCall(
+                role="reviewer",
+                provider="deepseek",
+                model="deepseek-v4-pro",
+                prompt_hash="q" * 64,
+                input_chars=100,
+                output_chars=50,
+                usage_json='{"usage_source": "provider", "total_tokens": 88, "elapsed_seconds": 1}',
+                cache_hit=False,
+                status="succeeded",
+            ),
+        ]
+    )
+    session.commit()
+    return {"writer_artifact_id": writer.id, "fix_artifact_id": fixed.id}
 
 
 @router.post("/seed-proposal")

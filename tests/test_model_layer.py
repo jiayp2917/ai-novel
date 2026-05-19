@@ -271,3 +271,75 @@ glm: glm-key
         "DEEPSEEK_API_KEY": "deepseek-key",
         "GLM_API_KEY": "glm-key",
     }
+
+
+def test_key_file_loader_accepts_key_then_provider_shorthand(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    key_file = tmp_path / "key.txt"
+    key_file.write_text(
+        """
+standalone-kimi-key
+sk-deepseek-key deepseek
+glm-key-value glm
+sk-qwen-key qwen
+""",
+        encoding="utf-8",
+    )
+    for name in ["DEEPSEEK_API_KEY", "KIMI_API_KEY", "QWEN_API_KEY", "GLM_API_KEY"]:
+        monkeypatch.delenv(name, raising=False)
+
+    loaded = load_key_file(key_file)
+
+    assert loaded == {
+        "KIMI_API_KEY": "standalone-kimi-key",
+        "DEEPSEEK_API_KEY": "sk-deepseek-key",
+        "GLM_API_KEY": "glm-key-value",
+        "QWEN_API_KEY": "sk-qwen-key",
+    }
+
+
+def test_key_file_loader_accepts_provider_equals_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    key_file = tmp_path / "key.txt"
+    key_file.write_text(
+        """
+deepseek=sk-deepseek-key
+kimi=standalone-kimi-key
+qwen=sk-qwen-key
+glm=glm-key-value
+""",
+        encoding="utf-8",
+    )
+    for name in ["DEEPSEEK_API_KEY", "KIMI_API_KEY", "QWEN_API_KEY", "GLM_API_KEY"]:
+        monkeypatch.delenv(name, raising=False)
+
+    loaded = load_key_file(key_file)
+
+    assert loaded == {
+        "DEEPSEEK_API_KEY": "sk-deepseek-key",
+        "KIMI_API_KEY": "standalone-kimi-key",
+        "QWEN_API_KEY": "sk-qwen-key",
+        "GLM_API_KEY": "glm-key-value",
+    }
+
+
+def test_key_file_loader_accepts_env_name_with_colon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    key_file = tmp_path / "key.txt"
+    key_file.write_text(
+        """
+DEEPSEEK_API_KEY:sk-deepseek-key
+KIMI_API_KEY:standalone-kimi-key
+QWEN_API_KEY:sk-qwen-key
+GLM_API_KEY:glm-key-value
+""",
+        encoding="utf-8",
+    )
+    for name in ["DEEPSEEK_API_KEY", "KIMI_API_KEY", "QWEN_API_KEY", "GLM_API_KEY"]:
+        monkeypatch.delenv(name, raising=False)
+
+    loaded = load_key_file(key_file)
+
+    assert loaded == {
+        "DEEPSEEK_API_KEY": "sk-deepseek-key",
+        "KIMI_API_KEY": "standalone-kimi-key",
+        "QWEN_API_KEY": "sk-qwen-key",
+        "GLM_API_KEY": "glm-key-value",
+    }

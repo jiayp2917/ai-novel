@@ -24,6 +24,7 @@ def load_key_file(path: Path | str = "key.txt", *, override: bool = False) -> di
     if not key_path.exists():
         return {}
     loaded: dict[str, str] = {}
+    unlabeled_values: list[str] = []
     for raw_line in key_path.read_text(encoding="utf-8-sig").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
@@ -35,13 +36,15 @@ def load_key_file(path: Path | str = "key.txt", *, override: bool = False) -> di
         else:
             parsed = _parse_provider_line(line)
             if parsed is None:
+                unlabeled = _parse_unlabeled_key(line)
+                if unlabeled:
+                    unlabeled_values.append(unlabeled)
                 continue
             name, value = parsed
-        if not value:
-            continue
-        if override or not os.getenv(name):
-            os.environ[name] = value
-        loaded[name] = value
+        if value:
+            _set_key(name, value, loaded, override=override)
+    if "KIMI_API_KEY" not in loaded and not os.getenv("KIMI_API_KEY") and len(unlabeled_values) == 1:
+        _set_key("KIMI_API_KEY", unlabeled_values[0], loaded, override=override)
     return loaded
 
 
@@ -58,12 +61,43 @@ def _clean_value(value: str) -> str:
 
 
 def _parse_provider_line(line: str) -> tuple[str, str] | None:
-    separator = "：" if "：" in line else ":" if ":" in line else ""
-    if not separator:
+    for separator in ("=", ":", "\uff1a", "锛?"):
+        if separator not in line:
+            continue
+        label, value = line.split(separator, 1)
+        normalized_label = label.strip()
+        env_name = (
+            normalized_label.upper()
+            if normalized_label.upper() in set(PROVIDER_KEY_ENV.values())
+            else PROVIDER_KEY_ENV.get(normalized_label.lower())
+        )
+        if env_name is None:
+            continue
+        cleaned = _clean_value(value)
+        return (env_name, cleaned) if cleaned else None
+
+    parts = line.split()
+    if len(parts) < 2:
         return None
-    label, value = line.split(separator, 1)
-    env_name = PROVIDER_KEY_ENV.get(label.strip().lower())
-    if env_name is None:
+    first = parts[0].strip().lower()
+    last = parts[-1].strip().lower()
+    if first in PROVIDER_KEY_ENV:
+        cleaned = _clean_value(" ".join(parts[1:]))
+        return (PROVIDER_KEY_ENV[first], cleaned) if cleaned else None
+    if last in PROVIDER_KEY_ENV:
+        cleaned = _clean_value(" ".join(parts[:-1]))
+        return (PROVIDER_KEY_ENV[last], cleaned) if cleaned else None
+    return None
+
+
+def _parse_unlabeled_key(line: str) -> str | None:
+    value = _clean_value(line)
+    if not value or any(char.isspace() for char in value):
         return None
-    cleaned = _clean_value(value)
-    return (env_name, cleaned) if cleaned else None
+    return value
+
+
+def _set_key(name: str, value: str, loaded: dict[str, str], *, override: bool) -> None:
+    if override or not os.getenv(name):
+        os.environ[name] = value
+    loaded[name] = value

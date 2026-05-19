@@ -264,6 +264,24 @@ test('budget pause is visible in author language and can be resumed from AI task
   await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('已完成', { timeout: 10000 });
 });
 
+test('model task page shows quality trends and context budget warnings', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  await seedModelQualityReport(page);
+
+  await openModelsView(page);
+  await expect(page.locator('.quality-grid')).toBeVisible();
+  await expect(page.locator('.quality-card')).toHaveCount(3);
+  await expect(page.locator('.quality-card').nth(0)).toContainText('1');
+  await expect(page.locator('.quality-card').nth(1)).toContainText('2000-2600');
+  await expect(page.locator('.quality-card').nth(2)).toContainText('0');
+  await expect(page.locator('.context-budget-list')).toBeVisible();
+  await expect(page.locator('.context-budget-card')).toContainText('timeline');
+  await expect(page.locator('.context-budget-card')).toContainText('500');
+});
+
 test('drag selection can create annotation from context menu', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
@@ -298,6 +316,10 @@ async function switchWorkspace(page: Page) {
   await page.getByRole('button', { name: '打开并扫描' }).click();
   await expect(page.locator('.workspace-feedback')).toContainText('已打开作品');
   await expect(page.locator('.workspace-stats').getByText('正文：2', { exact: true })).toBeVisible();
+}
+
+async function openModelsView(page: Page) {
+  await page.locator('.nav button').last().click();
 }
 
 async function openChapter(page: Page, paddedNo: string) {
@@ -434,4 +456,10 @@ async function seedBudgetPausedJob(page: Page): Promise<{ job_id: number; status
   const response = await page.request.post(`${apiBaseUrl}/api/test/seed-budget-paused-job`);
   expect(response.ok()).toBeTruthy();
   return (await response.json()) as { job_id: number; status: string };
+}
+
+async function seedModelQualityReport(page: Page): Promise<{ writer_artifact_id: number; fix_artifact_id: number }> {
+  const response = await page.request.post(`${apiBaseUrl}/api/test/seed-model-quality-report`);
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as { writer_artifact_id: number; fix_artifact_id: number };
 }

@@ -1195,6 +1195,102 @@ textarea {
   font-weight: 800;
 }
 
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.quality-card,
+.context-budget-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.quality-card > span,
+.quality-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.quality-card > strong {
+  color: var(--ink);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.quality-card p,
+.context-budget-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.quality-detail-grid,
+.context-budget-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 6px;
+}
+
+.quality-recommendations {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.quality-recommendations span {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.context-budget-list {
+  display: grid;
+  gap: 10px;
+}
+
+.context-budget-card > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.context-budget-card > div:first-child span {
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.section-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.section-chip-list strong {
+  width: 100%;
+}
+
+.section-chip-list span {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .pipeline-form-preview,
 .pipeline-lanes {
   grid-template-columns: repeat(2, minmax(160px, 1fr));
@@ -1729,6 +1825,7 @@ textarea {
   .split-grid,
   .dashboard-grid,
   .model-flow-grid,
+  .quality-grid,
   .memory-budget-grid,
   .model-task-grid,
   .pipeline-form-preview,
@@ -1742,6 +1839,8 @@ textarea {
   .chapter-jump,
   .artifact-trace-grid,
   .composer-grid,
+  .quality-detail-grid,
+  .context-budget-meta,
   .observability-row {
     grid-template-columns: 1fr;
   }

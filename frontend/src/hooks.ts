@@ -13,6 +13,7 @@ import type {
   Job,
   MemoryItem,
   ModelCallRecord,
+  ModelUsageReport,
   ModelRoutesPayload,
   ModelConstraints,
   PipelineRun,
@@ -128,6 +129,14 @@ export function useModelCalls() {
     queryKey: ['model-calls'],
     queryFn: () => apiRequest<ModelCallRecord[]>('/api/jobs/model-calls'),
     refetchInterval: 5000,
+  });
+}
+
+export function useModelUsageReport() {
+  return useQuery({
+    queryKey: ['model-usage-report'],
+    queryFn: () => apiRequest<ModelUsageReport>('/api/jobs/model-usage-report?days=30&limit=500'),
+    refetchInterval: 10000,
   });
 }
 

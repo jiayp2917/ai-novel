@@ -7,11 +7,12 @@ import {
   useModelCalls,
   useModelConstraints,
   useModelRoutes,
+  useModelUsageReport,
   usePublishDecisions,
   useSkills,
 } from '../hooks';
 import { useWorkbenchStore } from '../store';
-import type { ProbeModelPayload } from '../types';
+import type { ModelUsageReport, ProbeModelPayload } from '../types';
 import { JobList } from './WorkflowActions';
 
 const assistantRoles = [
@@ -28,6 +29,7 @@ export function ModelsView() {
   const cost = useCostDashboard();
   const constraints = useModelConstraints();
   const modelCalls = useModelCalls();
+  const usageReport = useModelUsageReport();
   const events = useEvents();
   const publishDecisions = usePublishDecisions();
   const skills = useSkills();
@@ -60,6 +62,8 @@ export function ModelsView() {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       void queryClient.invalidateQueries({ queryKey: ['pipeline-runs'] });
       void queryClient.invalidateQueries({ queryKey: ['cost-dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['model-calls'] });
+      void queryClient.invalidateQueries({ queryKey: ['model-usage-report'] });
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       pushTask({
         label: '继续执行任务',
@@ -108,6 +112,9 @@ export function ModelsView() {
           <div><strong>记忆整理</strong><span>整理短记忆和上下文，不创作正文。</span></div>
         </div>
       </section>
+
+      <QualityTrendSection report={usageReport.data} isLoading={usageReport.isLoading} />
+      <ContextBudgetSection report={usageReport.data} isLoading={usageReport.isLoading} />
 
       <div className="split-grid">
         <section className="workflow-card">
@@ -286,9 +293,163 @@ export function ModelsView() {
   );
 }
 
+function QualityTrendSection({ report, isLoading }: { report?: ModelUsageReport; isLoading: boolean }) {
+  const reviewer = report?.role_quality.reviewer;
+  const writer = report?.role_quality.writer;
+  const fixer = report?.role_quality.fixer;
+
+  return (
+    <section className="workflow-card">
+      <div className="section-title">
+        <div>
+          <p className="eyebrow">质量趋势</p>
+          <h2>AI 检查、写作和修订是否稳定</h2>
+        </div>
+        <span className="quality-note">{report?.usage_note ?? '本地统计为日志可见下限。'}</span>
+      </div>
+      {isLoading && <p className="muted">正在整理模型质量数据...</p>}
+      {!isLoading && (
+        <div className="quality-grid">
+          <article className="quality-card">
+            <span>AI 检查</span>
+            <strong>{percent(reviewer?.evidence_rate)}</strong>
+            <p>证据率。无证据问题 {reviewer?.no_evidence_issues ?? 0} 条，需人工判断 {reviewer?.manual_required ?? 0} 次。</p>
+            <details className="advanced-details">
+              <summary>检查详情</summary>
+              <div className="quality-detail-grid">
+                <small>检查次数：{reviewer?.reviews ?? 0}</small>
+                <small>通过：{reviewer?.passed ?? 0}</small>
+                <small>问题总数：{reviewer?.issues ?? 0}</small>
+                <small>JSON 解析失败：{reviewer?.json_parse_failed ?? 0}</small>
+              </div>
+            </details>
+          </article>
+          <article className="quality-card">
+            <span>AI 写作</span>
+            <strong>{percent(writer?.word_count_pass_rate)}</strong>
+            <p>
+              字数达标率。目标 {writer?.target_min ?? 2000}-{writer?.target_max ?? 2600} 字，
+              允许 {writer?.hard_min ?? 1900}-{writer?.hard_max ?? 2700} 字。
+            </p>
+            <details className="advanced-details">
+              <summary>草稿详情</summary>
+              <div className="quality-detail-grid">
+                <small>草稿：{writer?.candidate_count ?? 0}</small>
+                <small>达标：{writer?.word_count_passed ?? 0}</small>
+                <small>过短：{writer?.too_short ?? 0}</small>
+                <small>过长：{writer?.too_long ?? 0}</small>
+                <small>数据不足：{writer?.unknown_count ?? 0}</small>
+              </div>
+            </details>
+          </article>
+          <article className="quality-card">
+            <span>AI 修订</span>
+            <strong>{fixer?.reviewed_count ? percent(fixer.rereview_pass_rate) : '数据不足'}</strong>
+            <p>复审通过率。等待复审 {fixer?.waiting_review ?? 0} 个，无法归因 {fixer?.unknown_count ?? 0} 个。</p>
+            <details className="advanced-details">
+              <summary>修订详情</summary>
+              <div className="quality-detail-grid">
+                <small>修订草稿：{fixer?.fixed_candidate_count ?? 0}</small>
+                <small>已复审：{fixer?.reviewed_count ?? 0}</small>
+                <small>通过：{fixer?.passed ?? 0}</small>
+                <small>未通过：{fixer?.failed ?? 0}</small>
+              </div>
+            </details>
+          </article>
+        </div>
+      )}
+      {!!report?.recommendations.length && (
+        <div className="quality-recommendations">
+          {report.recommendations.map((item) => <span key={item}>{item}</span>)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ContextBudgetSection({ report, isLoading }: { report?: ModelUsageReport; isLoading: boolean }) {
+  const records = report?.context_budget.affected_chapters ?? [];
+  return (
+    <section className="workflow-card">
+      <div className="section-title">
+        <div>
+          <p className="eyebrow">上下文预算提示</p>
+          <h2>哪些章节发生过上下文裁剪</h2>
+        </div>
+        <span className="quality-note">
+          已记录 {report?.context_budget.context_reports ?? 0} 次上下文报告，裁剪 {report?.context_budget.degraded_count ?? 0} 次
+        </span>
+      </div>
+      {isLoading && <p className="muted">正在检查上下文预算...</p>}
+      {!isLoading && !records.length && <p className="muted">暂无上下文裁剪。</p>}
+      {!!records.length && (
+        <div className="context-budget-list">
+          {records.map((record) => (
+            <article className="context-budget-card" key={`${record.artifact_id}-${record.task_type}`}>
+              <div>
+                <strong>{chapterLabel(record)}</strong>
+                <span>{taskTypeLabel(record.task_type)}</span>
+              </div>
+              <p>{record.reason}</p>
+              <div className="context-budget-meta">
+                <small>预算：{record.budget ?? '-'} 字符</small>
+                <small>实际输入：{record.input_chars ?? '-'} 字符</small>
+                <small>产物：#{record.artifact_id}</small>
+              </div>
+              <details className="advanced-details">
+                <summary>查看保留和裁剪片段</summary>
+                <div className="section-chip-list">
+                  <strong>已保留</strong>
+                  {record.selected_sections.length
+                    ? record.selected_sections.map((section) => <span key={`selected-${section.name}`}>{section.name}：{section.chars}</span>)
+                    : <span>无记录</span>}
+                </div>
+                <div className="section-chip-list">
+                  <strong>已裁剪</strong>
+                  {record.dropped_sections.length
+                    ? record.dropped_sections.map((section) => <span key={`dropped-${section.name}`}>{section.name}：{section.chars}</span>)
+                    : <span>无记录</span>}
+                </div>
+              </details>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function roleLabel(role: string): string {
   const found = assistantRoles.find((item) => item.role === role);
   return found?.label ?? role;
+}
+
+function percent(value?: number): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '0%';
+  }
+  return `${Math.round(value * 1000) / 10}%`;
+}
+
+function chapterLabel(record: ModelUsageReport['context_budget']['affected_chapters'][number]): string {
+  if (record.chapter_no) {
+    return `第 ${String(record.chapter_no).padStart(3, '0')} 章${record.chapter_title ? `：${record.chapter_title}` : ''}`;
+  }
+  if (record.chapter_id) {
+    return `章节 #${record.chapter_id}`;
+  }
+  return `产物 #${record.artifact_id}`;
+}
+
+function taskTypeLabel(taskType: string): string {
+  const labels: Record<string, string> = {
+    generate_chapter_draft: '生成正文草稿',
+    review_chapter_candidate: '检查章节草稿',
+    fix_chapter_candidate: '修订章节草稿',
+    summarize_published_chapter: '整理章节记忆',
+    rebuild_structured_memory: '重建记忆库',
+  };
+  return labels[taskType] ?? taskType;
 }
 
 function statusLabel(status: string): string {

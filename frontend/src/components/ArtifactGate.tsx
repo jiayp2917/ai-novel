@@ -37,6 +37,12 @@ export function ArtifactGate({
   const selectedPublishDecision = (publishDecisions.data ?? []).find((decision) => decision.artifact_id === artifactId);
   const validation = validateArtifactContext(selectedArtifact.data, { baseChapterId, baseSourceFileId, artifactKind });
   const canOperate = Boolean(artifactId && selectedArtifact.data && validation.valid && !selectedArtifact.isLoading);
+  const operationBlockedReason = operationBlockReason({
+    artifactId,
+    artifact: selectedArtifact.data,
+    validationValid: validation.valid,
+    isLoading: selectedArtifact.isLoading,
+  });
   const publishBlockedReason = selectedArtifact.data
     ? publishBlockReason({ artifact: selectedArtifact.data, allowPublish, diffReady: Boolean(diffText) })
     : null;
@@ -130,10 +136,22 @@ export function ArtifactGate({
         artifactSelected={Boolean(artifactId)}
       />
       <div className="action-row">
-        <button type="button" className="secondary-button" onClick={() => reviewMutation.mutate()} disabled={!canOperate || reviewMutation.isPending}>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => reviewMutation.mutate()}
+          disabled={!canOperate || reviewMutation.isPending}
+          title={operationBlockedReason ?? undefined}
+        >
           检查草稿
         </button>
-        <button type="button" className="secondary-button" onClick={() => diffMutation.mutate()} disabled={!canOperate || diffMutation.isPending}>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => diffMutation.mutate()}
+          disabled={!canOperate || diffMutation.isPending}
+          title={operationBlockedReason ?? undefined}
+        >
           查看改动
         </button>
         {allowPublish ? (
@@ -154,6 +172,7 @@ export function ArtifactGate({
       </div>
       {artifactId && selectedArtifact.isLoading && <p className="form-hint">正在校验草稿归属...</p>}
       {artifactId && selectedArtifact.isError && <p className="form-hint form-hint--error">草稿不存在，不能继续操作。</p>}
+      {!artifactId && <p className="form-hint form-hint--error">请先选择草稿；如果没有草稿，请先从当前正文创建草稿。</p>}
       {!validation.valid && <p className="form-hint form-hint--error">{validation.message}</p>}
       {selectedArtifact.data && (
         <ArtifactTrace
@@ -245,6 +264,32 @@ function publishBlockReason({
   }
   if (artifact.latest_publish) {
     return '这个草稿已经写回过，请保存新的草稿后再写回。';
+  }
+  return null;
+}
+
+function operationBlockReason({
+  artifactId,
+  artifact,
+  validationValid,
+  isLoading,
+}: {
+  artifactId: number | null;
+  artifact: Artifact | undefined;
+  validationValid: boolean;
+  isLoading: boolean;
+}): string | null {
+  if (!artifactId) {
+    return '请先选择草稿。';
+  }
+  if (isLoading) {
+    return '正在校验草稿归属。';
+  }
+  if (!artifact) {
+    return '草稿不存在或尚未加载完成。';
+  }
+  if (!validationValid) {
+    return '草稿不属于当前章节或当前文件。';
   }
   return null;
 }

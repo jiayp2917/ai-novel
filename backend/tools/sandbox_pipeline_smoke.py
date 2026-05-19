@@ -150,7 +150,7 @@ def main() -> int:
                 max_fix_rounds=1,
                 dry_run=not args.publish,
             )
-            iterations = run_until_idle(session, executor, max_iterations=args.chapters * 8 + 10)
+            iterations = run_until_idle(session, executor, max_iterations=args.chapters * 12 + 20)
             PipelineRunService(session).refresh_run_status(run["id"])
             stored_run = PipelineRunService(session).get_run(run["id"])
             report = build_report(session, stored_run, iterations, published=args.publish)

@@ -31,8 +31,8 @@ export function ChapterActions({
         label: '创建修订任务',
         status: 'running',
         detail: selectedAnnotationIds.length
-          ? `按 ${selectedAnnotationIds.length} 条批注生成正文候选。`
-          : '未勾选批注，将使用当前章节全部可用批注生成候选。',
+          ? `按 ${selectedAnnotationIds.length} 条批注创建修订草稿。`
+          : '未勾选批注，将使用当前章节全部可用批注创建修订草稿。',
       }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -84,21 +84,21 @@ export function ChapterActions({
       ),
     onMutate: () =>
       pushTask({
-        label: '创建正文候选',
+        label: '创建待检查副本',
         status: 'running',
-        detail: '正在把当前正文保存为候选内容，不写回源文件。',
+        detail: '正在创建一份待检查副本，不写回源文件。',
       }),
     onSuccess: (result) => {
       setArtifactId(result.artifact_id);
       setDiffText('');
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       pushTask({
-        label: '创建正文候选',
+        label: '创建待检查副本',
         status: 'succeeded',
-        detail: `第 ${result.chapter_no} 章候选 #${result.artifact_id} 已创建。`,
+        detail: `第 ${result.chapter_no} 章待检查副本已创建。`,
       });
     },
-    onError: (error: Error) => pushTask({ label: '创建正文候选', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '创建待检查副本', status: 'failed', detail: error.message }),
   });
 
   const showGeneration = mode !== 'publish';
@@ -106,10 +106,10 @@ export function ChapterActions({
   const showGate = mode !== 'writing';
   const title =
     mode === 'writing'
-      ? '正文候选生成'
+      ? '正文待检查副本'
       : artifactId
-        ? `当前候选 #${artifactId}`
-        : '候选生成后必须审核再发布';
+        ? '已选择待检查草稿'
+        : '选择或创建草稿后再检查和写回';
 
   return (
     <section className="workflow-card">
@@ -125,10 +125,10 @@ export function ChapterActions({
             上下文预览
           </button>
           <button type="button" className="secondary-button" onClick={() => snapshotMutation.mutate()} disabled={snapshotMutation.isPending}>
-            当前正文生成候选
+            创建待检查副本
           </button>
           <button type="button" className="secondary-button" onClick={() => reviseMutation.mutate()} disabled={reviseMutation.isPending}>
-            按批注生成候选
+            按批注创建修订
           </button>
           {mode !== 'writing' && (
             <button type="button" className="secondary-button" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending}>
@@ -144,7 +144,12 @@ export function ChapterActions({
           </button>
         </div>
       )}
-      {preview && mode !== 'publish' && <pre className="json-preview">{JSON.stringify(preview, null, 2)}</pre>}
+      {preview && mode !== 'publish' && (
+        <details className="advanced-details">
+          <summary>查看上下文详情</summary>
+          <pre className="json-preview">{JSON.stringify(preview, null, 2)}</pre>
+        </details>
+      )}
       {showGate ? (
         <ArtifactGate
           artifactId={artifactId}
@@ -157,7 +162,7 @@ export function ChapterActions({
       ) : (
         <p className="form-hint">
           写作界面只负责正文、批注和草稿保存。草稿检查、差异与写回请进入“AI 工作台”。
-          {artifactId ? ` 当前候选 #${artifactId} 已创建。` : ''}
+          {artifactId ? ' 待检查草稿已创建。' : ''}
         </p>
       )}
     </section>
@@ -187,7 +192,7 @@ export function SourceProposalActions({ sourceFileId }: { sourceFileId: number }
     onSuccess: (result) => {
       setArtifactId(result.artifact_id);
       setDiffText('');
-      pushTask({ label: '生成源文件提案', status: 'succeeded', detail: `候选产物 #${result.artifact_id} 已创建。` });
+      pushTask({ label: '生成源文件提案', status: 'succeeded', detail: '提案已创建，可查看对比后人工采纳。' });
     },
     onError: (error: Error) => pushTask({ label: '生成源文件提案', status: 'failed', detail: error.message }),
   });
@@ -197,12 +202,12 @@ export function SourceProposalActions({ sourceFileId }: { sourceFileId: number }
       <div className="section-title">
         <div>
           <p className="eyebrow">设定 / 章纲提案</p>
-          <h2>{artifactId ? `当前候选 #${artifactId}` : '只生成提案，不直接覆盖'}</h2>
+          <h2>{artifactId ? '当前提案已创建' : '只生成提案，不直接覆盖'}</h2>
         </div>
       </div>
       <div className="action-row">
         <button type="button" className="secondary-button" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
-          生成候选提案
+          生成提案
         </button>
       </div>
       <ArtifactGate

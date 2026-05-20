@@ -31,20 +31,12 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await page.locator('.cm-content').click();
   await page.keyboard.type('\n新手路径正文版本保存验证。');
   await page.getByRole('button', { name: '保存正文版本' }).click();
-  await expect(page.locator('.task-latest')).toContainText(/正文版本 #\d+ 已保存/);
-  const versionId = await page.locator('.task-latest').innerText().then((text) => {
-    const match = text.match(/#(\d+)/);
-    if (!match) {
-      throw new Error(`Version id not found in task text: ${text}`);
-    }
-    return Number.parseInt(match[1], 10);
-  });
+  await expect(page.locator('.task-latest')).toContainText('正文版本已保存');
   await expect(page.locator('.annotations-panel')).toBeVisible();
   await expect(page.locator('.inspector-tab--active')).toHaveText('版本');
   await expect(page.locator('.version-history')).toContainText('正文版本');
-  const savedVersion = page.locator('.history-card').filter({ hasText: `#${versionId}` });
+  const savedVersion = page.locator('.history-card--active');
   await expect(savedVersion).toBeVisible();
-  await expect(savedVersion).toHaveClass(/history-card--active/);
   await expect(savedVersion.getByRole('button', { name: '正在查看' })).toBeVisible();
   await expect(page.locator('.reader-header h1')).toContainText('历史版本');
   await expect(page.locator('.cm-content')).toContainText('新手路径正文版本保存验证');
@@ -141,6 +133,7 @@ test('core views remain separated and writing layout does not use bottom overlay
   await page.mouse.click(menuBoxForSnapshot!.x + 80, menuBoxForSnapshot!.y + 80, { button: 'right' });
   await expect(page.locator('.context-menu')).toBeVisible();
   await expect(page.locator('.context-menu')).not.toContainText('生成审核快照');
+  await expect(page.locator('.page-editor')).not.toContainText(/artifact_id|hash|provider|token|raw JSON|当前正文生成候选/);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '收起侧栏' }).click();
   await expect(page.locator('.editor-shell')).toHaveClass(/inspector-hidden/);
@@ -522,6 +515,9 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
   await expect(page.locator('.pipeline-chapter-card')).toHaveCount(10);
   await expect(page.locator('.pipeline-chapter-card').first()).toContainText('生成草稿');
   await expect(page.locator('.pipeline-progress')).toContainText('/60');
+  expect(await page.locator('.pipeline-run-item').count()).toBeLessThanOrEqual(20);
+  const timelineStyle = await page.locator('.pipeline-chapter-timeline').evaluate((element) => getComputedStyle(element).overflowY);
+  expect(timelineStyle).toBe('auto');
 });
 
 test('pipeline page can cancel a run and display retryable failure state', async ({ page }) => {

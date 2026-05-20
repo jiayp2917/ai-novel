@@ -40,7 +40,20 @@ export function ArtifactTrace({
       {review && !review.passed && review.issues.length > 0 && (
         <details className="artifact-review-detail">
           <summary>查看检查问题</summary>
-          <pre>{JSON.stringify(review.issues, null, 2)}</pre>
+          <div className="review-issue-list">
+            {review.issues.map((issue, index) => (
+              <article className="review-issue-card" key={index}>
+                <strong>{issueText(issue, 'description', '未命名问题')}</strong>
+                <span>严重程度：{issueText(issue, 'severity', '未标注')}</span>
+                <span>处理建议：{issueText(issue, 'fix_instruction', '请人工判断')}</span>
+                {issueText(issue, 'evidence', '') && <blockquote>{issueText(issue, 'evidence', '')}</blockquote>}
+              </article>
+            ))}
+          </div>
+          <details className="advanced-details">
+            <summary>查看原始检查数据</summary>
+            <pre>{JSON.stringify(review.issues, null, 2)}</pre>
+          </details>
         </details>
       )}
       <details className="advanced-details">
@@ -56,6 +69,17 @@ export function ArtifactTrace({
       </details>
     </section>
   );
+}
+
+function issueText(issue: Record<string, unknown>, key: string, fallback: string): string {
+  const value = issue[key];
+  if (typeof value === 'string' && value.trim()) {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return fallback;
 }
 
 export function PublishGateChecklist({

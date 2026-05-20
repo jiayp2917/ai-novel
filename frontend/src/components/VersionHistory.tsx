@@ -28,7 +28,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
           body: JSON.stringify({ approved_by_user: true }),
         },
       ),
-    onMutate: (versionId) => pushTask({ label: '发布正文版本', status: 'running', detail: `正在发布正文版本 #${versionId}。` }),
+    onMutate: () => pushTask({ label: '发布正文版本', status: 'running', detail: '正在发布正文版本。' }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['chapter-content'] });
       void queryClient.invalidateQueries({ queryKey: ['chapter-versions'] });
@@ -40,7 +40,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
       pushTask({
         label: '发布正文版本',
         status: 'succeeded',
-        detail: `正文版本 #${result.version_id} 已发布，并已生成备份。`,
+        detail: '正文版本已发布，并已生成备份。',
       });
     },
     onError: (error: Error) => pushTask({ label: '发布正文版本', status: 'failed', detail: error.message }),
@@ -52,7 +52,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
         `/api/chapters/${chapterId}/versions/${versionId}`,
         { method: 'DELETE' },
       ),
-    onMutate: (versionId) => pushTask({ label: '删除正文版本', status: 'running', detail: `正在删除正文版本 #${versionId}。` }),
+    onMutate: () => pushTask({ label: '删除正文版本', status: 'running', detail: '正在删除正文版本。' }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['chapter-versions'] });
       void queryClient.removeQueries({ queryKey: ['chapter-version-content', chapterId, result.version_id] });
@@ -63,7 +63,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
       pushTask({
         label: '删除正文版本',
         status: 'succeeded',
-        detail: `正文版本 #${result.version_id} 已删除。当前正文和备份记录未受影响。`,
+        detail: '正文版本已删除。当前正文和备份记录未受影响。',
       });
     },
     onError: (error: Error) => pushTask({ label: '删除正文版本', status: 'failed', detail: error.message }),
@@ -165,7 +165,7 @@ function VersionCard({
   return (
     <article className={version.is_current ? 'history-card history-card--current' : active ? 'history-card history-card--active' : 'history-card'}>
       <div>
-        <strong>{version.is_current ? '当前正文' : `历史版本 #${version.id}`}</strong>
+        <strong>{version.is_current ? '当前正文' : '历史版本'}</strong>
         <span>{version.title}</span>
       </div>
       <small>{formatDate(version.created_at)}</small>
@@ -206,8 +206,8 @@ function VersionConfirmDialog({
   const isPublish = pending.action === 'publish';
   const title = isPublish ? '确认发布正文版本' : '确认删除正文版本';
   const body = isPublish
-    ? `发布“${pending.version.title}”的正文版本 #${pending.version.id}？系统会先备份当前正文。`
-    : `删除正文版本 #${pending.version.id}？这不会删除当前正文、备份和发布记录。`;
+    ? `发布“${pending.version.title}”这个正文版本？系统会先备份当前正文。`
+    : '删除这个正文版本？这不会删除当前正文、备份和发布记录。';
 
   return (
     <div className="confirm-backdrop" role="presentation">

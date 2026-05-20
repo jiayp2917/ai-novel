@@ -89,7 +89,7 @@ export function App() {
             <button className="btn primary" type="button" onClick={() => setActiveView('ai')}>AI 工作台</button>
           </div>
         </header>
-        <TaskPanel />
+        <TaskPanel compact={activeView === 'writing'} />
 
         <ErrorBoundary>
           {activeView === 'home' && <DashboardPage />}

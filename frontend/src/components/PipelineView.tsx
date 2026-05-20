@@ -5,6 +5,8 @@ import { useChapters, useCostDashboard, usePipelineRuns } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import type { Job, PipelineRun, PipelineRunCreatePayload } from '../types';
 
+const RUN_LIST_LIMIT = 20;
+
 const modeLabels: Record<PipelineRunCreatePayload['mode'], string> = {
   review_only: '只检查已有草稿',
   generate_missing: '只补齐缺失草稿',
@@ -71,11 +73,14 @@ export function PipelineView() {
     dry_run: true,
   });
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [showAllRuns, setShowAllRuns] = useState(false);
   const [pendingDeleteRun, setPendingDeleteRun] = useState<PipelineRun | null>(null);
   const [deleteDialogError, setDeleteDialogError] = useState<string | null>(null);
+  const allRuns = runs.data ?? [];
+  const visibleRuns = showAllRuns ? allRuns : allRuns.slice(0, RUN_LIST_LIMIT);
   const selectedRun = useMemo(
-    () => runs.data?.find((run) => run.id === selectedRunId) ?? runs.data?.[0] ?? null,
-    [runs.data, selectedRunId],
+    () => allRuns.find((run) => run.id === selectedRunId) ?? allRuns[0] ?? null,
+    [allRuns, selectedRunId],
   );
   const selectedSummary = selectedRun ? summarizeRun(selectedRun) : null;
   const selectedNextStep = selectedRun && selectedSummary ? nextStepForRun(selectedRun, selectedSummary) : null;
@@ -108,7 +113,10 @@ export function PipelineView() {
   });
 
   const deleteRun = useMutation({
-    mutationFn: deletePipelineRun,
+    mutationFn: async (runId: number) => {
+      const [result] = await Promise.all([deletePipelineRun(runId), waitForDeleteFeedback()]);
+      return result;
+    },
     onMutate: (runId) => {
       setDeleteDialogError(null);
       pushTask({ label: '删除流水线记录', status: 'running', detail: `正在删除流水线 #${runId} 的任务记录。` });
@@ -117,6 +125,9 @@ export function PipelineView() {
       setPendingDeleteRun(null);
       setDeleteDialogError(null);
       setSelectedRunId(null);
+      queryClient.setQueryData<PipelineRun[]>(['pipeline-runs'], (current) =>
+        current ? current.filter((run) => run.id !== result.run_id) : current,
+      );
       void queryClient.invalidateQueries({ queryKey: ['pipeline-runs'] });
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       pushTask({
@@ -269,9 +280,9 @@ export function PipelineView() {
               <h2>最近自动任务</h2>
             </div>
           </div>
-          <p className="muted">点击左侧任务查看详情。已完成、已终止或需人工判断的任务不会继续运行，可复用设置重新创建。</p>
+          <p className="muted">点击左侧任务查看详情。默认显示最近 {RUN_LIST_LIMIT} 条；已完成、已终止或需人工判断的任务不会继续运行。</p>
           <div className="pipeline-run-list">
-            {runs.data?.map((run) => {
+            {visibleRuns.map((run) => {
               const summary = summarizeRun(run);
               const step = nextStepForRun(run, summary);
               return (
@@ -289,8 +300,13 @@ export function PipelineView() {
               );
             })}
             {runs.isLoading && <p className="muted">正在加载自动任务...</p>}
-            {!runs.isLoading && !runs.data?.length && <p className="muted">还没有自动流水线任务。</p>}
+            {!runs.isLoading && !allRuns.length && <p className="muted">还没有自动流水线任务。</p>}
           </div>
+          {allRuns.length > RUN_LIST_LIMIT && (
+            <button className="secondary-button pipeline-list-toggle" type="button" onClick={() => setShowAllRuns((value) => !value)}>
+              {showAllRuns ? `收起到最近 ${RUN_LIST_LIMIT} 条` : `显示全部 ${allRuns.length} 条`}
+            </button>
+          )}
         </section>
 
         <section className="workflow-card">
@@ -307,6 +323,7 @@ export function PipelineView() {
                   title={runOperationHelp.pause}
                   onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'pause' })}
                   disabled={mutateRun.isPending || !canPause(selectedRun)}
+                  aria-disabled-reason={!canPause(selectedRun) ? disabledReason('pause', selectedRun) : undefined}
                 >
                   暂停
                 </button>
@@ -316,6 +333,7 @@ export function PipelineView() {
                   title={runOperationHelp.resume}
                   onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'resume' })}
                   disabled={mutateRun.isPending || !canResume(selectedRun)}
+                  aria-disabled-reason={!canResume(selectedRun) ? disabledReason('resume', selectedRun) : undefined}
                 >
                   恢复
                 </button>
@@ -325,6 +343,7 @@ export function PipelineView() {
                   title={runOperationHelp.retry}
                   onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'retry' })}
                   disabled={mutateRun.isPending || !canRetry(selectedRun)}
+                  aria-disabled-reason={!canRetry(selectedRun) ? disabledReason('retry', selectedRun) : undefined}
                 >
                   重试
                 </button>
@@ -342,6 +361,7 @@ export function PipelineView() {
                   title={runOperationHelp.cancel}
                   onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'cancel' })}
                   disabled={mutateRun.isPending || !canCancel(selectedRun)}
+                  aria-disabled-reason={!canCancel(selectedRun) ? disabledReason('cancel', selectedRun) : undefined}
                 >
                   停止
                 </button>
@@ -351,6 +371,7 @@ export function PipelineView() {
                   title={runOperationHelp.delete}
                   onClick={() => confirmDeleteRun(selectedRun)}
                   disabled={deleteRun.isPending || !canDelete(selectedRun)}
+                  aria-disabled-reason={!canDelete(selectedRun) ? disabledReason('delete', selectedRun) : undefined}
                 >
                   删除记录
                 </button>
@@ -487,6 +508,22 @@ function canDelete(run: PipelineRun): boolean {
   return ['done', 'failed_terminal', 'manual_required'].includes(run.status);
 }
 
+function disabledReason(action: 'pause' | 'resume' | 'retry' | 'cancel' | 'delete', run: PipelineRun): string {
+  if (action === 'resume') {
+    return '只有已暂停或额度暂停的任务可以恢复。';
+  }
+  if (action === 'retry') {
+    return '只有可重试失败或额度暂停的任务可以重试。';
+  }
+  if (action === 'delete') {
+    return '只能删除已完成、已终止或需人工处理的记录。';
+  }
+  if (action === 'pause') {
+    return '已结束或需人工处理的任务不能暂停。';
+  }
+  return '已结束或需人工处理的任务不能停止。';
+}
+
 function nextStepForRun(run: PipelineRun, summary: { total: number; done: number; manual: number; failed: number }): { label: string; text: string; tone: 'ok' | 'warn' | 'danger' | 'info' } {
   if (run.status === 'done') {
     return { label: '已完成', text: '可查看报告和产物；如要重新跑，请点击“复用设置”。', tone: 'ok' };
@@ -537,6 +574,10 @@ async function deletePipelineRun(runId: number): Promise<{ deleted: boolean; run
     }
     throw error;
   }
+}
+
+function waitForDeleteFeedback(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 180));
 }
 
 function PipelineDeleteDialog({

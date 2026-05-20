@@ -18,9 +18,6 @@ import { ReaderSearchBar, ReaderToolbar } from './ReaderToolbar';
 import { placeContextMenu, searchMatchCount } from './readerUtils';
 
 type DraftResponse = {
-  artifact_id: number;
-  artifact_path: string;
-  artifact_sha256: string;
   version_id?: number;
   chapter_id?: number;
   chapter_no?: number;
@@ -185,7 +182,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
       pushTask({
         label: content.data ? '保存正文版本' : '保存提案',
         status: 'succeeded',
-        detail: content.data ? `正文版本 #${result.version_id ?? result.artifact_id} 已保存，可切换查看、发布或删除。` : `提案 #${result.artifact_id} 已保存。需要检查和对比时，请到资料库或 AI 工作台处理。`,
+        detail: content.data ? '正文版本已保存，可切换查看、发布或删除。' : '提案已保存。需要检查和对比时，请到资料库或 AI 工作台处理。',
       });
     },
     onError: (error: Error) =>

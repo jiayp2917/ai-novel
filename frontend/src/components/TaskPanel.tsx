@@ -2,7 +2,7 @@ import { useCostDashboard, useHealth, useJobs } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import { useState } from 'react';
 
-export function TaskPanel() {
+export function TaskPanel({ compact = false }: { compact?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const tasks = useWorkbenchStore((state) => state.taskLog);
   const health = useHealth();
@@ -10,7 +10,13 @@ export function TaskPanel() {
   const jobs = useJobs();
   const latestTask = tasks[0];
   const pausedBudgetJobs = (jobs.data ?? []).filter((job) => job.status === 'paused_budget');
-  const costSummary = cost.isSuccess ? (
+  const writerSummary = (
+    <>
+      {pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
+      {jobs.isSuccess && jobs.data.length > 0 && <span>后台任务 {jobs.data.length}</span>}
+    </>
+  );
+  const costSummary = compact ? writerSummary : cost.isSuccess ? (
     <>
       <span>调用 {cost.data.today_model_calls}</span>
       <span>成本 {cost.data.today_estimated_cost.toFixed(6)}</span>
@@ -39,13 +45,13 @@ export function TaskPanel() {
         {latestTask && (
           <div className={`task-latest task-latest--${latestTask.status}`}>
             <strong>{latestTask.label}</strong>
-            <span>{latestTask.detail}</span>
-          </div>
-        )}
-        <div className="cost-dashboard">
-          {pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
+          <span>{latestTask.detail}</span>
+        </div>
+      )}
+      <div className="cost-dashboard">
+          {!compact && pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
           {costSummary}
-          {jobs.isSuccess && <span>任务 {jobs.data.length}</span>}
+          {!compact && jobs.isSuccess && <span>任务 {jobs.data.length}</span>}
         </div>
       </div>
       {expanded && (
@@ -60,9 +66,9 @@ export function TaskPanel() {
             </button>
           </div>
           <div className="cost-dashboard cost-dashboard--popover">
-            {pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
+            {!compact && pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
             {costSummary}
-            {jobs.isSuccess && <span>任务 {jobs.data.length}</span>}
+            {!compact && jobs.isSuccess && <span>任务 {jobs.data.length}</span>}
           </div>
           <div className="task-strip">
             {tasks.map((task) => (

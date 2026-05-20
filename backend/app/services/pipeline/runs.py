@@ -24,6 +24,7 @@ PIPELINE_RUN_MODES = {
     "full_auto",
 }
 DELETABLE_RUN_STATUSES = {"done", "manual_required", "failed_terminal"}
+UNSTARTED_CHILD_STATUSES = {"planned", "queued"}
 BLOCKING_DELETE_CHILD_STATUSES = {
     "planned",
     "queued",
@@ -398,7 +399,7 @@ class PipelineRunService:
         if job.status not in DELETABLE_RUN_STATUSES:
             raise PipelineRunError("Pipeline run must be stopped or completed before deletion")
         children = self._child_jobs(job)
-        blocking = [child for child in children if child.status in BLOCKING_DELETE_CHILD_STATUSES]
+        blocking = [child for child in children if self._child_blocks_delete(job, child)]
         if blocking:
             raise PipelineRunError("Pipeline run has active child tasks; stop it before deletion")
         deleted_child_tasks = len(children)
@@ -407,6 +408,13 @@ class PipelineRunService:
         self.session.delete(job)
         self.session.commit()
         return {"deleted": True, "run_id": run_id, "deleted_child_tasks": deleted_child_tasks}
+
+    def _child_blocks_delete(self, run: Job, child: Job) -> bool:
+        if child.status not in BLOCKING_DELETE_CHILD_STATUSES:
+            return False
+        if run.status in DELETABLE_RUN_STATUSES and child.status in UNSTARTED_CHILD_STATUSES:
+            return False
+        return True
 
     def _child_jobs(self, run: Job) -> list[Job]:
         payload = job_payload(run)

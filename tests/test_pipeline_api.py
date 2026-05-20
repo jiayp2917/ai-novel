@@ -167,6 +167,33 @@ def test_pipeline_run_delete_method_remains_supported(tmp_path, monkeypatch) -> 
     reset_engine()
 
 
+def test_pipeline_run_delete_allows_terminal_run_with_unstarted_children(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/pipeline/runs",
+        json={"start_chapter": 1, "end_chapter": 2, "mode": "review_only"},
+    )
+    assert created.status_code == 200
+    run = created.json()
+
+    with Session(get_engine()) as session:
+        parent = session.get(Job, run["id"])
+        assert parent is not None
+        parent.status = "failed_terminal"
+        parent.error = "Cancelled by user"
+        session.commit()
+
+    deleted = client.post(f"/api/pipeline/runs/{run['id']}/delete")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted": True, "run_id": run["id"], "deleted_child_tasks": 2}
+    with Session(get_engine()) as session:
+        assert session.query(Job).count() == 0
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_worker_queues_pipeline_children_without_running_model_calls(tmp_path, monkeypatch) -> None:
     setup_app_db(tmp_path, monkeypatch)
     client = TestClient(app)

@@ -182,6 +182,26 @@ def test_test_support_can_seed_failed_review_hash_mismatch_and_budget_pause(tmp_
     reset_engine()
 
 
+def test_test_support_routes_are_disabled_by_default(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "content"))
+    monkeypatch.delenv("ENABLE_TEST_SUPPORT", raising=False)
+    get_settings.cache_clear()
+    reset_engine()
+
+    import backend.app.main as main_module
+
+    app_without_test_support = importlib.reload(main_module).app
+    client = TestClient(app_without_test_support)
+
+    response = client.post("/api/test/seed-budget-paused-job")
+
+    assert response.status_code == 404
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_runtime_root_env_does_not_override_workspace_runtime(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
     monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "app-runtime"))

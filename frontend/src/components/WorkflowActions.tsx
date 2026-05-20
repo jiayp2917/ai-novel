@@ -103,9 +103,10 @@ export function ChapterActions({
 
   const showGeneration = mode !== 'publish';
   const showGate = mode !== 'writing';
+  const showSnapshotAdvanced = mode === 'full';
   const title =
     mode === 'writing'
-      ? '正文待检查副本'
+      ? '正文版本保存提示'
       : artifactId
         ? '已选择待检查草稿'
         : '选择或创建草稿后再检查和写回';
@@ -133,7 +134,7 @@ export function ChapterActions({
           )}
         </div>
       )}
-      {mode !== 'writing' && (
+      {showSnapshotAdvanced && (
         <details className="advanced-details">
           <summary>高级操作：检查当前正文副本</summary>
           <p className="form-hint">用于把当前正文复制成待检查草稿，不写回源文件；普通手写保存请回到写作页保存正文版本。</p>

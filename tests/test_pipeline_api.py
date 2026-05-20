@@ -66,15 +66,29 @@ def test_pipeline_run_api_create_list_pause_resume_cancel(tmp_path, monkeypatch)
     paused = client.post(f"/api/pipeline/runs/{run['id']}/pause")
     assert paused.status_code == 200
     assert paused.json()["status"] == "paused"
+    assert all(task["status"] == "paused" for task in paused.json()["child_tasks"])
 
     resumed = client.post(f"/api/pipeline/runs/{run['id']}/resume")
     assert resumed.status_code == 200
     assert resumed.json()["status"] == "queued"
+    resumed_tasks = resumed.json()["child_tasks"]
+    assert [task["status"] for task in resumed_tasks] == [
+        "queued",
+        "paused",
+        "paused",
+        "queued",
+        "paused",
+        "paused",
+        "queued",
+        "paused",
+        "paused",
+    ]
 
     cancelled = client.post(f"/api/pipeline/runs/{run['id']}/cancel")
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "failed_terminal"
     assert cancelled.json()["error"] == "Cancelled by user"
+    assert all(task["status"] == "failed_terminal" for task in cancelled.json()["child_tasks"])
     get_settings.cache_clear()
     reset_engine()
 
@@ -97,6 +111,58 @@ def test_pipeline_run_api_rejects_invalid_mode_and_retry_from_queued(tmp_path, m
     retry = client.post(f"/api/pipeline/runs/{created.json()['id']}/retry")
     assert retry.status_code == 400
     assert "not retryable" in retry.json()["detail"]
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_run_delete_requires_terminal_state_and_removes_task_records(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/pipeline/runs",
+        json={"start_chapter": 1, "end_chapter": 2, "mode": "review_only"},
+    )
+    assert created.status_code == 200
+    run = created.json()
+
+    active_delete = client.delete(f"/api/pipeline/runs/{run['id']}")
+    assert active_delete.status_code == 400
+    assert "stopped or completed" in active_delete.json()["detail"]
+    active_post_delete = client.post(f"/api/pipeline/runs/{run['id']}/delete")
+    assert active_post_delete.status_code == 400
+    assert "stopped or completed" in active_post_delete.json()["detail"]
+
+    cancelled = client.post(f"/api/pipeline/runs/{run['id']}/cancel")
+    assert cancelled.status_code == 200
+    deleted = client.post(f"/api/pipeline/runs/{run['id']}/delete")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted": True, "run_id": run["id"], "deleted_child_tasks": 2}
+
+    missing = client.get(f"/api/pipeline/runs/{run['id']}")
+    assert missing.status_code == 404
+    with Session(get_engine()) as session:
+      assert session.query(Job).count() == 0
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_run_delete_method_remains_supported(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/pipeline/runs",
+        json={"start_chapter": 1, "end_chapter": 1, "mode": "review_only"},
+    )
+    assert created.status_code == 200
+    run = created.json()
+    cancelled = client.post(f"/api/pipeline/runs/{run['id']}/cancel")
+    assert cancelled.status_code == 200
+
+    deleted = client.delete(f"/api/pipeline/runs/{run['id']}")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted": True, "run_id": run["id"], "deleted_child_tasks": 1}
     get_settings.cache_clear()
     reset_engine()
 

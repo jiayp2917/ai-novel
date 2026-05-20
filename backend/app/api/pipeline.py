@@ -67,6 +67,22 @@ def cancel_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict
     return _mutate_run(session, run_id, "cancel")
 
 
+@router.delete("/runs/{run_id}")
+def delete_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict:
+    try:
+        return PipelineRunService(session).delete_run(run_id)
+    except PipelineRunError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/runs/{run_id}/delete")
+def delete_pipeline_run_compat(run_id: int, session: Session = Depends(get_db)) -> dict:
+    try:
+        return PipelineRunService(session).delete_run(run_id)
+    except PipelineRunError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def _mutate_run(session: Session, run_id: int, action: str) -> dict:
     service = PipelineRunService(session)
     try:
@@ -83,4 +99,3 @@ def _mutate_run(session: Session, run_id: int, action: str) -> dict:
     except PipelineTransitionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     raise HTTPException(status_code=400, detail="Unsupported pipeline action")
-

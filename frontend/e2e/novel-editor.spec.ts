@@ -273,6 +273,55 @@ test('status drawer floats without resizing writing area and long pages can scro
   await expect(page.getByText('查看调用边界')).toBeVisible();
 });
 
+test('AI workbench keeps catalog, memory, and task queue bounded inside panels', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  for (let index = 0; index < 6; index += 1) {
+    await seedFailedPipelineRun(page);
+  }
+
+  await page.reload();
+  await mainNav(page, 'AI 工作台').click();
+  await openChapter(page, '001');
+  await expect(page.locator('.ai-workbench-layout')).toBeVisible();
+
+  const metrics = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!element) {
+        return null;
+      }
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return {
+        height: Math.round(rect.height),
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+        overflowY: style.overflowY,
+      };
+    };
+    return {
+      pageOverflowsDocument: document.documentElement.scrollHeight > document.documentElement.clientHeight + 1,
+      layout: read('.ai-workbench-layout'),
+      catalog: read('.ai-catalog-card .catalog-scroll'),
+      memory: read('.ai-memory-card .ai-card-body'),
+      jobs: read('.job-list--compact'),
+      jobCards: document.querySelectorAll('.job-list--compact .job-card').length,
+    };
+  });
+
+  expect(metrics.pageOverflowsDocument).toBeFalsy();
+  expect(metrics.layout?.height ?? 0).toBeLessThanOrEqual(560);
+  expect(metrics.catalog?.overflowY).toBe('auto');
+  expect(metrics.memory?.overflowY).toBe('auto');
+  expect(metrics.jobs?.overflowY).toBe('auto');
+  expect(metrics.jobCards).toBeLessThanOrEqual(8);
+  await expect(page.locator('.job-list--compact')).toContainText('仅显示最近 8 条任务');
+});
+
 test('review failure keeps draft unpublished and explains whether it needs manual judgment', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
@@ -464,11 +513,12 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
 
   await page.getByRole('button', { name: '暂停' }).click();
   await expect(page.locator('.pipeline-status-grid')).toContainText('已暂停');
-  await page.getByRole('button', { name: '恢复' }).click();
+  await expect(page.locator('.pipeline-next-step')).toContainText('已暂停');
+  await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '恢复' }).click();
   await expect(page.locator('.pipeline-status-grid')).toContainText('等待执行');
+  await expect(page.locator('.pipeline-next-step')).toContainText('运行一次队列');
 
   await page.getByRole('button', { name: '运行一次队列' }).click();
-  await expect(page.locator('.task-latest')).toContainText('执行流水线');
   await expect(page.locator('.pipeline-chapter-card')).toHaveCount(10);
   await expect(page.locator('.pipeline-chapter-card').first()).toContainText('生成草稿');
   await expect(page.locator('.pipeline-progress')).toContainText('/60');
@@ -490,6 +540,18 @@ test('pipeline page can cancel a run and display retryable failure state', async
   await page.getByRole('button', { name: '停止' }).click();
   await expect(page.locator('.pipeline-status-grid')).toContainText('已终止');
   await expect(page.locator('.pipeline-run-item').first()).toContainText('已终止');
+  await expect(page.locator('.pipeline-next-step')).toContainText('复用设置');
+  await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '复用设置' }).click();
+  await expect(page.getByLabel('起始章节')).toHaveValue('1');
+  await expect(page.getByLabel('结束章节')).toHaveValue('1');
+  await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '删除记录' }).click();
+  await expect(page.getByRole('dialog', { name: '确认删除流水线记录' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '确认删除流水线记录' })).toContainText('不会删除草稿、报告、模型日志或正文');
+  const confirmDelete = page.getByRole('button', { name: '确认删除' });
+  await confirmDelete.click();
+  await expect(page.getByRole('button', { name: '删除中...' })).toBeVisible();
+  await expect(page.locator('.task-latest')).toContainText('删除流水线记录');
+  await expect(page.locator('.pipeline-run-item').filter({ hasText: '已终止' })).toHaveCount(0);
 
   const failed = await page.request.post(`${apiBaseUrl}/api/test/seed-failed-pipeline-run`);
   expect(failed.ok()).toBeTruthy();
@@ -498,6 +560,39 @@ test('pipeline page can cancel a run and display retryable failure state', async
   await expect(page.locator('.pipeline-run-item').first()).toContainText('失败，可重试');
   await expect(page.locator('.pipeline-status-grid')).toContainText('失败/暂停：1');
   await expect(page.locator('.pipeline-chapter-card').first()).toContainText('失败，可重试');
+  await expect(page.locator('.pipeline-next-step')).toContainText('可重试');
+});
+
+test('pipeline delete dialog shows backend update hint when delete endpoints are unavailable', async ({ page }) => {
+  await page.route('**/api/pipeline/runs/*/delete', async (route) => {
+    await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ detail: 'Method Not Allowed' }) });
+  });
+  await page.route('**/api/pipeline/runs/*', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ detail: 'Method Not Allowed' }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  await mainNav(page, '自动流水线').click();
+  await page.getByLabel('起始章节').fill('1');
+  await page.getByLabel('结束章节').fill('1');
+  await page.getByLabel('执行模式').selectOption('review_only');
+  await page.getByRole('button', { name: '创建自动流水线' }).click();
+  await expect(page.locator('.pipeline-run-item').first()).toContainText('第 1-1 章');
+  await page.getByRole('button', { name: '停止' }).click();
+  await expect(page.locator('.pipeline-status-grid')).toContainText('已终止');
+
+  await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '删除记录' }).click();
+  await page.getByRole('button', { name: '确认删除' }).click();
+  await expect(page.getByRole('dialog', { name: '确认删除流水线记录' })).toContainText('删除接口不可用，请重启后端服务后再试。');
+  await expect(page.getByRole('button', { name: '确认删除' })).toBeEnabled();
 });
 
 test('drag selection can create annotation from context menu', async ({ page }) => {
@@ -742,6 +837,12 @@ async function seedBudgetPausedJob(page: Page): Promise<{ job_id: number; status
   const response = await page.request.post(`${apiBaseUrl}/api/test/seed-budget-paused-job`);
   expect(response.ok()).toBeTruthy();
   return (await response.json()) as { job_id: number; status: string };
+}
+
+async function seedFailedPipelineRun(page: Page): Promise<{ run_id: number; child_task_id: number; status: string }> {
+  const response = await page.request.post(`${apiBaseUrl}/api/test/seed-failed-pipeline-run`);
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as { run_id: number; child_task_id: number; status: string };
 }
 
 async function seedModelQualityReport(page: Page): Promise<{ writer_artifact_id: number; fix_artifact_id: number }> {

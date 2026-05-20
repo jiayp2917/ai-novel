@@ -400,6 +400,12 @@ pre {
   color: var(--danger);
 }
 
+.danger-button--quiet {
+  border-color: var(--danger-soft-border);
+  background: var(--danger-soft-bg);
+  color: var(--danger-soft-ink);
+}
+
 .page {
   min-height: 0;
   flex: 1;
@@ -1486,7 +1492,118 @@ textarea {
 }
 
 .catalog-card {
+  min-height: 0;
   overflow: hidden;
+}
+
+.ai-workbench-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-workbench-layout {
+  min-height: 0;
+  flex: 1;
+  max-height: calc(100vh - 178px);
+  display: grid;
+  grid-template-rows: minmax(280px, 1.1fr) minmax(240px, 0.9fr);
+  gap: 16px;
+  overflow: hidden;
+}
+
+.ai-main-row {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.ai-monitor-row {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.82fr) minmax(0, 1.18fr);
+  gap: 16px;
+}
+
+.ai-workbench-layout .card {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-workbench-layout .card-head {
+  flex: 0 0 auto;
+}
+
+.ai-card-body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.ai-catalog-card {
+  min-width: 0;
+}
+
+.ai-catalog-card .catalog-panel {
+  min-height: 0;
+  height: 100%;
+}
+
+.ai-primary-card {
+  min-width: 0;
+}
+
+.ai-memory-card {
+  min-width: 0;
+}
+
+.ai-jobs-card {
+  min-width: 0;
+}
+
+.memory-view--compact {
+  height: 100%;
+  overflow: hidden;
+}
+
+.memory-view--compact .view-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.memory-view--compact .view-header h1 {
+  font-size: 18px;
+}
+
+.memory-view--compact .dashboard-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.memory-view--compact .split-grid,
+.memory-compact-grid {
+  min-height: 0;
+  grid-template-columns: 1fr;
+}
+
+.memory-view--compact .split-grid > .workflow-card {
+  min-height: 0;
+}
+
+.memory-view--compact .split-grid > .workflow-card:nth-child(2) {
+  display: none;
+}
+
+.job-list--compact {
+  max-height: min(360px, 38vh);
+  overflow: auto;
+}
+
+.job-list--compact .job-card pre {
+  max-height: 140px;
 }
 
 .model-flow-grid div,
@@ -1687,6 +1804,59 @@ textarea {
 
 .pipeline-run-item small {
   color: var(--muted);
+}
+
+.pipeline-next-step {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.pipeline-next-step strong {
+  color: var(--ink);
+}
+
+.pipeline-next-step span,
+.pipeline-next-step small {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.pipeline-next-step--ok {
+  border-color: var(--safe-border);
+  background: var(--safe-bg);
+}
+
+.pipeline-next-step--ok strong,
+.pipeline-next-step--ok span,
+.pipeline-next-step--ok small {
+  color: var(--safe-ink);
+}
+
+.pipeline-next-step--warn {
+  border-color: var(--notice-border);
+  background: var(--notice-bg);
+}
+
+.pipeline-next-step--warn strong,
+.pipeline-next-step--warn span,
+.pipeline-next-step--warn small {
+  color: var(--notice-ink);
+}
+
+.pipeline-next-step--danger {
+  border-color: var(--danger-soft-border);
+  background: var(--danger-soft-bg);
+}
+
+.pipeline-next-step--danger strong,
+.pipeline-next-step--danger span,
+.pipeline-next-step--danger small {
+  color: var(--danger-soft-ink);
 }
 
 .pipeline-progress {
@@ -2429,6 +2599,8 @@ textarea {
   .workspace-layout,
   .dashboard-hero,
   .audit-layout,
+  .ai-main-row,
+  .ai-monitor-row,
   .publish-layout,
   .memory-layout,
   .model-layout,
@@ -2444,6 +2616,11 @@ textarea {
   .pipeline-detail-grid,
   .flow {
     grid-template-columns: 1fr;
+  }
+
+  .ai-workbench-layout {
+    max-height: none;
+    overflow: visible;
   }
 
   .dashboard-hero__visual {

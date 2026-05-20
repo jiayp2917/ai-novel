@@ -3,6 +3,18 @@ import { QueryClient } from '@tanstack/react-query';
 export const queryClient = new QueryClient();
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
 
+export class ApiRequestError extends Error {
+  status: number;
+  detail: string;
+
+  constructor(message: string, status: number, detail: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: {
@@ -19,7 +31,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     } catch {
       // Keep HTTP status fallback.
     }
-    throw new Error(localizeApiError(detail));
+    throw new ApiRequestError(localizeApiError(detail), response.status, detail);
   }
   return response.json() as Promise<T>;
 }
@@ -59,6 +71,8 @@ function localizeApiError(detail: string): string {
     'chunk_size must be positive': '分片大小必须大于 0。',
     'max_fix_rounds must be between 0 and 5': '最大修复轮次必须在 0 到 5 之间。',
     'Pipeline run not found': '流水线任务不存在。',
+    'Pipeline run must be stopped or completed before deletion': '这条流水线还不能删除。请先停止，或等它完成后再删除。',
+    'Pipeline run has active child tasks; stop it before deletion': '这条流水线还有活动步骤。请先停止后再删除。',
   };
   return exact[detail] ?? detail;
 }

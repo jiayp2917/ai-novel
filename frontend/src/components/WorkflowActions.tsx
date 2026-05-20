@@ -220,6 +220,8 @@ export function SourceProposalActions({ sourceFileId }: { sourceFileId: number }
 
 export function JobList({ compact = false }: { compact?: boolean }) {
   const jobs = useJobs();
+  const allJobs = jobs.data ?? [];
+  const visibleJobs = compact ? allJobs.slice(0, 8) : allJobs;
 
   return (
     <section className={compact ? 'workflow-card workflow-card--compact' : 'workflow-card'}>
@@ -228,11 +230,11 @@ export function JobList({ compact = false }: { compact?: boolean }) {
           <p className="eyebrow">任务队列</p>
           <h2>最近任务</h2>
         </div>
-        <span className="count-badge">{jobs.data?.length ?? 0}</span>
+        <span className="count-badge">{allJobs.length}</span>
       </div>
-      <div className="job-list">
+      <div className={compact ? 'job-list job-list--compact' : 'job-list'}>
         {jobs.isLoading && <p className="muted">正在加载任务...</p>}
-        {(jobs.data ?? []).map((job) => (
+        {visibleJobs.map((job) => (
           <article className={`job-card job-card--${job.status}`} key={job.id}>
             <div>
               <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
@@ -240,10 +242,22 @@ export function JobList({ compact = false }: { compact?: boolean }) {
             </div>
             {job.status === 'paused_budget' && <p>今日调用额度已暂停。查看原因后，可在 AI 助手页点击“继续执行任务”。</p>}
             {job.error && <p>{job.error}</p>}
-            {job.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
+            {job.result && (
+              compact ? (
+                <details>
+                  <summary>查看结果</summary>
+                  <pre>{JSON.stringify(job.result, null, 2)}</pre>
+                </details>
+              ) : (
+                <pre>{JSON.stringify(job.result, null, 2)}</pre>
+              )
+            )}
           </article>
         ))}
-        {!jobs.isLoading && (jobs.data ?? []).length === 0 && <p className="muted">暂无任务。</p>}
+        {!jobs.isLoading && allJobs.length === 0 && <p className="muted">暂无任务。</p>}
+        {compact && allJobs.length > visibleJobs.length && (
+          <p className="muted">仅显示最近 {visibleJobs.length} 条任务，完整队列请到设置/模型页查看。</p>
+        )}
       </div>
     </section>
   );

@@ -23,6 +23,20 @@ PIPELINE_RUN_MODES = {
     "review_fix",
     "full_auto",
 }
+DELETABLE_RUN_STATUSES = {"done", "manual_required", "failed_terminal"}
+BLOCKING_DELETE_CHILD_STATUSES = {
+    "planned",
+    "queued",
+    "running",
+    "context_built",
+    "draft_generated",
+    "local_validated",
+    "reviewed",
+    "fixing",
+    "paused",
+    "paused_budget",
+    "failed_retryable",
+}
 
 
 class PipelineRunError(ValueError):
@@ -288,10 +302,26 @@ class PipelineRunService:
         return dependency.status in {"done", "approved", "published", "summarized"}
 
     def _queue_child_if_ready(self, child: Job) -> int:
-        if child.status != PipelineState.PLANNED.value or not self._dependency_satisfied(child):
+        if child.status not in {PipelineState.PLANNED.value, PipelineState.PAUSED.value}:
+            return 0
+        if self._parent_stops_child_queue(child) or not self._dependency_satisfied(child):
             return 0
         self.machine.transition(child, PipelineState.QUEUED, payload_updates={"execution": "queued"})
         return 1
+
+    def _parent_stops_child_queue(self, child: Job) -> bool:
+        parent_run_id = job_payload(child).get("parent_run_id")
+        if not isinstance(parent_run_id, int):
+            return False
+        parent = self.session.get(Job, parent_run_id)
+        if parent is None:
+            return True
+        return parent.status in {
+            PipelineState.PAUSED.value,
+            PipelineState.MANUAL_REQUIRED.value,
+            PipelineState.FAILED_TERMINAL.value,
+            PipelineState.DONE.value,
+        }
 
     def _propagate_terminal_dependency(self, child: Job) -> None:
         if child.status != PipelineState.PLANNED.value:
@@ -332,16 +362,25 @@ class PipelineRunService:
     def pause(self, run_id: int) -> dict[str, Any]:
         job = self._run(run_id)
         self.machine.pause(job)
+        for child in self._child_jobs(job):
+            if child.status in {"planned", "queued", "running", "context_built", "draft_generated", "local_validated", "reviewed", "fixing", "approved", "published"}:
+                self._transition_child_if_allowed(child, PipelineState.PAUSED, error="Paused by user")
         return self.serialize(job)
 
     def resume(self, run_id: int) -> dict[str, Any]:
         job = self._run(run_id)
         self.machine.resume(job)
+        for child in self._child_jobs(job):
+            if child.status in {PipelineState.PAUSED.value, PipelineState.PAUSED_BUDGET.value} and self._dependency_satisfied(child):
+                self._transition_child_if_allowed(child, PipelineState.QUEUED, error=None)
         return self.serialize(job)
 
     def retry(self, run_id: int) -> dict[str, Any]:
         job = self._run(run_id)
         self.machine.retry(job)
+        for child in self._child_jobs(job):
+            if child.status in {PipelineState.FAILED_RETRYABLE.value, PipelineState.PAUSED_BUDGET.value} and self._dependency_satisfied(child):
+                self._transition_child_if_allowed(child, PipelineState.QUEUED, payload_updates={"retry_count": int(job_payload(child).get("retry_count", 0)) + 1}, error=None)
         return self.serialize(job)
 
     def cancel(self, run_id: int) -> dict[str, Any]:
@@ -349,7 +388,43 @@ class PipelineRunService:
         if job.status in {"done", "failed_terminal", "manual_required"}:
             raise PipelineRunError(f"Run cannot be cancelled from {job.status}")
         self.machine.transition(job, PipelineState.FAILED_TERMINAL, error="Cancelled by user")
+        for child in self._child_jobs(job):
+            if child.status not in {"done", "manual_required", "failed_terminal"}:
+                self._transition_child_if_allowed(child, PipelineState.FAILED_TERMINAL, error="Cancelled by user")
         return self.serialize(job)
+
+    def delete_run(self, run_id: int) -> dict[str, Any]:
+        job = self._run(run_id)
+        if job.status not in DELETABLE_RUN_STATUSES:
+            raise PipelineRunError("Pipeline run must be stopped or completed before deletion")
+        children = self._child_jobs(job)
+        blocking = [child for child in children if child.status in BLOCKING_DELETE_CHILD_STATUSES]
+        if blocking:
+            raise PipelineRunError("Pipeline run has active child tasks; stop it before deletion")
+        deleted_child_tasks = len(children)
+        for child in children:
+            self.session.delete(child)
+        self.session.delete(job)
+        self.session.commit()
+        return {"deleted": True, "run_id": run_id, "deleted_child_tasks": deleted_child_tasks}
+
+    def _child_jobs(self, run: Job) -> list[Job]:
+        payload = job_payload(run)
+        child_ids = [int(item) for item in payload.get("child_task_ids", []) if isinstance(item, int)]
+        if not child_ids:
+            return []
+        return list(self.session.scalars(select(Job).where(Job.id.in_(child_ids)).order_by(Job.id)))
+
+    def _transition_child_if_allowed(
+        self,
+        child: Job,
+        target: PipelineState,
+        *,
+        payload_updates: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
+        if self.machine.can_transition(child.status, target.value):
+            self.machine.transition(child, target, payload_updates=payload_updates, error=error)
 
     def serialize(self, job: Job) -> dict[str, Any]:
         payload = job_payload(job)

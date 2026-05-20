@@ -86,29 +86,33 @@ export function AiWorkbenchPage() {
     <section className="page active ai-workbench-page">
       <h2 className="page-title">AI 工作台</h2>
       <p className="page-subtitle">集中处理草稿检查、AI 修订、记忆整理与写回确认。人工写作不强制走 AI 检查。</p>
-      <div className="audit-layout ai-workbench-layout">
-        <aside className="card catalog-card ai-catalog-card"><CatalogPanel /></aside>
-        <div className="card ai-primary-card">
-          <div className="card-head"><h2>草稿检查与写回</h2><span className="chip warn">写回受控</span></div>
-          <div className="pad form-grid ai-card-body">
-            <SafetyBoundaryBanner compact />
-            {chapterContent.data ? (
-              <ChapterActions chapterId={chapterContent.data.id} mode="full" />
-            ) : (
-              <p className="muted">请选择一章正文。人工草稿可查看改动后写回；AI 草稿需要先检查。</p>
-            )}
+      <div className="ai-workbench-layout">
+        <div className="ai-main-row">
+          <aside className="card catalog-card ai-catalog-card"><CatalogPanel /></aside>
+          <div className="card ai-primary-card">
+            <div className="card-head"><h2>草稿检查与写回</h2><span className="chip warn">需要人工确认</span></div>
+            <div className="pad form-grid ai-card-body">
+              <SafetyBoundaryBanner compact />
+              {chapterContent.data ? (
+                <ChapterActions chapterId={chapterContent.data.id} mode="full" />
+              ) : (
+                <p className="muted">请选择一章正文。人工草稿可查看改动后写回；AI 草稿需要先检查。</p>
+              )}
+            </div>
           </div>
         </div>
-        <div className="card ai-memory-card">
-          <div className="card-head"><h2>记忆整理</h2><span className="chip blue">上下文</span></div>
-          <div className="pad ai-card-body">
-            <MemoryView compact />
+        <div className="ai-monitor-row">
+          <div className="card ai-memory-card">
+            <div className="card-head"><h2>记忆与上下文</h2><span className="chip blue">观察</span></div>
+            <div className="pad ai-card-body">
+              <MemoryView compact />
+            </div>
           </div>
-        </div>
-        <div className="card ai-jobs-card">
-          <div className="card-head"><h2>最近任务</h2><span className="chip">队列</span></div>
-          <div className="pad ai-card-body">
-            <JobList compact />
+          <div className="card ai-jobs-card">
+            <div className="card-head"><h2>AI 运行监控</h2><span className="chip">任务队列</span></div>
+            <div className="pad ai-card-body">
+              <JobList compact />
+            </div>
           </div>
         </div>
       </div>

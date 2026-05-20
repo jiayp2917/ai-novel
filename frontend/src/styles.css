@@ -276,25 +276,40 @@ pre {
   border-bottom: 1px solid var(--line);
   background: var(--toolbar);
   backdrop-filter: blur(8px);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   position: sticky;
   top: 0;
   z-index: 20;
+  min-width: 0;
 }
 
 .crumb {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--muted);
   font-size: 13px;
+  overflow: hidden;
 }
 
 .crumb strong {
+  min-width: 0;
   color: var(--ink);
   font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crumb span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-actions {
@@ -303,12 +318,22 @@ pre {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+  overflow: hidden;
 }
 
-.top-actions .chip:first-child {
-  max-width: 360px;
+.top-actions .chip {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.top-actions .workspace-chip {
+  flex: 0 1 240px;
+  max-width: min(300px, 28vw);
+}
+
+.top-actions .calls-chip {
+  flex: 0 0 auto;
 }
 
 .btn,
@@ -329,11 +354,13 @@ pre {
   align-items: center;
   gap: 8px;
   max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .theme-switch--compact {
-  min-width: 118px;
-  max-width: 150px;
+  min-width: 76px;
+  max-width: 92px;
   justify-content: center;
   gap: 4px;
 }
@@ -2339,6 +2366,7 @@ textarea {
   .topbar {
     padding: 0 12px;
     gap: 10px;
+    grid-template-columns: minmax(70px, 1fr) auto;
   }
 
   .crumb span {
@@ -2349,11 +2377,11 @@ textarea {
     gap: 6px;
   }
 
-  .top-actions .chip:first-child {
-    max-width: min(220px, 36vw);
+  .top-actions .workspace-chip {
+    max-width: min(150px, 24vw);
   }
 
-  .top-actions .chip:nth-of-type(2),
+  .top-actions .calls-chip,
   .top-actions .btn.primary {
     display: none;
   }
@@ -2439,5 +2467,36 @@ textarea {
   .workspace-stats--inline,
   .workspace-bookmark__actions {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 820px) {
+  .topbar {
+    grid-template-columns: minmax(44px, 1fr) auto;
+    gap: 6px;
+  }
+
+  .top-actions .workspace-chip {
+    display: none;
+  }
+
+  .theme-switch--compact {
+    min-width: 64px;
+    max-width: 72px;
+    padding-inline: 8px;
+  }
+
+  .top-actions .btn:not(.theme-switch):not(.primary) {
+    padding-inline: 9px;
+  }
+}
+
+@media (max-width: 640px) {
+  .crumb span {
+    display: none;
+  }
+
+  .top-actions .btn.primary {
+    display: none;
   }
 }

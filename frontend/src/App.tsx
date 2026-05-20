@@ -34,6 +34,8 @@ export function App() {
   const health = useHealth();
   const cost = useCostDashboard();
   const workspaceRoot = health.data?.workspace?.root ?? health.data?.content_root ?? '未连接工作区';
+  const workspaceLabel = shortWorkspaceLabel(workspaceRoot);
+  const themeShortLabel = theme === 'bright' ? '主题1' : '主题2';
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -71,10 +73,16 @@ export function App() {
             <span> / 长篇创作安全流</span>
           </div>
           <div className="top-actions">
-            <span className="chip blue" title={workspaceRoot}>当前工作区：{workspaceRoot}</span>
-            <span className="chip">今日调用 {cost.data?.today_model_calls ?? 0} 次</span>
-            <button className="btn theme-switch theme-switch--compact" type="button" onClick={toggleTheme} title={`当前：${themeLabels[theme]}，点击切换为${themeLabels[nextTheme(theme)]}`}>
-              界面风格：{themeLabels[theme]}
+            <span className="chip blue workspace-chip" title={workspaceRoot}>当前工作区：{workspaceLabel}</span>
+            <span className="chip calls-chip">今日调用 {cost.data?.today_model_calls ?? 0} 次</span>
+            <button
+              className="btn theme-switch theme-switch--compact"
+              type="button"
+              onClick={toggleTheme}
+              title={`当前：${themeLabels[theme]}，点击切换为${themeLabels[nextTheme(theme)]}`}
+              aria-label={`界面风格：${themeLabels[theme]}，点击切换为${themeLabels[nextTheme(theme)]}`}
+            >
+              {themeShortLabel}
               <span>切换为{themeLabels[nextTheme(theme)]}</span>
             </button>
             <button className="btn" type="button" onClick={() => setActiveView('settings')}>工作区</button>
@@ -94,4 +102,12 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function shortWorkspaceLabel(root: string): string {
+  if (!root || root === '未连接工作区') {
+    return root || '未连接工作区';
+  }
+  const parts = root.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? root;
 }

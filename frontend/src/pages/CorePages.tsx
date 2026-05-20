@@ -83,14 +83,14 @@ export function AiWorkbenchPage() {
   const chapterContent = useChapterContent(selectedChapterId);
 
   return (
-    <section className="page active">
+    <section className="page active ai-workbench-page">
       <h2 className="page-title">AI 工作台</h2>
       <p className="page-subtitle">集中处理草稿检查、AI 修订、记忆整理与写回确认。人工写作不强制走 AI 检查。</p>
-      <div className="audit-layout">
-        <aside className="card catalog-card"><CatalogPanel /></aside>
-        <div className="card">
+      <div className="audit-layout ai-workbench-layout">
+        <aside className="card catalog-card ai-catalog-card"><CatalogPanel /></aside>
+        <div className="card ai-primary-card">
           <div className="card-head"><h2>草稿检查与写回</h2><span className="chip warn">写回受控</span></div>
-          <div className="pad form-grid">
+          <div className="pad form-grid ai-card-body">
             <SafetyBoundaryBanner compact />
             {chapterContent.data ? (
               <ChapterActions chapterId={chapterContent.data.id} mode="full" />
@@ -99,15 +99,15 @@ export function AiWorkbenchPage() {
             )}
           </div>
         </div>
-        <div className="card">
+        <div className="card ai-memory-card">
           <div className="card-head"><h2>记忆整理</h2><span className="chip blue">上下文</span></div>
-          <div className="pad">
-            <MemoryView />
+          <div className="pad ai-card-body">
+            <MemoryView compact />
           </div>
         </div>
-        <div className="card">
+        <div className="card ai-jobs-card">
           <div className="card-head"><h2>最近任务</h2><span className="chip">队列</span></div>
-          <div className="pad">
+          <div className="pad ai-card-body">
             <JobList compact />
           </div>
         </div>

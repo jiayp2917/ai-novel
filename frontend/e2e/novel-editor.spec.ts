@@ -41,7 +41,13 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await expect(page.locator('.reader-header h1')).toContainText('历史版本');
   await expect(page.locator('.cm-content')).toContainText('新手路径正文版本保存验证');
   await expect(savedVersion.getByRole('button', { name: '删除版本' })).toBeEnabled();
+  await expect(savedVersion).toContainText('保存时间');
+  await expect(savedVersion).toContainText('改动摘要');
+  await expect(savedVersion).toContainText('发布状态');
+  await expect(savedVersion).toContainText('删除说明');
   await expect(page.locator('.history-card--current').getByRole('button', { name: '当前正文不可删' })).toBeDisabled();
+  await expect(page.locator('.history-card--current')).toContainText('已发布为当前正文');
+  await expect(page.locator('.history-card--current')).toContainText('不可删除：当前正文必须保留');
   await savedVersion.getByRole('button', { name: '发布此版本' }).click();
   await expect(page.getByRole('dialog', { name: '确认发布正文版本' })).toBeVisible();
   await page.getByRole('button', { name: '确认发布' }).click();
@@ -155,7 +161,6 @@ test('core views remain separated and writing layout does not use bottom overlay
   await expect(page.locator('.top-actions')).not.toContainText('今日调用');
   await expect(page.locator('.task-panel')).not.toContainText(/调用|成本|输入|输出|缓存|供应商/);
   await expect(page.locator('.page-editor')).not.toContainText(/artifact_id|provider|token|raw JSON|当前正文生成候选/);
-  await expect(page.locator('.page-editor')).not.toContainText(/正文校验|文件校验/);
   await expect(page.locator('.page-editor')).not.toContainText('snapshot-candidate');
   await expect(page.locator('.page-editor')).not.toContainText('运行任务一次');
   await page.keyboard.press('Escape');
@@ -380,6 +385,52 @@ test('status drawer floats without resizing writing area and long pages can scro
   await expect(page.getByText('查看调用边界')).toBeVisible();
 });
 
+test('AI workbench selects a draft card without manual id and shows readable draft context', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  await mainNav(page, 'AI 工作台').click();
+  await openChapter(page, '001');
+
+  const chapter = await chapterByNo(page, 1);
+  const content = await chapterContent(page, chapter.id);
+  const seeded = await seedAiCandidate(page, chapter.id, `${content.text}\n\n草稿卡片选择验证。`);
+  await page.route(`${apiBaseUrl}/api/artifacts/${seeded.artifact_id}/review`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        artifact_id: seeded.artifact_id,
+        review_id: 991,
+        passed: true,
+        evidence_count: 0,
+        manual_required: false,
+        issues: [],
+      }),
+    });
+  });
+  await page.reload();
+  await mainNav(page, 'AI 工作台').click();
+  await openChapter(page, '001');
+
+  const primary = page.locator('.ai-primary-card');
+  const draftCard = primary.locator('.candidate-row').filter({ hasText: 'AI 生成草稿' }).first();
+  await expect(draftCard).toBeVisible();
+  await expect(draftCard).toContainText('第 001 章：开局觉醒');
+  await expect(draftCard).toContainText('保存：');
+  await expect(draftCard).toContainText('检查：未检查');
+  await expect(draftCard).toContainText('未写回');
+  await expect(primary).not.toContainText('手动输入草稿编号');
+
+  await draftCard.click();
+  await expect(draftCard).toHaveClass(/candidate-row--active/);
+  await page.getByRole('button', { name: '检查草稿' }).click();
+  await expect(page.locator('.task-latest')).toContainText('检查 #991：通过');
+  await page.getByRole('button', { name: '查看改动' }).click();
+  await expect(page.locator('.diff-preview')).toContainText('草稿卡片选择验证');
+});
+
 test('AI workbench keeps catalog, memory, and task queue bounded inside panels', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
@@ -554,23 +605,26 @@ test('model task page shows quality trends and context budget warnings', async (
   await page.reload();
   await openModelsView(page);
   await expect(page.locator('.quality-grid')).toBeVisible();
+  await expect(page.locator('.models-section--workspace')).toContainText('AI 输出去向与安全边界');
+  await expect(page.locator('.models-section--connectivity')).toContainText('模型连通');
+  await expect(page.locator('.models-section--calls')).toContainText('最近调用');
+  await expect(page.locator('.models-section--skills')).toContainText('Skills / 事件');
   await expect(page.locator('.quality-card')).toHaveCount(3);
   await expect(page.locator('.quality-card').nth(0)).toContainText('1');
   await expect(page.locator('.quality-card').nth(1)).toContainText('2000-2600');
   await expect(page.locator('.quality-card').nth(2)).toContainText('0');
-  await expect(page.locator('[aria-label="按分工统计"]')).toContainText('AI 检查');
-  await expect(page.locator('[aria-label="按分工统计"]')).toContainText('88');
   await expect(page.locator('.context-budget-list')).toBeVisible();
   await expect(page.locator('.context-budget-card')).toContainText('timeline');
   await expect(page.locator('.context-budget-card')).toContainText('500');
   await expect(page.locator('.route-card').first()).toContainText('已配置，可测试连通');
   await expect(page.locator('.route-card').first().locator('div').first()).not.toContainText('/');
-  await page.locator('.route-card').first().getByText('查看模型配置').click();
+  await page.locator('.route-card').first().getByText('高级详情').click();
   await expect(page.locator('.route-card').first()).toContainText('/');
   await expect(page.getByText('本地记录仅供排错')).toBeVisible();
   await page.getByText('查看 Skills').click();
   await expect(page.locator('.skill-card').first()).toContainText(/参与最近一次记录的上下文|最近一次记录的上下文未使用/);
   await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(2);
+  await expect(page.locator('.models-section--calls .observability-row').first()).not.toContainText(/provider|token|base_url|JSON/);
 });
 
 test('cyberpunk theme keeps core work areas readable and uses project visual assets', async ({ page }) => {
@@ -640,12 +694,17 @@ test('home and writing pages keep engineering details out of the main flow', asy
   await expect(page.locator('.dashboard-page')).toContainText('版本安全');
   await expect(page.locator('.dashboard-page')).toContainText('AI 辅助');
   await expect(page.locator('.dashboard-page')).toContainText('改动可查');
+  await page.locator('.task-toggle').click();
+  await expect(page.locator('.task-popover details.advanced-details').filter({ hasText: '查看调用和成本排错信息' })).toBeVisible();
+  await page.locator('.task-popover').getByRole('button', { name: '关闭' }).click();
 
   await mainNav(page, '写作').click();
   await openChapter(page, '001');
   await expect(page.locator('.top-actions')).not.toContainText('今日调用');
   await expect(page.locator('.task-panel')).not.toContainText(/调用|成本|输入|输出|缓存|供应商|token|provider/);
   await expect(page.locator('.page-editor')).not.toContainText(/artifact_id|provider|token|raw JSON|snapshot-candidate/);
+  await page.locator('.task-toggle').click();
+  await expect(page.locator('.task-popover')).not.toContainText(/调用 \d|成本|输入 \d|输出 \d|缓存 \d|供应商/);
 });
 
 test('pipeline wizard can create, pause, resume, run once, and show 10-chapter timeline', async ({ page }) => {

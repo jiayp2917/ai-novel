@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useChapters } from '../hooks';
 import type { Artifact } from '../types';
 import { isManualEditorDraft, publishBlockReason, reviewLabel, reviewStatus, shortHash } from './artifactGateUtils';
 
@@ -126,21 +127,40 @@ export function CandidateSelector({
   candidates,
   artifactKind,
   allowPublish,
+  baseChapterId,
 }: {
   artifactId: number | null;
   setArtifactId: (id: number | null) => void;
-  candidates: Array<{
-    id: number;
-    kind: string;
-    path: string;
-    latest_review: { passed: boolean; manual_required: boolean } | null;
-    latest_publish: { published_at: string } | null;
-    created_at: string;
-  }>;
+  candidates: Artifact[];
   artifactKind: string;
   allowPublish: boolean;
+  baseChapterId?: number;
 }) {
   const [manualId, setManualId] = useState(artifactId ? String(artifactId) : '');
+  const chapters = useChapters();
+  const chapterById = useMemo(
+    () => new Map((chapters.data ?? []).map((chapter) => [chapter.id, chapter])),
+    [chapters.data],
+  );
+  const sortedCandidates = useMemo(() => {
+    return [...candidates].sort((a, b) => {
+      const aCurrent = baseChapterId !== undefined && a.base_chapter_id === baseChapterId ? 1 : 0;
+      const bCurrent = baseChapterId !== undefined && b.base_chapter_id === baseChapterId ? 1 : 0;
+      if (aCurrent !== bCurrent) {
+        return bCurrent - aCurrent;
+      }
+      const createdDelta = timestamp(b.created_at) - timestamp(a.created_at);
+      if (createdDelta !== 0) {
+        return createdDelta;
+      }
+      const aUnpublished = a.latest_publish ? 0 : 1;
+      const bUnpublished = b.latest_publish ? 0 : 1;
+      if (aUnpublished !== bUnpublished) {
+        return bUnpublished - aUnpublished;
+      }
+      return b.id - a.id;
+    });
+  }, [baseChapterId, candidates]);
 
   useEffect(() => {
     if (artifactId) {
@@ -175,18 +195,31 @@ export function CandidateSelector({
         </div>
       </details>
       <div className="candidate-list">
-        {candidates.map((candidate) => (
-          <button
-            type="button"
-            className={candidate.id === artifactId ? 'candidate-row candidate-row--active' : 'candidate-row'}
-            key={candidate.id}
-            onClick={() => setArtifactId(candidate.id)}
-          >
-            <strong>{artifactKind === 'candidate' ? '草稿' : '提案'}</strong>
-            <span>{reviewStatus(candidate.latest_review)}</span>
-            <small>{candidate.latest_publish ? '已写回' : allowPublish ? '未写回' : '不直接写回'}</small>
-          </button>
-        ))}
+        {sortedCandidates.map((candidate) => {
+          const chapter = candidate.base_chapter_id ? chapterById.get(candidate.base_chapter_id) : undefined;
+          const source = candidateSourceLabel(candidate);
+          return (
+            <button
+              type="button"
+              className={candidate.id === artifactId ? 'candidate-row candidate-row--active' : 'candidate-row'}
+              key={candidate.id}
+              onClick={() => setArtifactId(candidate.id)}
+            >
+              <div className="candidate-row__main">
+                <strong>{artifactKind === 'candidate' ? source : '素材提案'}</strong>
+                <span>{chapter ? `第 ${String(chapter.chapter_no).padStart(3, '0')} 章：${chapter.title}` : artifactKind === 'candidate' ? '当前章节草稿' : '设定/章纲提案'}</span>
+              </div>
+              <div className="candidate-row__meta">
+                <span>保存：{formatDate(candidate.created_at)}</span>
+                <span>检查：{reviewStatus(candidate.latest_review)}</span>
+              </div>
+              <div className="candidate-row__status">
+                <span>{candidate.latest_publish ? '已写回' : allowPublish ? '未写回' : '不直接写回'}</span>
+                <small>{candidate.latest_publish ? '已有写回记录' : candidateActionHint(candidate, allowPublish)}</small>
+              </div>
+            </button>
+          );
+        })}
         {candidates.length === 0 && (
           <p className="muted">
             {artifactKind === 'candidate'
@@ -197,4 +230,58 @@ export function CandidateSelector({
       </div>
     </section>
   );
+}
+
+function candidateSourceLabel(candidate: Artifact): string {
+  if (isManualEditorDraft(candidate)) {
+    return candidate.metadata.unparsed_chapter_source ? '普通正文 Markdown' : '人工正文版本';
+  }
+  const source = textMeta(candidate.metadata.source);
+  const taskType = textMeta(candidate.metadata.task_type);
+  if (taskType === 'revise_from_annotations') {
+    return '按批注修订';
+  }
+  if (taskType === 'generate_chapter_draft' || source === 'ai_generated_draft') {
+    return 'AI 生成草稿';
+  }
+  if (taskType === 'fix_chapter_candidate') {
+    return 'AI 修订草稿';
+  }
+  if (source === 'existing_chapter_snapshot' || textMeta(candidate.metadata.purpose) === 'pipeline_review_snapshot') {
+    return '待检查副本';
+  }
+  return '未知来源草稿';
+}
+
+function candidateActionHint(candidate: Artifact, allowPublish: boolean): string {
+  if (!allowPublish) {
+    return '只用于对比和人工采纳';
+  }
+  if (isManualEditorDraft(candidate)) {
+    return '可查看改动后确认';
+  }
+  if (!candidate.latest_review) {
+    return '需要先检查';
+  }
+  return candidate.latest_review.passed ? '可查看改动后确认' : '需处理检查问题';
+}
+
+function textMeta(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function timestamp(value: string | null): number {
+  if (!value) {
+    return 0;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function formatDate(value: string | null): string {
+  if (!value) {
+    return '未知时间';
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }

@@ -56,7 +56,7 @@ export function statusLabel(status: string): string {
 export function usageSummary(usage: Record<string, unknown>): string {
   const total = usage.total_tokens;
   if (typeof total === 'number') {
-    return `${total} token`;
+    return `${total} 本地单位`;
   }
   const source = usage.usage_source;
   return typeof source === 'string' ? source : '无';

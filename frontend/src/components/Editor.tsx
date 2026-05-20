@@ -276,12 +276,15 @@ export function ChapterEditor({
       return;
     }
     const view = viewRef.current;
+    const end = view.state.doc.length;
+    view.focus();
+    view.dispatch({ selection: EditorSelection.cursor(end) });
     const frame = window.requestAnimationFrame(() => {
-      const end = view.state.doc.length;
+      const nextEnd = view.state.doc.length;
       view.focus();
       view.dispatch({
-        selection: EditorSelection.cursor(end),
-        effects: EditorView.scrollIntoView(end, { y: 'end' }),
+        selection: EditorSelection.cursor(nextEnd),
+        effects: EditorView.scrollIntoView(nextEnd, { y: 'end' }),
       });
     });
     return () => window.cancelAnimationFrame(frame);

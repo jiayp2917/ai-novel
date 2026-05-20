@@ -128,6 +128,7 @@ export function ArtifactGate({
         candidates={artifacts.data ?? []}
         artifactKind={artifactKind}
         allowPublish={allowPublish}
+        baseChapterId={baseChapterId}
       />
       <PublishGateChecklist
         artifact={selectedArtifact.data}

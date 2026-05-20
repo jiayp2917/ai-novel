@@ -113,6 +113,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
               <VersionCard
                 key={version.id}
                 version={version}
+                versions={versions.data ?? []}
                 active={selectedVersionId === version.id}
                 publishing={publishMutation.isPending && publishMutation.variables === version.id}
                 deleting={deleteMutation.isPending && deleteMutation.variables === version.id}
@@ -147,6 +148,7 @@ function HistoryGroup({ title, children }: { title: string; children: ReactNode 
 
 function VersionCard({
   version,
+  versions,
   active,
   publishing,
   deleting,
@@ -155,6 +157,7 @@ function VersionCard({
   onDelete,
 }: {
   version: ChapterVersion;
+  versions: ChapterVersion[];
   active: boolean;
   publishing: boolean;
   deleting: boolean;
@@ -162,16 +165,44 @@ function VersionCard({
   onPublish: () => void;
   onDelete: () => void;
 }) {
+  const changeSummary = version.is_current
+    ? '这是当前正在使用的正文。'
+    : version.can_preview
+      ? '可切换查看，也可确认发布为当前正文。'
+      : '缺少正文快照，不能预览或发布。';
+  const publishStatus = version.is_current
+    ? '已发布为当前正文'
+    : version.can_publish
+      ? '未发布，可确认发布'
+      : version.can_preview
+        ? '暂不能发布'
+        : '不能发布';
+  const deleteReason = version.can_delete
+    ? '可删除：不会影响当前正文、备份和发布记录。'
+    : version.is_current
+      ? '不可删除：当前正文必须保留。'
+      : '不可删除：该版本仍受保护。';
+  const previousVersion = previousByCreatedAt(version, versions);
+
   return (
     <article className={version.is_current ? 'history-card history-card--current' : active ? 'history-card history-card--active' : 'history-card'}>
-      <div>
-        <strong>{version.is_current ? '当前正文' : '历史版本'}</strong>
-        <span>{version.title}</span>
+      <div className="history-card__head">
+        <div>
+          <strong>{version.is_current ? '当前正文' : '历史版本'}</strong>
+          <span>{version.title}</span>
+        </div>
+        <small>{formatDate(version.created_at)}</small>
       </div>
-      <small>{formatDate(version.created_at)}</small>
+      <div className="history-status-grid">
+        <span><strong>保存时间</strong>{formatDate(version.created_at)}</span>
+        <span><strong>改动摘要</strong>{changeSummary}</span>
+        <span><strong>发布状态</strong>{publishStatus}</span>
+        <span><strong>删除说明</strong>{deleteReason}</span>
+      </div>
       <details className="version-advanced">
         <summary>排错信息</summary>
         <code>正文校验 {shortHash(version.body_hash)} · 文件校验 {shortHash(version.source_file_hash)}</code>
+        <small>上一版本：{previousVersion ? `#${previousVersion.id} / ${formatDate(previousVersion.created_at)}` : '无'}</small>
       </details>
       {!version.can_preview && <small className="form-hint form-hint--error">该历史版本缺少可查看的正文内容，不能切换，只能保留记录或删除。</small>}
       <div className="history-actions">
@@ -238,6 +269,20 @@ function VersionConfirmDialog({
 
 function shortHash(value: string | null): string {
   return value ? `${value.slice(0, 8)}...` : '无';
+}
+
+function previousByCreatedAt(version: ChapterVersion, versions: ChapterVersion[]): ChapterVersion | undefined {
+  const sorted = [...versions].sort((a, b) => timestamp(b.created_at) - timestamp(a.created_at));
+  const index = sorted.findIndex((item) => item.id === version.id);
+  return index >= 0 ? sorted[index + 1] : undefined;
+}
+
+function timestamp(value: string | null): number {
+  if (!value) {
+    return 0;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
 function formatDate(value: string | null): string {

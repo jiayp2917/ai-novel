@@ -10,13 +10,15 @@ export function TaskPanel({ compact = false }: { compact?: boolean }) {
   const jobs = useJobs();
   const latestTask = tasks[0];
   const pausedBudgetJobs = (jobs.data ?? []).filter((job) => job.status === 'paused_budget');
-  const writerSummary = (
+  const runningJobs = (jobs.data ?? []).filter((job) => job.status === 'running' || job.status === 'queued').length;
+  const authorSummary = (
     <>
       {pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
+      {jobs.isSuccess && <span>运行任务 {runningJobs}</span>}
       {jobs.isSuccess && jobs.data.length > 0 && <span>后台任务 {jobs.data.length}</span>}
     </>
   );
-  const costSummary = compact ? writerSummary : cost.isSuccess ? (
+  const costSummary = cost.isSuccess ? (
     <>
       <span>调用 {cost.data.today_model_calls}</span>
       <span>成本 {cost.data.today_estimated_cost.toFixed(6)}</span>
@@ -49,9 +51,7 @@ export function TaskPanel({ compact = false }: { compact?: boolean }) {
         </div>
       )}
       <div className="cost-dashboard">
-          {!compact && pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
-          {costSummary}
-          {!compact && jobs.isSuccess && <span>任务 {jobs.data.length}</span>}
+          {authorSummary}
         </div>
       </div>
       {expanded && (
@@ -66,10 +66,18 @@ export function TaskPanel({ compact = false }: { compact?: boolean }) {
             </button>
           </div>
           <div className="cost-dashboard cost-dashboard--popover">
-            {!compact && pausedBudgetJobs.length > 0 && <span className="budget-paused">今日调用额度已暂停 {pausedBudgetJobs.length}</span>}
-            {costSummary}
-            {!compact && jobs.isSuccess && <span>任务 {jobs.data.length}</span>}
+            {authorSummary}
           </div>
+          {!compact && (
+            <details className="advanced-details">
+              <summary>查看调用和成本排错信息</summary>
+              <div className="cost-dashboard cost-dashboard--popover">
+                {costSummary}
+                {jobs.isSuccess && <span>任务 {jobs.data.length}</span>}
+              </div>
+              <p className="form-hint">完整模型调用记录请到“设置/模型”查看。</p>
+            </details>
+          )}
           <div className="task-strip">
             {tasks.map((task) => (
               <div className={`task-entry task-entry--${task.status}`} key={task.id}>

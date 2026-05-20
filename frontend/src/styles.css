@@ -1736,21 +1736,46 @@ textarea {
 .candidate-list {
   display: grid;
   gap: 6px;
-  max-height: 160px;
+  max-height: 260px;
   overflow: auto;
 }
 
 .candidate-row {
   display: grid;
-  grid-template-columns: 70px 1fr 1fr;
-  align-items: center;
+  grid-template-columns: minmax(150px, 1.35fr) minmax(130px, 1fr) minmax(120px, 0.9fr);
+  align-items: stretch;
   gap: 8px;
-  padding: 7px 9px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface-elevated);
   color: var(--ink);
   text-align: left;
+}
+
+.candidate-row__main,
+.candidate-row__meta,
+.candidate-row__status {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+}
+
+.candidate-row__main strong,
+.candidate-row__status span {
+  color: var(--ink);
+}
+
+.candidate-row__main span,
+.candidate-row__meta span,
+.candidate-row__status small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .candidate-row--active,
@@ -1827,6 +1852,42 @@ textarea {
   grid-template-columns: repeat(4, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.models-view {
+  gap: 16px;
+}
+
+.models-section {
+  min-width: 0;
+}
+
+.models-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.metric-card--ok {
+  border-color: var(--ok-soft-border);
+  background: var(--ok-bg);
+}
+
+.metric-card--danger {
+  border-color: var(--danger-soft-border);
+  background: var(--danger-soft-bg);
+}
+
+.observability-table--calls .observability-row {
+  grid-template-columns: minmax(120px, 0.85fr) minmax(90px, 0.7fr) minmax(100px, 0.7fr) minmax(160px, 1.2fr) minmax(140px, 1fr);
+}
+
+.observability-table--calls .advanced-details {
+  padding: 6px;
+}
+
+.models-bottom-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
 }
 
 .split-grid,
@@ -2472,10 +2533,36 @@ textarea {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.history-card div {
+.history-card__head {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+}
+
+.history-card__head div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.history-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.history-status-grid span {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.history-status-grid strong {
+  color: var(--ink);
+  font-size: 11px;
 }
 
 .history-actions {
@@ -3219,7 +3306,11 @@ textarea {
   .composer-grid,
   .quality-detail-grid,
   .context-budget-meta,
-  .observability-row {
+  .observability-row,
+  .observability-table--calls .observability-row,
+  .candidate-row,
+  .history-status-grid,
+  .models-summary-grid {
     grid-template-columns: 1fr;
   }
 

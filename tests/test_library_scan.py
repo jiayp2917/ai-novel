@@ -56,6 +56,20 @@ def test_scan_records_source_files_and_chapters(tmp_path: Path) -> None:
     assert len(versions) == 2
 
 
+def test_scan_reports_unparsed_chapter_files_and_empty_folders(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    write(workspace / "02-正文" / "06卷" / "随笔.md", "这里还没有标准章节标题。")
+    (workspace / "02-正文" / "07卷").mkdir(parents=True)
+
+    session = make_session()
+    summary = LibraryScanner(session, workspace).scan()
+
+    assert summary["chapter_source_files_seen"] == 1
+    assert summary["chapters_seen"] == 0
+    assert summary["unparsed_chapter_files"] == ["02-正文/06卷/随笔.md"]
+    assert "02-正文/07卷" in summary["empty_chapter_folders"]
+
+
 def test_repeated_scan_is_idempotent(tmp_path: Path) -> None:
     content = tmp_path / "content"
     write(content / "settings" / "world.md", "# World\nFacts")

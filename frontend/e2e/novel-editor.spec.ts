@@ -73,10 +73,15 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   await expect(page.getByText('草稿不属于当前章节，不能在这里检查、查看改动或写回。')).toBeVisible();
   await expect(page.getByRole('button', { name: '查看改动' })).toBeDisabled();
 
-  await mainNav(page, '资料库').click();
-  await expect(page.locator('.page.active')).toContainText('设定/章纲输出只保存为提案');
+  await mainNav(page, 'AI 素材库').click();
+  await expect(page.locator('.page.active')).toContainText('提案只用于改进设定和章纲');
   await expect(page.locator('.page.active')).not.toContainText('确认写回正文');
-  await page.locator('.catalog-toggle').filter({ hasText: '小说设定' }).click();
+  await expect(page.locator('.page.active .catalog-section--chapters')).toHaveCount(0);
+  await expect(page.locator('.page.active')).not.toContainText('未识别正文文件');
+  const settingsToggle = page.locator('.catalog-toggle').filter({ hasText: '小说设定' });
+  if ((await settingsToggle.getAttribute('aria-expanded')) !== 'true') {
+    await settingsToggle.click();
+  }
   await page.locator('.source-row').filter({ hasText: '01-设定' }).click();
   const setting = await firstSource(page, 'settings');
   const settingContent = await sourceContent(page, setting.id);
@@ -110,10 +115,24 @@ test('core views remain separated and writing layout does not use bottom overlay
   await page.goto('/');
   await switchWorkspace(page);
 
-  for (const title of ['首页', '写作', '资料库', 'AI 工作台', '自动流水线', '设置/模型']) {
+  for (const title of ['首页', '写作', 'AI 素材库', 'AI 工作台', '自动流水线']) {
     await mainNav(page, title).click();
     await expect(page.locator('.crumb')).toContainText(title);
   }
+  await settingsEntry(page).click();
+  await expect(page.locator('.crumb')).toContainText('设置/模型');
+  await expect(mainNav(page, '设置/模型')).toHaveCount(0);
+  await expect(page.locator('.side-note')).toHaveCount(0);
+  await expect(page.locator('.top-actions').getByRole('button', { name: /^工作区$/ })).toHaveCount(0);
+  await mainNav(page, 'AI 素材库').click();
+  await expect(page.locator('.page.active .catalog-section--chapters')).toHaveCount(0);
+  await expect(page.locator('.page.active').getByRole('button', { name: '新增' })).toBeVisible();
+  await page.getByRole('button', { name: '新增' }).click();
+  await expect(page.getByRole('dialog', { name: '新增素材' })).toBeVisible();
+  await expect(page.getByLabel('类型').locator('option')).toHaveText(['系统设定', '小说设定', '章纲']);
+  await page.getByRole('button', { name: '取消' }).click();
+  await page.locator('.workspace-chip--button').click();
+  await expect(page.locator('.crumb')).toContainText('设置/模型');
 
   await mainNav(page, '写作').click();
   await openChapter(page, '001');
@@ -245,6 +264,54 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   expect(selectedTextLength).toBeGreaterThan(50);
 });
 
+test('catalog can create folders, chapters, and normalize unrecognized markdown files', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  await mainNav(page, '写作').click();
+  await page.getByRole('button', { name: '新增' }).click();
+  await expect(page.getByRole('dialog', { name: '新增素材' })).toBeVisible();
+  await page.getByLabel('类型').selectOption('chapter-folder');
+  await page.getByLabel('卷/文件夹').fill('06卷');
+  await page.getByRole('button', { name: '创建并扫描' }).click();
+  await expect(page.locator('.task-latest')).toContainText('素材已创建');
+  await expect(page.locator('.catalog-empty-volume')).toContainText('06卷');
+
+  await page.getByRole('button', { name: '新增' }).click();
+  await page.getByLabel('类型').selectOption('chapter-file');
+  await page.getByLabel('卷/文件夹').fill('06卷');
+  await page.getByLabel('章号').fill('146');
+  await page.getByLabel('标题').fill('新卷开篇');
+  await page.getByRole('button', { name: '创建并扫描' }).click();
+  await expect(page.locator('.chapter-row').filter({ hasText: '146' })).toBeVisible();
+  await expect(page.locator('.reader-header h1')).toContainText('新卷开篇');
+
+  await page.getByRole('button', { name: '新增' }).click();
+  await page.getByLabel('类型').selectOption('chapter-markdown');
+  await page.getByLabel('卷/文件夹').fill('06卷');
+  await page.getByLabel('文件名').fill('待整理正文.md');
+  await page.getByLabel('初始内容').fill('这是一段没有标准章节标题的正文。');
+  await page.getByRole('button', { name: '创建并扫描' }).click();
+  await expect(page.locator('.catalog-subtitle--warn')).toContainText('未识别正文文件');
+  const unparsed = page.locator('.unparsed-row').filter({ hasText: '待整理正文.md' });
+  await expect(unparsed).toBeVisible();
+  await unparsed.getByRole('button').first().click();
+  await expect(page.locator('.reader-header h1')).toContainText('待整理正文.md');
+  await expect(page.getByRole('button', { name: '保存文件草稿' })).toBeVisible();
+
+  await unparsed.getByLabel('规范化章号').fill('147');
+  await unparsed.getByLabel('规范化标题').fill('整理成章');
+  await unparsed.getByRole('button', { name: '转为章节' }).click();
+  await expect(page.locator('.task-latest')).toContainText('已生成标准章节标题');
+  await expect(page.locator('.chapter-row').filter({ hasText: '147' })).toBeVisible();
+  await expect(page.locator('.reader-header h1')).toContainText('整理成章');
+
+  const reset = await page.request.post(`${apiBaseUrl}/api/test/reset-sandbox-workspace`);
+  expect(reset.ok()).toBeTruthy();
+});
+
 test('status drawer floats without resizing writing area and long pages can scroll to bottom', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
@@ -263,7 +330,7 @@ test('status drawer floats without resizing writing area and long pages can scro
   await page.locator('.task-popover').getByRole('button', { name: '关闭' }).click();
   await expect(page.locator('.task-popover')).toHaveCount(0);
 
-  await mainNav(page, '设置/模型').click();
+  await openSettings(page);
   await page.evaluate(() => {
     const pageElement = document.querySelector('.page.active');
     pageElement?.scrollTo({ top: pageElement.scrollHeight });
@@ -428,7 +495,7 @@ test('budget pause is visible in author language and can be resumed from AI task
   const paused = await seedBudgetPausedJob(page);
 
   await page.reload();
-  await mainNav(page, '设置/模型').click();
+  await openSettings(page);
   await expect(page.getByText('今日调用额度已暂停').first()).toBeVisible();
   await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('今日调用额度已暂停');
 
@@ -687,7 +754,7 @@ test('memory learning gives feedback and learns only resolved annotations', asyn
 });
 
 async function switchWorkspace(page: Page) {
-  await mainNav(page, '设置/模型').click();
+  await openSettings(page);
   const workspaceCard = page.locator('.workspace-card').first();
   await expect(workspaceCard.getByRole('heading', { name: '作品列表与最近打开' })).toBeVisible();
   await openSandboxWorkspace(page, workspaceCard);
@@ -708,11 +775,19 @@ async function openSandboxWorkspace(page: Page, workspaceCard: ReturnType<Page['
 }
 
 async function openModelsView(page: Page) {
-  await mainNav(page, '设置/模型').click();
+  await openSettings(page);
 }
 
 function mainNav(page: Page, name: string) {
   return page.locator('.nav button').filter({ hasText: name });
+}
+
+function settingsEntry(page: Page) {
+  return page.locator('.sidebar-settings');
+}
+
+async function openSettings(page: Page) {
+  await settingsEntry(page).click();
 }
 
 async function openChapter(page: Page, paddedNo: string) {

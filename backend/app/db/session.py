@@ -2,7 +2,7 @@ from collections.abc import Generator
 from threading import RLock
 
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, close_all_sessions, sessionmaker
 
 from backend.app.core.config import get_settings
 
@@ -41,6 +41,8 @@ def get_session_local() -> sessionmaker[Session]:
 
 def reset_engine() -> None:
     global engine, SessionLocal
+    if SessionLocal is not None:
+        close_all_sessions()
     if engine is not None:
         engine.dispose()
     engine = None

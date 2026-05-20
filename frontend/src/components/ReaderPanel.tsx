@@ -4,6 +4,7 @@ import { apiRequest } from '../api';
 import {
   useChapters,
   useAnnotations,
+  useCatalogStatus,
   useChapterContent,
   useChapterVersionContent,
   useSourceAnnotations,
@@ -56,6 +57,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const content = useChapterContent(selectedChapterId);
   const versionContent = useChapterVersionContent(selectedChapterId, selectedChapterVersionId);
   const sourceContent = useSourceFileContent(selectedSourceFileId);
+  const catalogStatus = useCatalogStatus();
   const chapterAnnotations = useAnnotations(selectedChapterId);
   const sourceAnnotations = useSourceAnnotations(selectedSourceFileId);
   const activeContent = versionContent.data
@@ -82,6 +84,11 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const viewingVersion = Boolean(selectedChapterVersionId && versionContent.data);
   const dirty = Boolean(activeContent && draftActive && draftText !== activeContent.text);
   const isSourceProposal = Boolean(sourceContent.data && sourceContent.data.kind !== 'chapters');
+  const isUnparsedChapterSource = Boolean(
+    sourceContent.data
+    && sourceContent.data.kind === 'chapters'
+    && (catalogStatus.data?.unparsed_chapter_files ?? []).includes(sourceContent.data.path),
+  );
 
   const startEditing = () => {
     if (!activeContent) {
@@ -154,7 +161,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
           body: JSON.stringify({ text: activeText }),
         });
       }
-      if (sourceContent.data && sourceContent.data.kind !== 'chapters') {
+      if (sourceContent.data && (sourceContent.data.kind !== 'chapters' || isUnparsedChapterSource)) {
         return apiRequest<DraftResponse>(`/api/source-files/${sourceContent.data.id}/draft-proposal`, {
           method: 'POST',
           body: JSON.stringify({ text: activeText }),
@@ -164,9 +171,13 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
     },
     onMutate: () =>
       pushTask({
-        label: content.data ? '保存正文版本' : '保存提案',
+        label: content.data ? '保存正文版本' : isUnparsedChapterSource ? '保存文件草稿' : '保存提案',
         status: 'running',
-        detail: content.data ? '正在保存为新的正文版本，不会直接覆盖正式正文。' : '正在保存为提案，不会覆盖源文件。',
+        detail: content.data
+          ? '正在保存为新的正文版本，不会直接覆盖正式正文。'
+          : isUnparsedChapterSource
+            ? '正在保存为文件草稿，不会直接覆盖源文件。'
+            : '正在保存为提案，不会覆盖源文件。',
       }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
@@ -180,20 +191,24 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         setDraftText('');
       }
       pushTask({
-        label: content.data ? '保存正文版本' : '保存提案',
+        label: content.data ? '保存正文版本' : isUnparsedChapterSource ? '保存文件草稿' : '保存提案',
         status: 'succeeded',
-        detail: content.data ? '正文版本已保存，可切换查看、发布或删除。' : '提案已保存。需要检查和对比时，请到资料库或 AI 工作台处理。',
+        detail: content.data
+          ? '正文版本已保存，可切换查看、发布或删除。'
+          : isUnparsedChapterSource
+            ? '文件草稿已保存。补充章号和标题并转为章节后，才能进入正文版本流程。'
+            : '提案已保存。需要检查和对比时，请到 AI 素材库或 AI 工作台处理。',
       });
     },
     onError: (error: Error) =>
       pushTask({
-        label: content.data ? '保存正文版本' : '保存提案',
+        label: content.data ? '保存正文版本' : isUnparsedChapterSource ? '保存文件草稿' : '保存提案',
         status: 'failed',
         detail: error.message,
       }),
   });
 
-  const canSaveDraft = Boolean(activeContent && activeText.trim() && (content.data || isSourceProposal));
+  const canSaveDraft = Boolean(activeContent && activeText.trim() && (content.data || isSourceProposal || isUnparsedChapterSource));
   const menuSelection = contextMenu?.selection ?? selection;
   const canAnnotateSelection = Boolean(activeContent && !dirty);
   const readerClasses = useMemo(
@@ -287,6 +302,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         annotationCount={activeAnnotations.length}
         dirty={dirty}
         viewingVersion={viewingVersion}
+        unparsedChapterSource={isUnparsedChapterSource}
         writingFullscreen={writingFullscreen}
         catalogPanelOpen={catalogPanelOpen}
         rightPanelOpen={rightPanelOpen}

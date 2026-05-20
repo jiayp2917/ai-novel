@@ -4,6 +4,7 @@ import type {
   Annotation,
   AnnotationInsight,
   Artifact,
+  CatalogStatus,
   Chapter,
   ChapterContent,
   ChapterVersionContent,
@@ -52,6 +53,13 @@ export function useChapters() {
   return useQuery({
     queryKey: ['chapters'],
     queryFn: () => apiRequest<Chapter[]>('/api/chapters'),
+  });
+}
+
+export function useCatalogStatus() {
+  return useQuery({
+    queryKey: ['catalog-status'],
+    queryFn: () => apiRequest<CatalogStatus>('/api/library/catalog-status'),
   });
 }
 

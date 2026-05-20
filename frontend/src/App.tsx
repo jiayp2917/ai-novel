@@ -11,16 +11,15 @@ import type { ActiveView } from './types';
 const navItems: Array<{ id: ActiveView; icon: string; label: string }> = [
   { id: 'home', icon: '⌂', label: '首页' },
   { id: 'writing', icon: '✎', label: '写作' },
-  { id: 'planning', icon: '☷', label: '资料库' },
+  { id: 'planning', icon: '☷', label: 'AI 素材库' },
   { id: 'ai', icon: '◇', label: 'AI 工作台' },
   { id: 'pipeline', icon: '⇄', label: '自动流水线' },
-  { id: 'settings', icon: '⚙', label: '设置/模型' },
 ];
 
 const viewTitles: Record<ActiveView, string> = {
   home: '首页工作台',
   writing: '写作',
-  planning: '资料库',
+  planning: 'AI 素材库',
   pipeline: '自动流水线',
   ai: 'AI 工作台',
   settings: '设置/模型',
@@ -61,9 +60,14 @@ export function App() {
             </button>
           ))}
         </nav>
-        <div className="side-note">
-          安全边界：正文写回必须确认、备份并通过发布门；AI 草稿需先检查。模型调用与正文编写分离。
-        </div>
+        <button
+          className={activeView === 'settings' ? 'sidebar-settings active' : 'sidebar-settings'}
+          type="button"
+          onClick={() => setActiveView('settings')}
+        >
+          <span className="ico">⚙</span>
+          <span>设置/模型</span>
+        </button>
       </aside>
 
       <main className="main">
@@ -73,7 +77,14 @@ export function App() {
             <span> / 长篇创作安全流</span>
           </div>
           <div className="top-actions">
-            <span className="chip blue workspace-chip" title={workspaceRoot}>当前工作区：{workspaceLabel}</span>
+            <button
+              className="chip blue workspace-chip workspace-chip--button"
+              type="button"
+              title={workspaceRoot}
+              onClick={() => setActiveView('settings')}
+            >
+              当前工作区：{workspaceLabel}
+            </button>
             <span className="chip calls-chip">今日调用 {cost.data?.today_model_calls ?? 0} 次</span>
             <button
               className="btn theme-switch theme-switch--compact"
@@ -85,7 +96,6 @@ export function App() {
               {themeShortLabel}
               <span>切换为{themeLabels[nextTheme(theme)]}</span>
             </button>
-            <button className="btn" type="button" onClick={() => setActiveView('settings')}>工作区</button>
             <button className="btn primary" type="button" onClick={() => setActiveView('ai')}>AI 工作台</button>
           </div>
         </header>

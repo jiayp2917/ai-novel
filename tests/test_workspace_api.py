@@ -222,3 +222,108 @@ def test_runtime_root_env_does_not_override_workspace_runtime(tmp_path: Path, mo
 
     get_settings.cache_clear()
     reset_engine()
+
+
+def test_source_file_create_folder_file_and_normalize_chapter(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
+    workspace = tmp_path / "workspace"
+    (workspace / "02-正文").mkdir(parents=True)
+    (workspace / "01-设定").mkdir(parents=True)
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+
+    client = TestClient(app)
+    assert client.post("/api/workspace", json={"path": str(workspace)}).status_code == 200
+
+    folder = client.post("/api/source-folders/create", json={"root": "chapters", "folder": "06卷"})
+    assert folder.status_code == 200
+    assert (workspace / "02-正文" / "06卷").is_dir()
+    assert "02-正文/06卷" in folder.json()["scan"]["empty_chapter_folders"]
+
+    chapter = client.post(
+        "/api/source-files/create",
+        json={
+            "root": "chapters",
+            "folder": "06卷",
+            "filename": "第146章.md",
+            "template": "chapter",
+            "chapter_no": 146,
+            "title": "新卷开篇",
+            "content": "正文开头。",
+        },
+    )
+    assert chapter.status_code == 200
+    assert chapter.json()["chapter_id"] is not None
+    assert client.get("/api/chapters").json()[0]["chapter_no"] == 146
+
+    loose = client.post(
+        "/api/source-files/create",
+        json={
+            "root": "chapters",
+            "folder": "06卷",
+            "filename": "待整理.md",
+            "template": "blank",
+            "title": "",
+            "content": "只有正文，没有章标题。",
+        },
+    )
+    assert loose.status_code == 200
+    loose_source_id = loose.json()["source_file_id"]
+    assert "02-正文/06卷/待整理.md" in loose.json()["scan"]["unparsed_chapter_files"]
+
+    normalized = client.post(
+        f"/api/source-files/{loose_source_id}/normalize-chapter",
+        json={"chapter_no": 147, "title": "整理成章"},
+    )
+    assert normalized.status_code == 200
+    assert normalized.json()["chapter_id"] is not None
+    assert [item["chapter_no"] for item in client.get("/api/chapters").json()] == [146, 147]
+    assert "# 第147章 整理成章" in (workspace / "02-正文" / "06卷" / "待整理.md").read_text(encoding="utf-8")
+
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_source_file_create_rejects_unsafe_paths_and_duplicates(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
+    workspace = tmp_path / "workspace"
+    (workspace / "02-正文").mkdir(parents=True)
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+
+    client = TestClient(app)
+    assert client.post("/api/workspace", json={"path": str(workspace)}).status_code == 200
+    created = client.post(
+        "/api/source-files/create",
+        json={"root": "chapters", "folder": "01卷", "filename": "第001章.md", "template": "chapter", "chapter_no": 1, "title": "起步"},
+    )
+    assert created.status_code == 200
+
+    duplicate = client.post(
+        "/api/source-files/create",
+        json={"root": "chapters", "folder": "01卷", "filename": "第001章.md", "template": "chapter", "chapter_no": 2, "title": "重复"},
+    )
+    assert duplicate.status_code == 400
+    assert duplicate.json()["detail"] == "Source file already exists"
+
+    traversal = client.post(
+        "/api/source-files/create",
+        json={"root": "chapters", "folder": "../runtime", "filename": "bad.md", "template": "blank"},
+    )
+    assert traversal.status_code == 400
+
+    protected = client.post(
+        "/api/source-files/create",
+        json={"root": "chapters", "folder": "runtime", "filename": "bad.md", "template": "blank"},
+    )
+    assert protected.status_code == 400
+
+    get_settings.cache_clear()
+    reset_engine()

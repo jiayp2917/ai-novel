@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 from pathlib import Path
 
 
@@ -26,8 +27,21 @@ def _safe_reset(path: Path) -> None:
     if root not in resolved.parents:
         raise RuntimeError(f"Refuse to reset outside runtime: {resolved}")
     if resolved.exists():
-        shutil.rmtree(resolved)
+        _rmtree_with_retry(resolved)
     resolved.mkdir(parents=True, exist_ok=True)
+
+
+def _rmtree_with_retry(path: Path) -> None:
+    last_error: OSError | None = None
+    for _ in range(8):
+        try:
+            shutil.rmtree(path)
+            return
+        except OSError as exc:
+            last_error = exc
+            time.sleep(0.15)
+    if last_error is not None:
+        raise last_error
 
 
 def _write(path: Path, text: str) -> None:

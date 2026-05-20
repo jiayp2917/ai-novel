@@ -25,7 +25,7 @@ export function WritingPage() {
     <section className="page active page-editor">
       <div className={shellClassName}>
         <aside className="chapter-pane">
-          <CatalogPanel />
+          <CatalogPanel variant="writing" />
         </aside>
         <section className="writing-area">
           <ReaderPanel variant="writing" />
@@ -44,24 +44,24 @@ export function PlanningPage() {
 
   return (
     <section className="page active">
-      <h2 className="page-title">设定/章纲</h2>
-      <p className="page-subtitle">设定、章纲、人物关系只能生成提案，不进入普通发布，不直接改正文。</p>
+      <h2 className="page-title">AI 素材库</h2>
+      <p className="page-subtitle">这里只整理系统设定、小说设定和章纲，供 AI 理解作品背景。正文编辑请回到写作页。</p>
       <div className="outline-layout">
-        <aside className="card catalog-card"><CatalogPanel /></aside>
+        <aside className="card catalog-card"><CatalogPanel variant="library" /></aside>
         <div className="card">
           <div className="card-head">
-            <h2>提案流程</h2>
+            <h2>素材提案</h2>
             <span className="chip purple">仅提案</span>
           </div>
           <div className="pad form-grid">
-            <div className="notice safe">设定/章纲输出只保存为提案，需人工采纳后进入版本，不走普通正文发布。</div>
+            <div className="notice safe">提案只用于改进设定和章纲，需要人工采纳；不会直接覆盖正文。</div>
             {sourceContent.data && sourceContent.data.kind !== 'chapters' ? (
               <>
                 <pre className="document-preview">{sourceContent.data.text}</pre>
                 <SourceProposalActions sourceFileId={sourceContent.data.id} />
               </>
             ) : (
-              <p className="muted">请从左侧选择系统设定、小说设定或章纲文件。</p>
+              <p className="muted">选择设定或章纲后，可在这里查看内容并生成提案。</p>
             )}
           </div>
         </div>
@@ -88,7 +88,7 @@ export function AiWorkbenchPage() {
       <p className="page-subtitle">集中处理草稿检查、AI 修订、记忆整理与写回确认。人工写作不强制走 AI 检查。</p>
       <div className="ai-workbench-layout">
         <div className="ai-main-row">
-          <aside className="card catalog-card ai-catalog-card"><CatalogPanel /></aside>
+          <aside className="card catalog-card ai-catalog-card"><CatalogPanel variant="ai" /></aside>
           <div className="card ai-primary-card">
             <div className="card-head"><h2>草稿检查与写回</h2><span className="chip warn">需要人工确认</span></div>
             <div className="pad form-grid ai-card-body">

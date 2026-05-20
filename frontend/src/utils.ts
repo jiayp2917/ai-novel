@@ -1,4 +1,4 @@
-import type { Annotation, Chapter, HealthPayload, SourceFile, WorkspaceStatus } from './types';
+import type { Annotation, CatalogStatus, Chapter, HealthPayload, SourceFile, WorkspaceStatus } from './types';
 
 export const ANNOTATION_TYPES = [
   'style',
@@ -105,6 +105,26 @@ export function chaptersByVolume(chapters: Chapter[], sources: SourceFile[]) {
     buckets.set(volume, [...(buckets.get(volume) ?? []), chapter]);
   }
   return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b, 'zh-Hans-CN'));
+}
+
+export function unparsedChapterFilesByVolume(paths: string[]) {
+  const buckets = new Map<string, string[]>();
+  for (const path of paths) {
+    const volume = volumeName(path);
+    buckets.set(volume, [...(buckets.get(volume) ?? []), path]);
+  }
+  return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b, 'zh-Hans-CN'));
+}
+
+export function emptyChapterFoldersByVolume(status: CatalogStatus | undefined) {
+  const paths = status?.empty_chapter_folders ?? [];
+  return paths
+    .map((path) => {
+      const match = path.match(/02-正文\/(.+)/);
+      return match?.[1] ?? path;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
 }
 
 export function chapterMatchesFilter(chapter: Chapter, filter: string): boolean {

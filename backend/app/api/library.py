@@ -8,7 +8,8 @@ from backend.app.db.models import Chapter, ChapterVersion, SourceFile
 from backend.app.db.session import get_db
 from backend.app.schemas import ChapterContentRead, ChapterRead, SourceFileContentRead, SourceFileRead
 from backend.app.services.chapter_versions import ChapterVersionError, ChapterVersionService
-from backend.app.services.library import LibraryScanner
+from backend.app.services.library import LibraryScanner, parse_chapters
+from backend.app.services.source_files import SourceFileManager, SourceFileManagerError
 from backend.app.services.workspace import WorkspaceResolver
 
 
@@ -19,9 +20,85 @@ class PublishChapterVersionRequest(BaseModel):
     approved_by_user: bool
 
 
+class CreateSourceFileRequest(BaseModel):
+    root: str
+    folder: str = ""
+    filename: str
+    template: str = "blank"
+    title: str | None = None
+    chapter_no: int | None = None
+    content: str | None = None
+
+
+class CreateSourceFolderRequest(BaseModel):
+    root: str
+    folder: str
+
+
+class NormalizeChapterRequest(BaseModel):
+    chapter_no: int
+    title: str
+    content_prefix: str | None = None
+
+
 @router.post("/library/scan")
 def scan_library(session: Session = Depends(get_db)) -> dict:
     return LibraryScanner(session).scan()
+
+
+@router.get("/library/catalog-status")
+def catalog_status(session: Session = Depends(get_db)) -> dict:
+    return LibraryScanner(session).scan()
+
+
+@router.post("/source-files/create")
+def create_source_file(payload: CreateSourceFileRequest, session: Session = Depends(get_db)) -> dict:
+    try:
+        created = SourceFileManager(session).create_file(
+            root_key=payload.root,
+            folder=payload.folder,
+            filename=payload.filename,
+            template=payload.template,
+            title=payload.title,
+            chapter_no=payload.chapter_no,
+            content=payload.content,
+        )
+    except (SourceFileManagerError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "path": created.path,
+        "source_file_id": created.source_file_id,
+        "chapter_id": created.chapter_id,
+        "scan": created.scan,
+    }
+
+
+@router.post("/source-folders/create")
+def create_source_folder(payload: CreateSourceFolderRequest, session: Session = Depends(get_db)) -> dict:
+    try:
+        return SourceFileManager(session).create_folder(root_key=payload.root, folder=payload.folder)
+    except (SourceFileManagerError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/source-files/{source_file_id}/normalize-chapter")
+def normalize_chapter_source(source_file_id: int, payload: NormalizeChapterRequest, session: Session = Depends(get_db)) -> dict:
+    try:
+        normalized = SourceFileManager(session).normalize_chapter(
+            source_file_id=source_file_id,
+            chapter_no=payload.chapter_no,
+            title=payload.title,
+            content_prefix=payload.content_prefix,
+        )
+    except (SourceFileManagerError, ValueError) as exc:
+        status = 404 if str(exc) == "Source file not found" else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    return {
+        "path": normalized.path,
+        "source_file_id": normalized.source_file_id,
+        "chapter_id": normalized.chapter_id,
+        "scan": normalized.scan,
+    }
 
 
 @router.get("/source-files", response_model=list[SourceFileRead])
@@ -47,6 +124,7 @@ def get_source_file(source_file_id: int, session: Session = Depends(get_db)) -> 
         "size": source_file.size,
         "active": source_file.active,
         "text": text,
+        "recognized_chapter_count": len(parse_chapters(text)) if source_file.kind == "chapters" else None,
         "offset_unit": "python_code_point",
     }
 

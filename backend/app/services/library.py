@@ -65,17 +65,22 @@ class LibraryScanner:
                 "source_files_created": 0,
                 "source_files_updated": 0,
                 "source_files_deactivated": 0,
+                "chapter_source_files_seen": 0,
                 "chapters_seen": 0,
                 "chapters_created": 0,
                 "chapters_deactivated": 0,
                 "chapter_versions_created": 0,
                 "annotations_relocated": 0,
+                "unparsed_chapter_files": [],
+                "empty_chapter_folders": [],
             }
             for spec in self.workspace.source_specs():
                 kind = spec.kind
                 directory = spec.directory
                 if not directory.exists():
                     continue
+                if kind == "chapters":
+                    summary["empty_chapter_folders"].extend(self._empty_chapter_folders(directory))
                 for path in sorted(directory.rglob("*.md")):
                     seen_source_paths.add(self._relative_path(path))
                     source_file, created, updated = self._upsert_source_file(path, kind)
@@ -85,13 +90,18 @@ class LibraryScanner:
                     summary["source_files_created"] += int(created)
                     summary["source_files_updated"] += int(updated)
                     if kind == "chapters":
+                        summary["chapter_source_files_seen"] += 1
                         chapter_stats = self._scan_chapter_file(path, source_file)
                         seen_chapter_numbers.update(chapter_stats.pop("chapter_numbers"))
+                        if chapter_stats["chapters_seen"] == 0:
+                            summary["unparsed_chapter_files"].append(self._relative_path(path))
                         for key, value in chapter_stats.items():
                             summary[key] += value
             summary["source_files_deactivated"] = self._deactivate_missing_source_files(seen_source_paths)
             summary["chapters_deactivated"] = self._deactivate_missing_chapters(seen_chapter_numbers)
             self.session.commit()
+            summary["unparsed_chapter_files"] = sorted(set(summary["unparsed_chapter_files"]))
+            summary["empty_chapter_folders"] = sorted(set(summary["empty_chapter_folders"]))
             return summary
 
     def _relative_path(self, path: Path) -> str:
@@ -185,6 +195,13 @@ class LibraryScanner:
         path = directory / f"chapter_{chapter_id}_{body_hash[:12]}.md"
         safe_write_text(path, text, encoding="utf-8")
         return path.relative_to(self.runtime_root).as_posix()
+
+    def _empty_chapter_folders(self, directory: Path) -> list[str]:
+        folders: list[str] = []
+        for folder in sorted(path for path in directory.rglob("*") if path.is_dir()):
+            if not any(child.is_file() and child.suffix.lower() == ".md" for child in folder.rglob("*")):
+                folders.append(self._relative_path(folder))
+        return folders
 
     def _deactivate_missing_source_files(self, seen_paths: set[str]) -> int:
         changed = 0

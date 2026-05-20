@@ -206,7 +206,7 @@ export function SourceProposalActions({ sourceFileId }: { sourceFileId: number }
           <h2>{artifactId ? '当前提案已创建' : '只生成提案，不直接覆盖'}</h2>
         </div>
       </div>
-      <p className="form-hint">资料库只负责设定和章纲资料。提案可检查、查看改动，但不会通过正文写回按钮覆盖源文件。</p>
+      <p className="form-hint">AI 素材库只负责设定和章纲资料。提案可检查、查看改动，但不会通过正文写回按钮覆盖源文件。</p>
       <div className="action-row">
         <button type="button" className="secondary-button" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
           生成提案

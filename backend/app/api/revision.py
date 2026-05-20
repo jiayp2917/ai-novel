@@ -117,9 +117,29 @@ def create_source_draft_proposal(
     source_file = session.get(SourceFile, source_file_id)
     if source_file is None or not source_file.active:
         raise HTTPException(status_code=404, detail="Source file not found")
-    if source_file.kind == "chapters":
-        raise HTTPException(status_code=400, detail="Chapter source files must use chapter draft candidates")
     text = payload.text.strip()
+    if source_file.kind == "chapters":
+        if not text:
+            raise HTTPException(status_code=400, detail="Draft text is empty")
+        artifact = ArtifactStore(session).save_text(
+            kind="candidate",
+            text=text,
+            metadata={
+                "purpose": "front_end_unparsed_chapter_draft",
+                "source": "manual_editor_draft",
+                "requires_ai_review": False,
+                "source_file_id": source_file.id,
+                "unparsed_chapter_source": True,
+            },
+            base_source_file=source_file,
+        )
+        session.commit()
+        return {
+            "artifact_id": artifact.id,
+            "artifact_path": artifact.path,
+            "artifact_sha256": artifact.sha256,
+            "source_file_id": source_file.id,
+        }
     if not text:
         raise HTTPException(status_code=400, detail="Draft text is empty")
     artifact = ArtifactStore(session).save_text(

@@ -68,7 +68,7 @@ export function DashboardPage() {
           <div className="card-head"><h2>快捷入口</h2></div>
           <div className="quick">
             <button type="button" onClick={() => setActiveView('writing')}><b>写作</b><span className="muted">编辑正文、保存版本、查看改动</span></button>
-            <button type="button" onClick={() => setActiveView('planning')}><b>资料库</b><span className="muted">设定、章纲、人物与伏笔</span></button>
+            <button type="button" onClick={() => setActiveView('planning')}><b>AI 素材库</b><span className="muted">设定、章纲、人物与伏笔</span></button>
             <button type="button" onClick={() => setActiveView('ai')}><b>AI 工作台</b><span className="muted">检查、修订、记忆整理与写回</span></button>
             <button type="button" onClick={() => setActiveView('pipeline')}><b>自动流水线</b><span className="muted">批量生成、检查和报告</span></button>
           </div>

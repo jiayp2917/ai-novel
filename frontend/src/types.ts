@@ -55,7 +55,40 @@ export type SourceFile = {
 
 export type SourceFileContent = SourceFile & {
   text: string;
+  recognized_chapter_count?: number | null;
   offset_unit: 'python_code_point';
+};
+
+export type CatalogStatus = {
+  source_files_seen: number;
+  source_files_created: number;
+  source_files_updated: number;
+  source_files_deactivated: number;
+  chapter_source_files_seen: number;
+  chapters_seen: number;
+  chapters_created: number;
+  chapters_deactivated: number;
+  chapter_versions_created: number;
+  annotations_relocated: number;
+  unparsed_chapter_files: string[];
+  empty_chapter_folders: string[];
+};
+
+export type CreateSourceFilePayload = {
+  root: 'system' | 'settings' | 'outlines' | 'chapters';
+  folder?: string;
+  filename: string;
+  template?: 'blank' | 'chapter';
+  title?: string;
+  chapter_no?: number | null;
+  content?: string;
+};
+
+export type CreateSourceFileResult = {
+  path: string;
+  source_file_id: number | null;
+  chapter_id: number | null;
+  scan: CatalogStatus;
 };
 
 export type Chapter = {

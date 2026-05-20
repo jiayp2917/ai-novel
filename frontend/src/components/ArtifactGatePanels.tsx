@@ -29,12 +29,10 @@ export function ArtifactTrace({
   return (
     <section className="artifact-trace" aria-label="草稿追踪">
       <div className="artifact-trace-grid">
-        <span><strong>草稿</strong>#{artifact.id}</span>
-        <span><strong>章节版本</strong>{artifact.base_chapter_version_id ?? '无'}</span>
         <span><strong>检查</strong>{review ? reviewLabel(review.passed, review.manual_required) : manualDraft ? '人工草稿，可选检查' : '未检查'}</span>
         <span><strong>改动</strong>{diffReady || publishDecision?.diff_path ? '已查看' : '未查看'}</span>
         <span><strong>备份</strong>{publishDecision?.backup_path ? '已生成' : '写回后生成'}</span>
-        <span><strong>写回</strong>{publishDecision ? `记录 #${publishDecision.id}` : '暂无'}</span>
+        <span><strong>写回</strong>{publishDecision ? '已有记录' : '暂无'}</span>
       </div>
       {blockedReason && <p className="form-hint form-hint--error">暂不能写回：{blockedReason}</p>}
       {review && !review.passed && review.issues.length > 0 && (
@@ -59,9 +57,12 @@ export function ArtifactTrace({
       <details className="advanced-details">
         <summary>查看高级追踪信息</summary>
         <div className="artifact-trace-grid">
+          <span><strong>草稿编号</strong>#{artifact.id}</span>
+          <span><strong>章节版本</strong>{artifact.base_chapter_version_id ?? '无'}</span>
           <span><strong>草稿类型</strong>{artifact.kind}</span>
           <span><strong>源文件</strong>{shortHash(artifact.base_source_file_hash)}</span>
           <span><strong>草稿校验</strong>{shortHash(artifact.sha256)}</span>
+          <span><strong>写回记录</strong>{publishDecision ? `#${publishDecision.id}` : '暂无'}</span>
           <span><strong>改动记录</strong>{publishDecision?.diff_path ?? '暂无'}</span>
           <span><strong>备份路径</strong>{publishDecision?.backup_path ?? '暂无'}</span>
           {publishDecision?.force && <span><strong>强制写回原因</strong>{publishDecision.force_reason || '未填写'}</span>}
@@ -178,12 +179,18 @@ export function CandidateSelector({
             key={candidate.id}
             onClick={() => setArtifactId(candidate.id)}
           >
-            <strong>#{candidate.id}</strong>
-            <span>{artifactKind === 'candidate' ? '草稿' : '提案'} · {reviewStatus(candidate.latest_review)}</span>
+            <strong>{artifactKind === 'candidate' ? '草稿' : '提案'}</strong>
+            <span>{reviewStatus(candidate.latest_review)}</span>
             <small>{candidate.latest_publish ? '已写回' : allowPublish ? '未写回' : '不直接写回'}</small>
           </button>
         ))}
-        {candidates.length === 0 && <p className="muted">暂无草稿。先在写作界面保存正文版本，或在 AI 工作台生成候选。</p>}
+        {candidates.length === 0 && (
+          <p className="muted">
+            {artifactKind === 'candidate'
+              ? '暂无草稿。先在写作界面保存正文版本，或在 AI 工作台生成修订草稿。'
+              : '暂无提案。可先生成提案，再查看改动并人工采纳。'}
+          </p>
+        )}
       </div>
     </section>
   );

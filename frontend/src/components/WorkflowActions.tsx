@@ -48,19 +48,19 @@ export function ChapterActions({
         '/api/jobs/run-once',
         { method: 'POST' },
       ),
-    onMutate: () => pushTask({ label: '运行任务队列', status: 'running', detail: '正在执行已排队任务。' }),
+    onMutate: () => pushTask({ label: '继续处理队列', status: 'running', detail: '正在处理待办任务。' }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       void queryClient.refetchQueries({ queryKey: ['jobs'] });
       void queryClient.invalidateQueries({ queryKey: ['cost-dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       pushTask({
-        label: '运行任务队列',
+        label: '继续处理队列',
         status: result.failed ? 'failed' : 'succeeded',
         detail: `启动 ${result.started}，成功 ${result.succeeded}，失败 ${result.failed}。`,
       });
     },
-    onError: (error: Error) => pushTask({ label: '运行任务队列', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '继续处理队列', status: 'failed', detail: error.message }),
   });
 
   const contextMutation = useMutation({
@@ -102,7 +102,6 @@ export function ChapterActions({
   });
 
   const showGeneration = mode !== 'publish';
-  const showSnapshotButton = mode !== 'writing';
   const showGate = mode !== 'writing';
   const title =
     mode === 'writing'
@@ -124,25 +123,26 @@ export function ChapterActions({
           <button type="button" className="secondary-button" onClick={() => contextMutation.mutate()} disabled={contextMutation.isPending}>
             上下文预览
           </button>
-          <button type="button" className="secondary-button" onClick={() => snapshotMutation.mutate()} disabled={snapshotMutation.isPending}>
-            创建待检查副本
-          </button>
           <button type="button" className="secondary-button" onClick={() => reviseMutation.mutate()} disabled={reviseMutation.isPending}>
             按批注创建修订
           </button>
           {mode !== 'writing' && (
             <button type="button" className="secondary-button" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending}>
-              运行任务一次
+              继续处理队列
             </button>
           )}
         </div>
       )}
-      {showSnapshotButton && !showGeneration && (
-        <div className="action-row">
-          <button type="button" className="secondary-button" onClick={() => snapshotMutation.mutate()} disabled={snapshotMutation.isPending}>
-            从当前正文创建草稿
-          </button>
-        </div>
+      {mode !== 'writing' && (
+        <details className="advanced-details">
+          <summary>高级操作：检查当前正文副本</summary>
+          <p className="form-hint">用于把当前正文复制成待检查草稿，不写回源文件；普通手写保存请回到写作页保存正文版本。</p>
+          <div className="action-row">
+            <button type="button" className="secondary-button" onClick={() => snapshotMutation.mutate()} disabled={snapshotMutation.isPending}>
+              创建待检查副本
+            </button>
+          </div>
+        </details>
       )}
       {preview && mode !== 'publish' && (
         <details className="advanced-details">
@@ -183,7 +183,7 @@ export function SourceProposalActions({ sourceFileId }: { sourceFileId: number }
       ),
     onMutate: () =>
       pushTask({
-        label: '生成源文件提案',
+        label: '生成设定/章纲提案',
         status: 'running',
         detail: selectedAnnotationIds.length
           ? `按 ${selectedAnnotationIds.length} 条批注生成提案，不自动覆盖源文件。`
@@ -192,9 +192,9 @@ export function SourceProposalActions({ sourceFileId }: { sourceFileId: number }
     onSuccess: (result) => {
       setArtifactId(result.artifact_id);
       setDiffText('');
-      pushTask({ label: '生成源文件提案', status: 'succeeded', detail: '提案已创建，可查看对比后人工采纳。' });
+      pushTask({ label: '生成设定/章纲提案', status: 'succeeded', detail: '提案已创建，可查看对比后人工采纳。' });
     },
-    onError: (error: Error) => pushTask({ label: '生成源文件提案', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '生成设定/章纲提案', status: 'failed', detail: error.message }),
   });
 
   return (
@@ -205,6 +205,7 @@ export function SourceProposalActions({ sourceFileId }: { sourceFileId: number }
           <h2>{artifactId ? '当前提案已创建' : '只生成提案，不直接覆盖'}</h2>
         </div>
       </div>
+      <p className="form-hint">资料库只负责设定和章纲资料。提案可检查、查看改动，但不会通过正文写回按钮覆盖源文件。</p>
       <div className="action-row">
         <button type="button" className="secondary-button" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
           生成提案
@@ -245,12 +246,12 @@ export function JobList({ compact = false }: { compact?: boolean }) {
               <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
               <span>{jobStatusLabel(job.status)}</span>
             </div>
-            {job.status === 'paused_budget' && <p>今日调用额度已暂停。查看原因后，可在 AI 助手页点击“继续执行任务”。</p>}
+            {job.status === 'paused_budget' && <p>今日调用额度已暂停。查看原因后，可在设置/模型页点击“继续执行任务”。</p>}
             {job.error && <p>{job.error}</p>}
             {job.result && (
               compact ? (
-                <details>
-                  <summary>查看结果</summary>
+                <details className="advanced-details">
+                  <summary>高级详情</summary>
                   <pre>{JSON.stringify(job.result, null, 2)}</pre>
                 </details>
               ) : (

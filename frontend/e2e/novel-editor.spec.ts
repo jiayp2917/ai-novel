@@ -74,6 +74,8 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   await expect(page.getByRole('button', { name: '查看改动' })).toBeDisabled();
 
   await mainNav(page, '资料库').click();
+  await expect(page.locator('.page.active')).toContainText('设定/章纲输出只保存为提案');
+  await expect(page.locator('.page.active')).not.toContainText('确认写回正文');
   await page.locator('.catalog-toggle').filter({ hasText: '小说设定' }).click();
   await page.locator('.source-row').filter({ hasText: '01-设定' }).click();
   const setting = await firstSource(page, 'settings');
@@ -82,6 +84,7 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   await page.getByPlaceholder('手动输入草稿编号').fill(String(proposal.artifact_id));
   await page.getByRole('button', { name: '绑定草稿' }).click();
   await expect(page.getByRole('button', { name: '提案不直接写回' })).toBeDisabled();
+  await expect(page.locator('.page.active')).not.toContainText('确认写回正文');
 
   await mainNav(page, 'AI 工作台').click();
   await openChapter(page, '002');
@@ -134,6 +137,8 @@ test('core views remain separated and writing layout does not use bottom overlay
   await expect(page.locator('.context-menu')).toBeVisible();
   await expect(page.locator('.context-menu')).not.toContainText('生成审核快照');
   await expect(page.locator('.page-editor')).not.toContainText(/artifact_id|hash|provider|token|raw JSON|当前正文生成候选/);
+  await expect(page.locator('.page-editor')).not.toContainText('snapshot-candidate');
+  await expect(page.locator('.page-editor')).not.toContainText('运行任务一次');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '收起侧栏' }).click();
   await expect(page.locator('.editor-shell')).toHaveClass(/inspector-hidden/);
@@ -346,6 +351,31 @@ test('review failure keeps draft unpublished and explains whether it needs manua
   await expect(page.getByRole('button', { name: '确认写回正文' })).toBeDisabled();
   await page.getByText('查看检查问题').click();
   await expect(page.locator('.artifact-review-detail')).toContainText('需要人工判断的测试问题');
+});
+
+test('AI workbench keeps advanced actions and engineering fields out of the main flow', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  await mainNav(page, 'AI 工作台').click();
+  await openChapter(page, '001');
+
+  const workbench = page.locator('.ai-workbench-page');
+  const primary = page.locator('.ai-primary-card');
+  await expect(primary).toContainText('草稿检查与写回');
+  await expect(primary.getByRole('button', { name: '上下文预览', exact: true })).toBeVisible();
+  await expect(primary.getByRole('button', { name: '按批注创建修订', exact: true })).toBeVisible();
+  await expect(primary.getByRole('button', { name: '继续处理队列', exact: true })).toBeVisible();
+  await expect(primary).not.toContainText('运行任务一次');
+  await expect(primary).not.toContainText('snapshot-candidate');
+  await expect(primary).not.toContainText(/artifact_id|raw JSON|provider|token/);
+  await expect(primary.locator('details.advanced-details').filter({ hasText: '高级操作：检查当前正文副本' })).toBeVisible();
+  await expect(primary.getByRole('button', { name: '创建待检查副本', exact: true })).toHaveCount(0);
+
+  await primary.getByText('高级操作：检查当前正文副本').click();
+  await expect(primary.getByRole('button', { name: '创建待检查副本', exact: true })).toBeVisible();
+  await expect(workbench).not.toContainText('运行任务一次');
 });
 
 test('unreviewed AI draft cannot be written back from the frontend', async ({ page }) => {

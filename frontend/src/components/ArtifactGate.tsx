@@ -173,7 +173,7 @@ export function ArtifactGate({
       </div>
       {artifactId && selectedArtifact.isLoading && <p className="form-hint">正在校验草稿归属...</p>}
       {artifactId && selectedArtifact.isError && <p className="form-hint form-hint--error">草稿不存在，不能继续操作。</p>}
-      {!artifactId && <p className="form-hint form-hint--error">请先选择草稿；如果没有草稿，请先从当前正文创建草稿。</p>}
+      {!artifactId && <p className="form-hint form-hint--error">请先选择草稿；如果没有草稿，请先在写作页保存正文版本，或在 AI 工作台生成修订草稿。</p>}
       {!validation.valid && <p className="form-hint form-hint--error">{validation.message}</p>}
       {selectedArtifact.data && (
         <ArtifactTrace

@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
-from backend.app.db.models import Artifact, Chapter, Job, SourceFile
+from backend.app.db.models import Artifact, Chapter, Job, ModelCall, PublishDecision, Review, SourceFile
 from backend.app.db.session import get_engine, reset_engine
 from backend.app.main import app
 from backend.app.repositories import Repository
+from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.pipeline.runs import PipelineRunService
 from backend.app.services.pipeline.state_machine import PipelineState, PipelineStateMachine
 from backend.app.services.worker import JobWorker
@@ -47,6 +48,11 @@ def test_pipeline_run_api_create_list_pause_resume_cancel(tmp_path, monkeypatch)
     assert created.status_code == 200
     run = created.json()
     assert run["status"] == "queued"
+    assert run["summary"]["total_steps"] == 9
+    assert run["summary"]["completed_steps"] == 0
+    assert run["summary"]["status_label"] == "等待开始"
+    assert run["next_step"]["label"] == "下一步"
+    assert run["report_summary"]["path"] is None
     assert run["payload"]["chapters"] == [1, 2, 3]
     assert run["payload"]["dry_run"] is True
     assert run["payload"]["input_hash"]
@@ -62,6 +68,9 @@ def test_pipeline_run_api_create_list_pause_resume_cancel(tmp_path, monkeypatch)
     listed = client.get("/api/pipeline/runs")
     assert listed.status_code == 200
     assert listed.json()[0]["id"] == run["id"]
+    limited = client.get("/api/pipeline/runs?limit=1")
+    assert limited.status_code == 200
+    assert len(limited.json()) == 1
 
     paused = client.post(f"/api/pipeline/runs/{run['id']}/pause")
     assert paused.status_code == 200
@@ -137,7 +146,10 @@ def test_pipeline_run_delete_requires_terminal_state_and_removes_task_records(tm
     assert cancelled.status_code == 200
     deleted = client.post(f"/api/pipeline/runs/{run['id']}/delete")
     assert deleted.status_code == 200
-    assert deleted.json() == {"deleted": True, "run_id": run["id"], "deleted_child_tasks": 2}
+    assert deleted.json()["deleted"] is True
+    assert deleted.json()["run_id"] == run["id"]
+    assert deleted.json()["deleted_child_tasks"] == 2
+    assert deleted.json()["report_path"] == f"reports/pipeline_run_{run['id']}.json"
 
     missing = client.get(f"/api/pipeline/runs/{run['id']}")
     assert missing.status_code == 404
@@ -162,7 +174,9 @@ def test_pipeline_run_delete_method_remains_supported(tmp_path, monkeypatch) -> 
 
     deleted = client.delete(f"/api/pipeline/runs/{run['id']}")
     assert deleted.status_code == 200
-    assert deleted.json() == {"deleted": True, "run_id": run["id"], "deleted_child_tasks": 1}
+    assert deleted.json()["deleted"] is True
+    assert deleted.json()["run_id"] == run["id"]
+    assert deleted.json()["deleted_child_tasks"] == 1
     get_settings.cache_clear()
     reset_engine()
 
@@ -187,9 +201,134 @@ def test_pipeline_run_delete_allows_terminal_run_with_unstarted_children(tmp_pat
 
     deleted = client.post(f"/api/pipeline/runs/{run['id']}/delete")
     assert deleted.status_code == 200
-    assert deleted.json() == {"deleted": True, "run_id": run["id"], "deleted_child_tasks": 2}
+    assert deleted.json()["deleted"] is True
+    assert deleted.json()["run_id"] == run["id"]
+    assert deleted.json()["deleted_child_tasks"] == 2
     with Session(get_engine()) as session:
         assert session.query(Job).count() == 0
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_run_delete_rejects_terminal_run_with_retryable_child(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/pipeline/runs",
+        json={"start_chapter": 1, "end_chapter": 1, "mode": "review_only"},
+    )
+    assert created.status_code == 200
+    run = created.json()
+
+    with Session(get_engine()) as session:
+        parent = session.get(Job, run["id"])
+        assert parent is not None
+        child_id = json.loads(parent.payload_json)["child_task_ids"][0]
+        child = session.get(Job, child_id)
+        assert child is not None
+        parent.status = "failed_terminal"
+        child.status = "failed_retryable"
+        child.error = "模型返回格式错误"
+        session.commit()
+
+    refreshed = client.get(f"/api/pipeline/runs/{run['id']}")
+    assert refreshed.status_code == 200
+    assert refreshed.json()["summary"]["can_delete"] is False
+    assert "仍有运行中、暂停或可重试" in refreshed.json()["summary"]["delete_block_reason"]
+    deleted = client.post(f"/api/pipeline/runs/{run['id']}/delete")
+    assert deleted.status_code == 400
+    assert "active child tasks" in deleted.json()["detail"]
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_run_delete_preserves_artifacts_reviews_model_calls_and_publish_records(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    chapter_file = content_root / "chapters" / "book.md"
+    chapter_file.parent.mkdir(parents=True, exist_ok=True)
+    chapter_file.write_text("# 第001章 First\nBody.", encoding="utf-8")
+
+    created = client.post(
+        "/api/pipeline/runs",
+        json={"start_chapter": 1, "end_chapter": 1, "mode": "review_only"},
+    )
+    assert created.status_code == 200
+    run = created.json()
+
+    with Session(get_engine()) as session:
+        source = Repository(session, SourceFile).create(
+            {"path": "chapters/book.md", "kind": "chapters", "sha256": "source-hash", "mtime": 1.0, "size": 21, "active": True}
+        )
+        chapter = Repository(session, Chapter).create(
+            {"chapter_no": 1, "title": "First", "source_file_id": source.id, "range_start": 0, "range_end": 21, "active": True}
+        )
+        artifact = ArtifactStore(session).save_text(kind="candidate", text="# 第001章 First\nCandidate.", metadata={}, base_chapter=chapter)
+        diff_path = runtime_root / "diffs" / "artifact.diff"
+        backup_path = runtime_root / "backups" / "book.md"
+        diff_path.parent.mkdir(parents=True, exist_ok=True)
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        diff_path.write_text("diff", encoding="utf-8")
+        backup_path.write_text("backup", encoding="utf-8")
+        session.add_all(
+            [
+                Review(
+                    artifact_id=artifact.id,
+                    passed=True,
+                    issues_json="[]",
+                    evidence_count=0,
+                    manual_required=False,
+                    candidate_hash=artifact.sha256,
+                    base_source_file_hash=artifact.base_source_file_hash,
+                    base_chapter_version_id=artifact.base_chapter_version_id,
+                ),
+                ModelCall(
+                    role="reviewer",
+                    provider="fake",
+                    model="fake",
+                    prompt_hash="a" * 64,
+                    input_chars=10,
+                    output_chars=5,
+                    usage_json="{}",
+                    cache_hit=False,
+                    status="succeeded",
+                ),
+                PublishDecision(
+                    artifact_id=artifact.id,
+                    approved_by_user=True,
+                    force=False,
+                    source_hash_before="a" * 64,
+                    candidate_hash=artifact.sha256,
+                    diff_path="diffs/artifact.diff",
+                    backup_path="backups/book.md",
+                    published_at=None,
+                ),
+            ]
+        )
+        parent = session.get(Job, run["id"])
+        assert parent is not None
+        child_id = json.loads(parent.payload_json)["child_task_ids"][0]
+        child = session.get(Job, child_id)
+        assert child is not None
+        child.result_json = json.dumps({"artifact_id": artifact.id, "model_call_id": 1}, ensure_ascii=False)
+        parent.status = "failed_terminal"
+        session.commit()
+        artifact_id = artifact.id
+
+    deleted = client.post(f"/api/pipeline/runs/{run['id']}/delete")
+    assert deleted.status_code == 200
+
+    with Session(get_engine()) as session:
+        assert session.get(Artifact, artifact_id) is not None
+        assert session.scalar(select(Review).where(Review.artifact_id == artifact_id)) is not None
+        assert session.scalar(select(ModelCall)) is not None
+        assert session.scalar(select(PublishDecision).where(PublishDecision.artifact_id == artifact_id)) is not None
+        assert diff_path.exists()
+        assert backup_path.exists()
+        assert (runtime_root / deleted.json()["report_path"]).exists()
     get_settings.cache_clear()
     reset_engine()
 

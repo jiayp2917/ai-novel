@@ -169,7 +169,7 @@ export function usePublishDecisions() {
 export function usePipelineRuns() {
   return useQuery({
     queryKey: ['pipeline-runs'],
-    queryFn: () => apiRequest<PipelineRun[]>('/api/pipeline/runs'),
+    queryFn: () => apiRequest<PipelineRun[]>('/api/pipeline/runs?limit=100'),
     refetchInterval: 5000,
   });
 }

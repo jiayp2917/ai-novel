@@ -1970,6 +1970,59 @@ textarea {
   color: var(--danger-soft-ink);
 }
 
+.pipeline-failure-summary,
+.pipeline-report-summary {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-elevated);
+}
+
+.pipeline-failure-summary > strong,
+.pipeline-report-summary > strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.pipeline-failure-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--danger-soft-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft-bg);
+}
+
+.pipeline-failure-card span,
+.pipeline-failure-card small {
+  color: var(--danger-soft-ink);
+  font-size: 12px;
+}
+
+.pipeline-failure-card p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.pipeline-advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pipeline-advanced-grid span,
+.pipeline-report-summary span,
+.pipeline-report-summary small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .workspace-current {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -35,8 +35,8 @@ def create_pipeline_run(payload: PipelineRunCreateRequest, session: Session = De
 
 
 @router.get("/runs")
-def list_pipeline_runs(session: Session = Depends(get_db)) -> list[dict]:
-    return PipelineRunService(session).list_runs()
+def list_pipeline_runs(limit: int = Query(default=100, ge=1, le=500), session: Session = Depends(get_db)) -> list[dict]:
+    return PipelineRunService(session).list_runs(limit=limit)
 
 
 @router.get("/runs/{run_id}")

@@ -377,6 +377,36 @@ export type PipelineRun = {
   created_at?: string;
   updated_at?: string;
   child_tasks: Job[];
+  summary: {
+    total_steps: number;
+    completed_steps: number;
+    manual_required_steps: number;
+    failed_or_paused_steps: number;
+    status_label: string;
+    can_delete: boolean;
+    delete_block_reason: string | null;
+    failure_summaries: Array<{
+      job_id: number;
+      chapter_no: number | null;
+      task_type: string;
+      task_label: string;
+      status: string;
+      status_label: string;
+      reason: string;
+      next_step: string;
+    }>;
+  };
+  next_step: {
+    label: string;
+    text: string;
+    tone: 'ok' | 'warn' | 'danger' | 'info';
+  };
+  report_summary: {
+    path: string | null;
+    exists: boolean;
+    generated: boolean;
+    note: string;
+  };
 };
 
 export type PipelineRunCreatePayload = {

@@ -177,10 +177,6 @@ export function PipelineView() {
   }
 
   function confirmDeleteRun(run: PipelineRun) {
-    if (!canDelete(run)) {
-      pushTask({ label: '删除流水线记录', status: 'failed', detail: '这条任务还不能删除。请先停止，或等它完成后再删除。' });
-      return;
-    }
     setDeleteDialogError(null);
     setPendingDeleteRun(run);
   }
@@ -370,8 +366,7 @@ export function PipelineView() {
                   type="button"
                   title={runOperationHelp.delete}
                   onClick={() => confirmDeleteRun(selectedRun)}
-                  disabled={deleteRun.isPending || !canDelete(selectedRun)}
-                  aria-disabled-reason={!canDelete(selectedRun) ? disabledReason('delete', selectedRun) : undefined}
+                  disabled={deleteRun.isPending}
                 >
                   删除记录
                 </button>
@@ -398,6 +393,8 @@ export function PipelineView() {
                   {selectedRun.error && <small>任务提示：{selectedRun.error}</small>}
                 </div>
               )}
+              <PipelineFailureSummary run={selectedRun} />
+              <PipelineReportSummary run={selectedRun} />
               <div className="pipeline-chapter-timeline">
                 {groupTasksByChapter(selectedRun.child_tasks).map(([chapterNo, tasks]) => (
                   <article className="pipeline-chapter-card" key={chapterNo}>
@@ -415,7 +412,12 @@ export function PipelineView() {
               </div>
               <details className="advanced-details">
                 <summary>查看高级详情</summary>
-                <pre className="json-preview">{JSON.stringify(selectedRun, null, 2)}</pre>
+                <div className="pipeline-advanced-grid">
+                  <span>任务编号：#{selectedRun.id}</span>
+                  <span>模式：{modeLabels[(selectedRun.payload.mode as PipelineRunCreatePayload['mode'])] ?? String(selectedRun.payload.mode ?? '未知')}</span>
+                  <span>章节：第 {String(selectedRun.payload.start_chapter)}-{String(selectedRun.payload.end_chapter)} 章</span>
+                  <span>报告：{selectedRun.report_summary.path ?? '暂无'}</span>
+                </div>
               </details>
             </>
           ) : (
@@ -471,6 +473,14 @@ function taskTypeLabel(type: string): string {
 }
 
 function summarizeRun(run: PipelineRun): { total: number; done: number; manual: number; failed: number } {
+  if (run.summary) {
+    return {
+      total: run.summary.total_steps,
+      done: run.summary.completed_steps,
+      manual: run.summary.manual_required_steps,
+      failed: run.summary.failed_or_paused_steps,
+    };
+  }
   const terminalDone = new Set(['approved', 'published', 'summarized', 'done']);
   const manual = run.child_tasks.filter((task) => task.status === 'manual_required').length;
   const failed = run.child_tasks.filter((task) => ['failed_terminal', 'failed_retryable', 'paused_budget'].includes(task.status)).length;
@@ -505,7 +515,7 @@ function canCancel(run: PipelineRun): boolean {
 }
 
 function canDelete(run: PipelineRun): boolean {
-  return ['done', 'failed_terminal', 'manual_required'].includes(run.status);
+  return run.summary?.can_delete ?? ['done', 'failed_terminal', 'manual_required'].includes(run.status);
 }
 
 function disabledReason(action: 'pause' | 'resume' | 'retry' | 'cancel' | 'delete', run: PipelineRun): string {
@@ -525,6 +535,9 @@ function disabledReason(action: 'pause' | 'resume' | 'retry' | 'cancel' | 'delet
 }
 
 function nextStepForRun(run: PipelineRun, summary: { total: number; done: number; manual: number; failed: number }): { label: string; text: string; tone: 'ok' | 'warn' | 'danger' | 'info' } {
+  if (run.next_step) {
+    return run.next_step;
+  }
   if (run.status === 'done') {
     return { label: '已完成', text: '可查看报告和产物；如要重新跑，请点击“复用设置”。', tone: 'ok' };
   }
@@ -547,6 +560,41 @@ function nextStepForRun(run: PipelineRun, summary: { total: number; done: number
     return { label: '有步骤失败', text: '查看标红步骤原因；可重试的任务会显示重试入口。', tone: 'danger' };
   }
   return { label: '下一步', text: '点击“运行一次队列”推进任务。每次只执行一批，便于观察失败原因和额度消耗。', tone: 'info' };
+}
+
+function deleteBlockReason(run: PipelineRun): string | null {
+  return run.summary?.delete_block_reason ?? (canDelete(run) ? null : disabledReason('delete', run));
+}
+
+function PipelineFailureSummary({ run }: { run: PipelineRun }) {
+  const failures = run.summary?.failure_summaries ?? [];
+  if (!failures.length) {
+    return null;
+  }
+  return (
+    <section className="pipeline-failure-summary" aria-label="失败章节摘要">
+      <strong>失败和人工处理摘要</strong>
+      {failures.map((failure) => (
+        <article className="pipeline-failure-card" key={failure.job_id}>
+          <span>第 {failure.chapter_no ? String(failure.chapter_no).padStart(3, '0') : '未知'} 章 · {failure.task_label}</span>
+          <b>{failure.status_label}</b>
+          <p>{failure.reason}</p>
+          <small>{failure.next_step}</small>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function PipelineReportSummary({ run }: { run: PipelineRun }) {
+  const report = run.report_summary;
+  return (
+    <section className="pipeline-report-summary" aria-label="流水线报告摘要">
+      <strong>运行报告</strong>
+      <span>{report?.path ?? '任务结束后生成轻量报告'}</span>
+      <small>{report?.note ?? '报告保存在当前工作区 runtime/reports，不进入 Git。'}</small>
+    </section>
+  );
 }
 
 function groupTasksByChapter(tasks: Job[]): Array<[string, Job[]]> {
@@ -597,6 +645,7 @@ function PipelineDeleteDialog({
     return null;
   }
   const summary = summarizeRun(run);
+  const blockedReason = deleteBlockReason(run);
   return (
     <div className="confirm-backdrop" role="presentation">
       <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="pipeline-delete-title">
@@ -610,12 +659,13 @@ function PipelineDeleteDialog({
           </div>
         </div>
         <div className="notice danger">删除后列表中不再显示这条任务；已生成的产物仍保留在运行记录中。</div>
+        {blockedReason && <div className="notice danger" role="alert">{blockedReason}</div>}
         {error && <div className="notice danger" role="alert">{error}</div>}
         <div className="confirm-dialog__actions">
           <button className="secondary-button" type="button" onClick={onCancel} disabled={busy}>
             取消
           </button>
-          <button className="secondary-button danger-button" type="button" onClick={onConfirm} disabled={busy}>
+          <button className="secondary-button danger-button" type="button" onClick={onConfirm} disabled={busy || Boolean(blockedReason)}>
             {busy ? '删除中...' : '确认删除'}
           </button>
         </div>

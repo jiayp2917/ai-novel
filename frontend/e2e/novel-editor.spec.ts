@@ -533,6 +533,12 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
   await page.getByRole('button', { name: '创建自动流水线' }).click();
   await expect(page.locator('.task-latest')).toContainText('自动流水线');
   await expect(page.locator('.pipeline-run-item').first()).toContainText('第 1-10 章');
+  await expect(page.locator('.pipeline-report-summary')).toContainText('任务结束后生成轻量报告');
+
+  await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '删除记录' }).click();
+  await expect(page.getByRole('dialog', { name: '确认删除流水线记录' })).toContainText('这条流水线还没有结束');
+  await expect(page.getByRole('button', { name: '确认删除' })).toBeDisabled();
+  await page.getByRole('button', { name: '取消' }).click();
 
   await page.getByRole('button', { name: '暂停' }).click();
   await expect(page.locator('.pipeline-status-grid')).toContainText('已暂停');
@@ -567,6 +573,7 @@ test('pipeline page can cancel a run and display retryable failure state', async
   await expect(page.locator('.pipeline-status-grid')).toContainText('已终止');
   await expect(page.locator('.pipeline-run-item').first()).toContainText('已终止');
   await expect(page.locator('.pipeline-next-step')).toContainText('复用设置');
+  await expect(page.locator('.pipeline-report-summary')).toContainText('reports/pipeline_run_');
   await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '复用设置' }).click();
   await expect(page.getByLabel('起始章节')).toHaveValue('1');
   await expect(page.getByLabel('结束章节')).toHaveValue('1');
@@ -587,6 +594,12 @@ test('pipeline page can cancel a run and display retryable failure state', async
   await expect(page.locator('.pipeline-status-grid')).toContainText('失败/暂停：1');
   await expect(page.locator('.pipeline-chapter-card').first()).toContainText('失败，可重试');
   await expect(page.locator('.pipeline-next-step')).toContainText('可重试');
+  await expect(page.locator('.pipeline-failure-summary')).toContainText('第 001 章');
+  await expect(page.locator('.pipeline-failure-summary')).toContainText('检查草稿');
+  await expect(page.locator('.pipeline-failure-summary')).toContainText('模型返回格式错误');
+  await expect(page.locator('.pipeline-failure-summary')).toContainText('可点击重试');
+  await expect(page.locator('.pipeline-report-summary')).toContainText('任务结束后生成轻量报告');
+  await expect(page.locator('.json-preview')).toHaveCount(0);
 });
 
 test('pipeline delete dialog shows backend update hint when delete endpoints are unavailable', async ({ page }) => {

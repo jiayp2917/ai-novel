@@ -19,7 +19,7 @@ export function DashboardPage() {
         <div className="dashboard-hero__copy">
           <p className="eyebrow">本地长篇小说工作台</p>
           <h2 className="page-title">首页工作台</h2>
-          <p className="page-subtitle">从写作开始，AI 和自动流水线作为辅助入口。正文版本可查看改动后确认发布。</p>
+          <p className="page-subtitle">从写作开始，AI 和自动任务作为辅助入口。正文版本可先查看改动，再由作者确认发布。</p>
           <div className="home-actions">
             <button className="primary-button" type="button" onClick={() => setActiveView('writing')}>进入写作</button>
             <button className="secondary-button" type="button" onClick={() => setActiveView('ai')}>打开 AI 工作台</button>
@@ -33,8 +33,7 @@ export function DashboardPage() {
       <div className="grid">
         <div className="card metric span-3"><span>源文件</span><b>{sourceCount}</b><span>设定、章纲、正文索引</span></div>
         <div className="card metric span-3"><span>正文</span><b>{chapterCount}</b><span>当前工作区章节数</span></div>
-        <div className="card metric span-3"><span>今日调用</span><b>{cost.data?.today_model_calls ?? 0}</b><span>仅本地记录</span></div>
-        <div className="card metric span-3"><span>运行任务</span><b>{cost.data?.running_jobs ?? 0}</b><span>后台队列状态</span></div>
+        <div className="card metric span-3"><span>运行任务</span><b>{cost.data?.running_jobs ?? 0}</b><span>需要关注的后台事项</span></div>
 
         <div className="card span-8">
           <div className="card-head">
@@ -47,9 +46,9 @@ export function DashboardPage() {
               <div className="row-title">当前小说项目</div>
               <div className="muted">支持旧目录：00-系统 / 01-设定 / 02-正文 / 03-章纲</div>
               <div className="chips">
-                <span className="chip ok">已接入发布门</span>
-                <span className="chip blue">候选池优先</span>
-                <span className="chip warn">流水线阶段接入中</span>
+                <span className="chip ok">版本安全</span>
+                <span className="chip blue">AI 辅助</span>
+                <span className="chip warn">改动可查</span>
               </div>
             </div>
             <button className="btn primary" type="button" onClick={() => setActiveView('writing')}>进入写作</button>

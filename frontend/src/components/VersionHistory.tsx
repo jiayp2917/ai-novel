@@ -170,7 +170,7 @@ function VersionCard({
       </div>
       <small>{formatDate(version.created_at)}</small>
       <details className="version-advanced">
-        <summary>高级详情</summary>
+        <summary>排错信息</summary>
         <code>正文校验 {shortHash(version.body_hash)} · 文件校验 {shortHash(version.source_file_hash)}</code>
       </details>
       {!version.can_preview && <small className="form-hint form-hint--error">该历史版本缺少可查看的正文内容，不能切换，只能保留记录或删除。</small>}

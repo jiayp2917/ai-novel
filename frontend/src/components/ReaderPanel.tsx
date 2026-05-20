@@ -51,6 +51,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const [editing, setEditing] = useState(false);
   const [draftActive, setDraftActive] = useState(false);
   const [draftText, setDraftText] = useState('');
+  const [focusAtEndSignal, setFocusAtEndSignal] = useState(0);
   const [jumpValue, setJumpValue] = useState('');
   const queryClient = useQueryClient();
   const chapters = useChapters();
@@ -98,7 +99,10 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
       setDraftText(activeContent.text);
       setDraftActive(true);
     }
+    setSearchQuery('');
+    setSearchIndex(0);
     setEditing(true);
+    setFocusAtEndSignal((value) => value + 1);
   };
 
   const toggleCatalog = () => {
@@ -352,6 +356,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
           searchQuery={searchQuery}
           searchIndex={searchIndex}
           editable={editing}
+          focusAtEndSignal={focusAtEndSignal}
           onSelectionChange={setSelection}
           onTextChange={setDraftText}
           onContextMenu={(menu) => {

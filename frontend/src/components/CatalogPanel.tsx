@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { apiRequest } from '../api';
 import { useCatalogStatus, useChapters, useSources } from '../hooks';
 import { useWorkbenchStore } from '../store';
@@ -451,6 +451,13 @@ function CreateSourceDialog({
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
+  const formId = useId();
+  const modeId = `${formId}-mode`;
+  const folderId = `${formId}-folder`;
+  const filenameId = `${formId}-filename`;
+  const chapterNoId = `${formId}-chapter-no`;
+  const titleId = `${formId}-title`;
+  const contentId = `${formId}-content`;
 
   const createFileMutation = useMutation({
     mutationFn: (payload: CreateSourceFilePayload) =>
@@ -514,9 +521,9 @@ function CreateSourceDialog({
           </div>
         </div>
         <div className="source-create-form">
-          <label>
+          <label htmlFor={modeId}>
             类型
-            <select value={mode} onChange={(event) => setMode(event.target.value as CreateMode)}>
+            <select id={modeId} value={mode} onChange={(event) => setMode(event.target.value as CreateMode)}>
               {allowedModes.includes('system') && <option value="system">系统设定</option>}
               {allowedModes.includes('settings') && <option value="settings">小说设定</option>}
               {allowedModes.includes('outlines') && <option value="outlines">章纲</option>}
@@ -526,39 +533,39 @@ function CreateSourceDialog({
             </select>
           </label>
           {(mode === 'chapter-folder' || mode === 'chapter-file' || mode === 'chapter-markdown') && (
-            <label>
+            <label htmlFor={folderId}>
               卷/文件夹
-              <input value={folder} onChange={(event) => setFolder(event.target.value)} placeholder="例如：06卷" />
+              <input id={folderId} value={folder} onChange={(event) => setFolder(event.target.value)} placeholder="例如：06卷" />
             </label>
           )}
           {mode !== 'chapter-folder' && (
-            <label>
+            <label htmlFor={filenameId}>
               文件名
-              <input value={filename} onChange={(event) => setFilename(event.target.value)} placeholder={defaultFilename(mode, parsedChapterNo, title)} />
+              <input id={filenameId} value={filename} onChange={(event) => setFilename(event.target.value)} placeholder={defaultFilename(mode, parsedChapterNo, title)} />
             </label>
           )}
           {mode === 'chapter-file' && (
             <div className="source-create-grid">
-              <label>
+              <label htmlFor={chapterNoId}>
                 章号
-                <input value={chapterNo} onChange={(event) => setChapterNo(event.target.value)} placeholder="146" />
+                <input id={chapterNoId} value={chapterNo} onChange={(event) => setChapterNo(event.target.value)} placeholder="146" />
               </label>
-              <label>
+              <label htmlFor={titleId}>
                 标题
-                <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="新的章节标题" />
+                <input id={titleId} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="新的章节标题" />
               </label>
             </div>
           )}
           {mode !== 'chapter-file' && mode !== 'chapter-folder' && (
-            <label>
+            <label htmlFor={titleId}>
               标题
-              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="可选" />
+              <input id={titleId} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="可选" />
             </label>
           )}
           {mode !== 'chapter-folder' && (
-            <label>
+            <label htmlFor={contentId}>
               初始内容
-              <textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder="可留空，稍后再写。" />
+              <textarea id={contentId} value={content} onChange={(event) => setContent(event.target.value)} placeholder="可留空，稍后再写。" />
             </label>
           )}
           {mode === 'chapter-markdown' && <div className="notice warn">普通正文 Markdown 不会直接成为章节；需要补充章号和标题后，才能转为可发布的正文章节。</div>}

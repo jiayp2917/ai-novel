@@ -133,9 +133,13 @@ export function ModelsView() {
                 <article className="route-card" key={role}>
                   <div>
                     <strong>{label}</strong>
-                    <span>{route?.error ?? `${route?.provider ?? '未识别'} / ${route?.model ?? '未识别'}`}</span>
+                    <span>{route?.error ?? '已配置，可测试连通'}</span>
                   </div>
-                  <small>{route?.base_url ?? '暂无地址'}</small>
+                  <details className="advanced-details">
+                    <summary>查看模型配置</summary>
+                    <small>{route?.provider ?? '未识别'} / {route?.model ?? '未识别'}</small>
+                    <small>{route?.base_url ?? '暂无地址'}</small>
+                  </details>
                   <button
                     className="secondary-button"
                     type="button"
@@ -174,8 +178,9 @@ export function ModelsView() {
       <section className="workflow-card">
         <div className="section-title">
           <div>
-            <p className="eyebrow">调用记录</p>
+            <p className="eyebrow">高级观测</p>
             <h2>最近 AI 调用</h2>
+            <p className="form-hint">本地记录仅供排错，真实消耗以供应商控制台为准。</p>
           </div>
           <button className="secondary-button" type="button" onClick={() => modelCalls.refetch()}>
             刷新

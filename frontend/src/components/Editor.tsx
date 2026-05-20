@@ -8,7 +8,7 @@ import {
   type ViewUpdate,
   keymap,
 } from '@codemirror/view';
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { Annotation, ContextMenuState, SelectionRange } from '../types';
 import { codePointToUtf16Offset, utf16ToCodePointOffset } from '../utils';
 
@@ -134,6 +134,7 @@ type ChapterEditorProps = {
   searchQuery?: string;
   searchIndex?: number;
   editable?: boolean;
+  focusAtEndSignal?: number;
   onSelectionChange: (selection: SelectionRange | null) => void;
   onTextChange?: (text: string) => void;
   onContextMenu?: (menu: ContextMenuState) => void;
@@ -147,6 +148,7 @@ export function ChapterEditor({
   searchQuery = '',
   searchIndex = 0,
   editable = false,
+  focusAtEndSignal = 0,
   onSelectionChange,
   onTextChange,
   onContextMenu,
@@ -158,10 +160,11 @@ export function ChapterEditor({
   const readOnlyCompartmentRef = useRef(new Compartment());
   const editableCompartmentRef = useRef(new Compartment());
   const callbacksRef = useRef({ onSelectionChange, onTextChange, onContextMenu });
+  const skippedSearchForFocusSignalRef = useRef(0);
 
   callbacksRef.current = { onSelectionChange, onTextChange, onContextMenu };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hostRef.current || !content) {
       return undefined;
     }
@@ -237,6 +240,10 @@ export function ChapterEditor({
     if (!viewRef.current || !searchQuery.trim()) {
       return;
     }
+    if (editable && focusAtEndSignal > 0 && skippedSearchForFocusSignalRef.current !== focusAtEndSignal) {
+      skippedSearchForFocusSignalRef.current = focusAtEndSignal;
+      return;
+    }
     const view = viewRef.current;
     const matches = findSearchMatches(view.state.doc.toString(), searchQuery);
     if (matches.length === 0) {
@@ -247,7 +254,7 @@ export function ChapterEditor({
       selection: EditorSelection.range(match.from, match.to),
       effects: EditorView.scrollIntoView(match.from, { y: 'center' }),
     });
-  }, [documentKey, searchQuery, searchIndex]);
+  }, [documentKey, editable, focusAtEndSignal, searchQuery, searchIndex]);
 
   useEffect(() => {
     if (!content || selectedAnnotationId === null || !viewRef.current) {
@@ -263,6 +270,22 @@ export function ChapterEditor({
       effects: EditorView.scrollIntoView(from, { y: 'center' }),
     });
   }, [annotations, content, selectedAnnotationId]);
+
+  useLayoutEffect(() => {
+    if (!editable || !viewRef.current || focusAtEndSignal <= 0) {
+      return;
+    }
+    const view = viewRef.current;
+    const frame = window.requestAnimationFrame(() => {
+      const end = view.state.doc.length;
+      view.focus();
+      view.dispatch({
+        selection: EditorSelection.cursor(end),
+        effects: EditorView.scrollIntoView(end, { y: 'end' }),
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editable, focusAtEndSignal]);
 
   if (!content) {
     return (

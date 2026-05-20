@@ -55,7 +55,7 @@ export function ArtifactTrace({
         </details>
       )}
       <details className="advanced-details">
-        <summary>查看高级追踪信息</summary>
+        <summary>查看排错信息</summary>
         <div className="artifact-trace-grid">
           <span><strong>草稿编号</strong>#{artifact.id}</span>
           <span><strong>章节版本</strong>{artifact.base_chapter_version_id ?? '无'}</span>
@@ -156,21 +156,24 @@ export function CandidateSelector({
         <span className="step">3 改动</span>
         <span className="step">4 写回</span>
       </div>
-      <div className="manual-artifact">
-        <input
-          value={manualId}
-          onChange={(event) => setManualId(event.target.value.replace(/[^\d]/g, ''))}
-          placeholder="手动输入草稿编号"
-        />
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => setArtifactId(manualId ? Number.parseInt(manualId, 10) : null)}
-          disabled={manualId.trim() === ''}
-        >
-          绑定草稿
-        </button>
-      </div>
+      <details className="advanced-details">
+        <summary>高级选择草稿</summary>
+        <div className="manual-artifact">
+          <input
+            value={manualId}
+            onChange={(event) => setManualId(event.target.value.replace(/[^\d]/g, ''))}
+            placeholder="手动输入草稿编号"
+          />
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setArtifactId(manualId ? Number.parseInt(manualId, 10) : null)}
+            disabled={manualId.trim() === ''}
+          >
+            绑定草稿
+          </button>
+        </div>
+      </details>
       <div className="candidate-list">
         {candidates.map((candidate) => (
           <button

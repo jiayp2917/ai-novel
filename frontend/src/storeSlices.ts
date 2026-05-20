@@ -46,7 +46,7 @@ export const createNavigationSlice: SliceCreator = (set, get) => ({
     set({ theme });
   },
   toggleTheme: () => {
-    const next = get().theme === 'dark' ? 'light' : 'dark';
+    const next = get().theme === 'anime' ? 'bright' : 'anime';
     get().setTheme(next);
   },
 });

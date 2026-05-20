@@ -112,7 +112,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const toggleRightPanel = () => {
     const next = !rightPanelOpen;
     setRightPanelOpen(next);
-    pushTask({ label: next ? '打开右侧栏' : '收起右侧栏', status: 'succeeded', detail: next ? '批注、候选和记忆栏已显示。' : '右侧栏已隐藏，正文区域已扩大。' });
+    pushTask({ label: next ? '打开右侧栏' : '收起右侧栏', status: 'succeeded', detail: next ? '批注、版本和记忆栏已显示。' : '右侧栏已隐藏，正文区域已扩大。' });
   };
 
   useEffect(() => {

@@ -1,18 +1,34 @@
 import { useChapters, useCostDashboard, useSources } from '../hooks';
 import { useWorkbenchStore } from '../store';
+import animeHero from '../assets/theme/2917.png';
+import cyberpunkHero from '../assets/theme/cyberpunk-theme-hero.png';
 
 export function DashboardPage() {
   const setActiveView = useWorkbenchStore((state) => state.setActiveView);
   const sources = useSources();
   const chapters = useChapters();
   const cost = useCostDashboard();
+  const theme = useWorkbenchStore((state) => state.theme);
   const sourceCount = sources.data?.length ?? 0;
   const chapterCount = chapters.data?.length ?? 0;
+  const heroImage = theme === 'anime' ? cyberpunkHero : animeHero;
 
   return (
-    <section className="page active">
-      <h2 className="page-title">首页工作台</h2>
+    <section className="page active dashboard-page">
+      <section className="dashboard-hero">
+        <div className="dashboard-hero__copy">
+          <p className="eyebrow">本地长篇小说工作台</p>
+          <h2 className="page-title">首页工作台</h2>
           <p className="page-subtitle">从写作开始，AI 和自动流水线作为辅助入口。正文版本可查看改动后确认发布。</p>
+          <div className="home-actions">
+            <button className="primary-button" type="button" onClick={() => setActiveView('writing')}>进入写作</button>
+            <button className="secondary-button" type="button" onClick={() => setActiveView('ai')}>打开 AI 工作台</button>
+          </div>
+        </div>
+        <div className="dashboard-hero__visual">
+          <img src={heroImage} alt={theme === 'anime' ? '赛博朋克小说创作工作台' : '动漫小说创作助手工作台'} />
+        </div>
+      </section>
 
       <div className="grid">
         <div className="card metric span-3"><span>源文件</span><b>{sourceCount}</b><span>设定、章纲、正文索引</span></div>

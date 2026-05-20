@@ -1,9 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { apiRequest } from '../api';
 import { useChapterVersions } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import type { ChapterVersion } from '../types';
 import type { ReactNode } from 'react';
+
+type PendingConfirm =
+  | { action: 'publish'; version: ChapterVersion }
+  | { action: 'delete'; version: ChapterVersion }
+  | null;
 
 export function VersionHistory({ chapterId }: { chapterId: number | null }) {
   const versions = useChapterVersions(chapterId);
@@ -11,6 +17,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
   const setSelectedChapterVersionId = useWorkbenchStore((state) => state.setSelectedChapterVersionId);
   const pushTask = useWorkbenchStore((state) => state.pushTask);
   const queryClient = useQueryClient();
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const publishMutation = useMutation({
     mutationFn: (versionId: number) =>
@@ -66,20 +73,26 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
     if (!version.can_publish || !chapterId) {
       return;
     }
-    const confirmed = window.confirm(`确认发布“${version.title}”的正文版本 #${version.id} 吗？系统会先备份当前正文。`);
-    if (confirmed) {
-      publishMutation.mutate(version.id);
-    }
+    setPendingConfirm({ action: 'publish', version });
   };
 
   const handleDelete = (version: ChapterVersion) => {
     if (!version.can_delete || !chapterId) {
       return;
     }
-    const confirmed = window.confirm(`确认删除正文版本 #${version.id} 吗？这不会删除当前正文、备份和发布记录。`);
-    if (confirmed) {
-      deleteMutation.mutate(version.id);
+    setPendingConfirm({ action: 'delete', version });
+  };
+
+  const confirmAction = () => {
+    if (!pendingConfirm) {
+      return;
     }
+    if (pendingConfirm.action === 'publish') {
+      publishMutation.mutate(pendingConfirm.version.id);
+    } else {
+      deleteMutation.mutate(pendingConfirm.version.id);
+    }
+    setPendingConfirm(null);
   };
 
   return (
@@ -113,6 +126,12 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
           <p className="form-hint">这里不区分草稿和正文：保存后就是一个正文版本。发布某个版本前会要求确认，并自动备份当前正文。</p>
         </>
       )}
+      <VersionConfirmDialog
+        pending={pendingConfirm}
+        busy={publishMutation.isPending || deleteMutation.isPending}
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={confirmAction}
+      />
     </section>
   );
 }
@@ -150,8 +169,11 @@ function VersionCard({
         <span>{version.title}</span>
       </div>
       <small>{formatDate(version.created_at)}</small>
-      <code>正文 {shortHash(version.body_hash)} · 文件 {shortHash(version.source_file_hash)}</code>
-      {!version.can_preview && <small className="form-hint form-hint--error">该历史版本缺少正文快照，不能切换，只能保留记录或删除。</small>}
+      <details className="version-advanced">
+        <summary>高级详情</summary>
+        <code>正文校验 {shortHash(version.body_hash)} · 文件校验 {shortHash(version.source_file_hash)}</code>
+      </details>
+      {!version.can_preview && <small className="form-hint form-hint--error">该历史版本缺少可查看的正文内容，不能切换，只能保留记录或删除。</small>}
       <div className="history-actions">
         <button className="secondary-button" type="button" onClick={onPreview} disabled={!version.can_preview}>
           {version.is_current ? '查看当前正文' : active ? '正在查看' : '切换查看'}
@@ -164,6 +186,53 @@ function VersionCard({
         </button>
       </div>
     </article>
+  );
+}
+
+function VersionConfirmDialog({
+  pending,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  pending: PendingConfirm;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!pending) {
+    return null;
+  }
+  const isPublish = pending.action === 'publish';
+  const title = isPublish ? '确认发布正文版本' : '确认删除正文版本';
+  const body = isPublish
+    ? `发布“${pending.version.title}”的正文版本 #${pending.version.id}？系统会先备份当前正文。`
+    : `删除正文版本 #${pending.version.id}？这不会删除当前正文、备份和发布记录。`;
+
+  return (
+    <div className="confirm-backdrop" role="presentation">
+      <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="version-confirm-title">
+        <div className="confirm-dialog__header">
+          <span className={isPublish ? 'confirm-dialog__mark confirm-dialog__mark--publish' : 'confirm-dialog__mark confirm-dialog__mark--delete'}>
+            {isPublish ? '发' : '删'}
+          </span>
+          <div>
+            <h3 id="version-confirm-title">{title}</h3>
+            <p>{body}</p>
+          </div>
+        </div>
+        {isPublish && <div className="notice safe">发布前会保留当前正文备份；发布成功后，该版本会成为当前正文。</div>}
+        {!isPublish && <div className="notice danger">删除只影响这个历史版本记录，不会删除当前正文。</div>}
+        <div className="confirm-dialog__actions">
+          <button className="secondary-button" type="button" onClick={onCancel} disabled={busy}>
+            取消
+          </button>
+          <button className={isPublish ? 'primary-button' : 'secondary-button danger-button'} type="button" onClick={onConfirm} disabled={busy}>
+            {busy ? '处理中...' : isPublish ? '确认发布' : '确认删除'}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

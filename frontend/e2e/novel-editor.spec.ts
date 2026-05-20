@@ -50,16 +50,17 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await expect(page.locator('.cm-content')).toContainText('新手路径正文版本保存验证');
   await expect(savedVersion.getByRole('button', { name: '删除版本' })).toBeEnabled();
   await expect(page.locator('.history-card--current').getByRole('button', { name: '当前正文不可删' })).toBeDisabled();
-  page.once('dialog', (dialog) => dialog.accept());
   await savedVersion.getByRole('button', { name: '发布此版本' }).click();
+  await expect(page.getByRole('dialog', { name: '确认发布正文版本' })).toBeVisible();
+  await page.getByRole('button', { name: '确认发布' }).click();
   await expect(page.locator('.task-latest')).toContainText('已发布');
   const chapterAfterManualPublish = await chapterContent(page, 1);
   expect(chapterAfterManualPublish.text).toContain('新手路径正文版本保存验证');
 
   const themeBefore = await page.locator('html').getAttribute('data-theme');
-  await page.getByRole('button', { name: themeBefore === 'dark' ? '浅色' : '深色' }).click();
+  await page.getByRole('button', { name: /界面风格/ }).first().click();
   await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', themeBefore === 'dark' ? 'light' : 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', themeBefore === 'anime' ? 'bright' : 'anime');
 });
 
 test('safety gates reject mismatched drafts, settings proposals, and publish sandbox chapter only after checks', async ({ page }) => {
@@ -388,18 +389,21 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(2);
 });
 
-test('dark theme keeps core work areas dark without white card leaks', async ({ page }) => {
+test('cyberpunk theme keeps core work areas readable and uses project visual assets', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
   await page.goto('/');
   await switchWorkspace(page);
 
   const theme = await page.locator('html').getAttribute('data-theme');
-  if (theme !== 'dark') {
-    await page.getByRole('button', { name: '深色' }).click();
+  if (theme !== 'anime') {
+    await page.getByRole('button', { name: /界面风格/ }).first().click();
   }
   await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'anime');
+  await mainNav(page, '首页').click();
+  await expect(page.locator('.dashboard-hero__visual img')).toHaveAttribute('alt', '赛博朋克小说创作工作台');
+  await expect(page.locator('.dashboard-hero__visual img')).toBeVisible();
 
   await mainNav(page, '写作').click();
   await openChapter(page, '001');
@@ -414,10 +418,18 @@ test('dark theme keeps core work areas dark without white card leaks', async ({ 
       const element = document.querySelector(selector);
       return element ? getComputedStyle(element).backgroundColor : '';
     };
+    const readColor = (selector: string) => {
+      const element = document.querySelector(selector);
+      return element ? getComputedStyle(element).color : '';
+    };
     return {
       topbar: read('.topbar'),
+      taskPanel: read('.task-panel'),
+      chapterTabs: read('.chapter-tabs'),
+      activeChapterTab: read('.chapter-tab--active'),
       button: read('.secondary-button'),
       paper: read('.cm-content'),
+      paperText: readColor('.cm-content'),
       editor: read('.editor-host'),
       menu: read('.context-menu'),
       card: read('.annotation-card'),
@@ -425,8 +437,11 @@ test('dark theme keeps core work areas dark without white card leaks', async ({ 
     };
   });
   for (const [name, color] of Object.entries(colors)) {
-    expect(color, `${name} should not be pure white in dark theme`).not.toBe('rgb(255, 255, 255)');
+    expect(color, `${name} should not be transparent in anime theme`).not.toBe('rgba(0, 0, 0, 0)');
   }
+  expect(colors.taskPanel, 'task panel should not fall back to light gray in cyberpunk theme').not.toBe('rgba(255, 255, 255, 0.88)');
+  expect(colors.chapterTabs, 'chapter tabs should match dark chrome in cyberpunk theme').not.toBe('rgba(255, 255, 255, 0.88)');
+  expect(colors.paperText, 'paper text should use readable dark ink on light paper').toBe('rgb(31, 47, 58)');
 });
 
 test('pipeline wizard can create, pause, resume, run once, and show 10-chapter timeline', async ({ page }) => {

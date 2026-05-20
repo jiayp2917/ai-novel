@@ -1,13 +1,12 @@
 export type ActiveView =
   | 'home'
-  | 'workspace'
   | 'writing'
   | 'planning'
   | 'pipeline'
   | 'ai'
   | 'settings';
 
-export type ThemeMode = 'dark' | 'light';
+export type ThemeMode = 'bright' | 'anime';
 
 export type InspectorTab = 'annotations' | 'candidates' | 'history' | 'review' | 'memory';
 

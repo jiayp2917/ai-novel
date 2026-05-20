@@ -84,21 +84,21 @@ export function ChapterActions({
       ),
     onMutate: () =>
       pushTask({
-        label: '生成审核快照',
+        label: '创建正文候选',
         status: 'running',
-        detail: '正在把当前正文保存为只读候选，不写回源文件。',
+        detail: '正在把当前正文保存为候选内容，不写回源文件。',
       }),
     onSuccess: (result) => {
       setArtifactId(result.artifact_id);
       setDiffText('');
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       pushTask({
-        label: '生成审核快照',
+        label: '创建正文候选',
         status: 'succeeded',
         detail: `第 ${result.chapter_no} 章候选 #${result.artifact_id} 已创建。`,
       });
     },
-    onError: (error: Error) => pushTask({ label: '生成审核快照', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '创建正文候选', status: 'failed', detail: error.message }),
   });
 
   const showGeneration = mode !== 'publish';
@@ -125,7 +125,7 @@ export function ChapterActions({
             上下文预览
           </button>
           <button type="button" className="secondary-button" onClick={() => snapshotMutation.mutate()} disabled={snapshotMutation.isPending}>
-            当前正文生成审核快照
+            当前正文生成候选
           </button>
           <button type="button" className="secondary-button" onClick={() => reviseMutation.mutate()} disabled={reviseMutation.isPending}>
             按批注生成候选

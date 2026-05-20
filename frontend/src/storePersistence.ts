@@ -16,9 +16,13 @@ export const STORAGE_KEYS = {
 
 export function initialTheme(): ThemeMode {
   if (typeof window === 'undefined') {
-    return 'dark';
+    return 'bright';
   }
-  return window.localStorage.getItem('novel-editor-theme') === 'light' ? 'light' : 'dark';
+  const raw = window.localStorage.getItem('novel-editor-theme');
+  if (raw === 'anime' || raw === 'dark') {
+    return 'anime';
+  }
+  return 'bright';
 }
 
 export function storedString(key: string): string | null {
@@ -82,6 +86,7 @@ export function storeJson(key: string, value: unknown): void {
 export function initialActiveView(): ActiveView {
   const raw = storedString(STORAGE_KEYS.activeView);
   const migrations: Record<string, ActiveView> = {
+    workspace: 'settings',
     review: 'ai',
     memory: 'ai',
     fix_publish: 'ai',
@@ -90,7 +95,7 @@ export function initialActiveView(): ActiveView {
   if (raw && migrations[raw]) {
     return migrations[raw];
   }
-  const valid: ActiveView[] = ['home', 'workspace', 'writing', 'planning', 'pipeline', 'ai', 'settings'];
+  const valid: ActiveView[] = ['home', 'writing', 'planning', 'pipeline', 'ai', 'settings'];
   return valid.includes(raw as ActiveView) ? (raw as ActiveView) : 'home';
 }
 

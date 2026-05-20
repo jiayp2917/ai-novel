@@ -3,8 +3,9 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { TaskPanel } from './components/TaskPanel';
 import { useCostDashboard, useHealth } from './hooks';
 import { DashboardPage } from './pages/DashboardPage';
-import { AiWorkbenchPage, PipelinePage, PlanningPage, SettingsModelsPage, WorkspacePage, WritingPage } from './pages/CorePages';
+import { AiWorkbenchPage, PipelinePage, PlanningPage, SettingsModelsPage, WritingPage } from './pages/CorePages';
 import { useWorkbenchStore } from './store';
+import { nextTheme, themeLabels } from './theme';
 import type { ActiveView } from './types';
 
 const navItems: Array<{ id: ActiveView; icon: string; label: string }> = [
@@ -18,7 +19,6 @@ const navItems: Array<{ id: ActiveView; icon: string; label: string }> = [
 
 const viewTitles: Record<ActiveView, string> = {
   home: '首页工作台',
-  workspace: '作品/工作区入口',
   writing: '写作',
   planning: '资料库',
   pipeline: '自动流水线',
@@ -60,7 +60,7 @@ export function App() {
           ))}
         </nav>
         <div className="side-note">
-          安全边界：正文写回必须经过候选、审核、发布门；模型调用与正文编写分离。
+          安全边界：正文写回必须确认、备份并通过发布门；AI 草稿需先检查。模型调用与正文编写分离。
         </div>
       </aside>
 
@@ -73,7 +73,10 @@ export function App() {
           <div className="top-actions">
             <span className="chip blue" title={workspaceRoot}>当前工作区：{workspaceRoot}</span>
             <span className="chip">今日调用 {cost.data?.today_model_calls ?? 0} 次</span>
-            <button className="btn" type="button" onClick={toggleTheme}>{theme === 'dark' ? '浅色' : '深色'}</button>
+            <button className="btn theme-switch theme-switch--compact" type="button" onClick={toggleTheme} title={`当前：${themeLabels[theme]}，点击切换为${themeLabels[nextTheme(theme)]}`}>
+              界面风格：{themeLabels[theme]}
+              <span>切换为{themeLabels[nextTheme(theme)]}</span>
+            </button>
             <button className="btn" type="button" onClick={() => setActiveView('settings')}>工作区</button>
             <button className="btn primary" type="button" onClick={() => setActiveView('ai')}>AI 工作台</button>
           </div>
@@ -82,7 +85,6 @@ export function App() {
 
         <ErrorBoundary>
           {activeView === 'home' && <DashboardPage />}
-          {activeView === 'workspace' && <WorkspacePage />}
           {activeView === 'writing' && <WritingPage />}
           {activeView === 'planning' && <PlanningPage />}
           {activeView === 'pipeline' && <PipelinePage />}

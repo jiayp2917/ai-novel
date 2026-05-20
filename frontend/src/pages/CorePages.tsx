@@ -10,16 +10,6 @@ import { ChapterActions, JobList, SourceProposalActions } from '../components/Wo
 import { useChapterContent, useSourceFileContent } from '../hooks';
 import { useWorkbenchStore } from '../store';
 
-export function WorkspacePage() {
-  return (
-    <section className="page active">
-      <h2 className="page-title">作品/工作区入口</h2>
-      <p className="page-subtitle">切换工作区、扫描素材、重建短记忆。源文件不迁移、不删除。</p>
-      <WorkspacePanel />
-    </section>
-  );
-}
-
 export function WritingPage() {
   const rightPanelOpen = useWorkbenchStore((state) => state.rightPanelOpen);
   const catalogPanelOpen = useWorkbenchStore((state) => state.catalogPanelOpen);
@@ -84,78 +74,6 @@ export function PipelinePage() {
   return (
     <section className="page active">
       <PipelineView />
-    </section>
-  );
-}
-
-export function ReviewPage() {
-  const selectedChapterId = useWorkbenchStore((state) => state.selectedChapterId);
-  const selectedSourceFileId = useWorkbenchStore((state) => state.selectedSourceFileId);
-  const chapterContent = useChapterContent(selectedChapterId);
-  const sourceContent = useSourceFileContent(selectedSourceFileId);
-
-  return (
-    <section className="page active">
-      <h2 className="page-title">审核中心</h2>
-      <p className="page-subtitle">候选必须在这里完成证据约束审核。审核通过不等于发布。</p>
-      <div className="audit-layout">
-        <aside className="card catalog-card"><CatalogPanel /></aside>
-        <div className="card">
-          <div className="card-head"><h2>候选审核</h2><span className="chip warn">只判断</span></div>
-          <div className="pad form-grid">
-            <SafetyBoundaryBanner compact />
-            {!selectedChapterId && !selectedSourceFileId && <p className="muted">从左侧选择正文、设定或章纲后，查看可审核候选与任务状态。</p>}
-            {chapterContent.data && <ChapterActions chapterId={chapterContent.data.id} mode="review" />}
-            {sourceContent.data && sourceContent.data.kind !== 'chapters' && (
-              <div className="notice">设定和章纲不在前端直接覆盖源文件。请先在“设定/章纲”生成提案，再查看审核任务。</div>
-            )}
-            <JobList compact />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function PublishPage() {
-  const selectedChapterId = useWorkbenchStore((state) => state.selectedChapterId);
-  const chapterContent = useChapterContent(selectedChapterId);
-
-  return (
-    <section className="page active">
-      <h2 className="page-title">修复发布</h2>
-      <p className="page-subtitle">写回确认是唯一允许正文覆盖的入口，必须有草稿、检查记录、版本快照和改动对比。</p>
-      <div className="publish-layout">
-        <aside className="card catalog-card"><CatalogPanel /></aside>
-        <div className="card">
-          <div className="card-head"><h2>发布门</h2><span className="chip warn">写回受控</span></div>
-          <div className="pad form-grid">
-            <div className="notice danger">未满足条件时禁止发布：不会覆盖正文。</div>
-            {chapterContent.data ? (
-              <ChapterActions chapterId={chapterContent.data.id} mode="publish" />
-            ) : (
-              <p className="muted">请选择一章正文。设定和章纲保持提案流程，不提供普通发布按钮。</p>
-            )}
-            <JobList compact />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function MemoryPage() {
-  return (
-    <section className="page active">
-      <MemoryView />
-    </section>
-  );
-}
-
-export function ModelsPage() {
-  return (
-    <section className="page active">
-      <ModelsView />
     </section>
   );
 }

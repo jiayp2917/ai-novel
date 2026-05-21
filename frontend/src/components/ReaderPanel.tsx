@@ -40,6 +40,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const setWritingFullscreen = useWorkbenchStore((state) => state.setWritingFullscreen);
   const setSelectedChapterId = useWorkbenchStore((state) => state.setSelectedChapterId);
   const setSelectedChapterVersionId = useWorkbenchStore((state) => state.setSelectedChapterVersionId);
+  const setWritingNavigationGuard = useWorkbenchStore((state) => state.setWritingNavigationGuard);
   const recentChapterIds = useWorkbenchStore((state) => state.recentChapterIds);
   const closeChapterTab = useWorkbenchStore((state) => state.closeChapterTab);
   const setDraftAnnotationSelection = useWorkbenchStore((state) => state.setDraftAnnotationSelection);
@@ -128,7 +129,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
     setSelection(null);
     setContextMenu(null);
     setDraftAnnotationSelection(undefined);
-    setSelectedChapterVersionId(null);
+    setSelectedChapterVersionId(null, { force: true });
     setEditing(false);
     setDraftActive(false);
     setDraftText('');
@@ -190,10 +191,10 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
       if (content.data && result.version_id) {
         setRightPanelOpen(true);
         setInspectorTab('history');
-        setSelectedChapterVersionId(result.version_id);
         setEditing(false);
         setDraftActive(false);
         setDraftText('');
+        setSelectedChapterVersionId(result.version_id, { force: true });
       }
       pushTask({
         label: content.data ? '保存正文版本' : isUnparsedChapterSource ? '保存文件草稿' : '保存提案',
@@ -216,6 +217,19 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const canSaveDraft = Boolean(activeContent && activeText.trim() && (content.data || isSourceProposal || isUnparsedChapterSource));
   const menuSelection = contextMenu?.selection ?? selection;
   const canAnnotateSelection = Boolean(activeContent && !dirty);
+
+  useEffect(() => {
+    if (!dirty) {
+      setWritingNavigationGuard(null);
+      return undefined;
+    }
+    setWritingNavigationGuard(() => window.confirm('当前正文版本还未保存，切换章节或版本会丢失这次修改。是否继续？'));
+    return () => setWritingNavigationGuard(null);
+  }, [dirty, setWritingNavigationGuard]);
+
+  const selectChapter = (chapterId: number) => setSelectedChapterId(chapterId);
+  const selectVersion = (versionId: number | null) => setSelectedChapterVersionId(versionId);
+
   const readerClasses = useMemo(
     () => ['panel', 'reader-panel', editing ? 'reader-panel--editing' : ''].filter(Boolean).join(' '),
     [editing],
@@ -256,9 +270,10 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
       pushTask({ label: '章节跳转', status: 'failed', detail: `没有找到“${normalized}”对应的章节。` });
       return;
     }
-    setSelectedChapterId(target.id);
-    setJumpValue('');
-    pushTask({ label: '章节跳转', status: 'succeeded', detail: `已打开第 ${target.chapter_no} 章：${target.title}` });
+    if (selectChapter(target.id)) {
+      setJumpValue('');
+      pushTask({ label: '章节跳转', status: 'succeeded', detail: `已打开第 ${target.chapter_no} 章：${target.title}` });
+    }
   };
 
   return (
@@ -270,7 +285,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
               className={chapter.id === selectedChapterId ? 'chapter-tab chapter-tab--active' : 'chapter-tab'}
               key={chapter.id}
               type="button"
-              onClick={() => setSelectedChapterId(chapter.id)}
+              onClick={() => selectChapter(chapter.id)}
             >
               <span>{String(chapter.chapter_no).padStart(3, '0')}</span>
               <strong>{chapter.title}</strong>
@@ -326,12 +341,12 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         }}
         onJumpValueChange={setJumpValue}
         onJumpToChapter={jumpToChapter}
-        onSelectChapter={setSelectedChapterId}
+        onSelectChapter={selectChapter}
         onToggleCatalog={toggleCatalog}
         onToggleFullscreen={toggleFullscreen}
         onSaveDraft={() => saveDraftMutation.mutate()}
         onToggleRightPanel={toggleRightPanel}
-        onBackToCurrentVersion={() => setSelectedChapterVersionId(null)}
+        onBackToCurrentVersion={() => selectVersion(null)}
       />
       {(content.error || sourceContent.error || versionContent.error) && (
         <div className="inline-error">

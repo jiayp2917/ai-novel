@@ -391,6 +391,25 @@ def test_model_config_api_hides_secret_and_keeps_yaml_unchanged(tmp_path: Path, 
     assert config_path.read_text(encoding="utf-8") == before
 
 
+def test_model_config_rejects_invalid_advanced_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    invalid_url = client.patch(
+        "/api/admin/model-config/writer",
+        json={"provider": "kimi", "model": "kimi-k2.6", "base_url": "not-a-url", "api_key_env": "KIMI_API_KEY"},
+    )
+    invalid_env = client.patch(
+        "/api/admin/model-config/writer",
+        json={"provider": "kimi", "model": "kimi-k2.6", "base_url": "https://api.changed.local/v1", "api_key_env": "bad env"},
+    )
+
+    assert invalid_url.status_code == 400
+    assert invalid_url.json()["detail"] == "接口地址必须是有效的 http 或 https 地址。"
+    assert invalid_env.status_code == 400
+    assert invalid_env.json()["detail"] == "密钥名称必须是环境变量格式，例如 KIMI_API_KEY。"
+
+
 def test_model_config_secret_response_never_returns_plaintext(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     setup_app_db(tmp_path, monkeypatch)
     secret_value = "unit-test-secret-value"

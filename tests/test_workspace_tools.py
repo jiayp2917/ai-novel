@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from backend.tools.workspace_boundary_report import inventory, render_report
-from backend.tools.workspace_migrate import build_plan, existing_targets, execute_plan
+from backend.tools.workspace_migrate import build_plan, existing_targets, execute_plan, render_report as render_migration_report
 
 
 def write(path: Path, text: str) -> None:
@@ -55,3 +55,27 @@ def test_workspace_migrate_reports_existing_targets(tmp_path: Path) -> None:
 
     assert len(conflicts) == 1
     assert conflicts[0].target == target / "02-正文" / "01卷" / "第001章.md"
+
+
+def test_workspace_migrate_runtime_excludes_secret_files_and_reports_warning(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    write(source / "runtime" / "artifacts" / "candidate.md", "# 候选")
+    write(source / "runtime" / "diffs" / "chapter.diff", "diff")
+    write(source / "runtime" / "backups" / "chapter.md", "backup")
+    write(source / "runtime" / "model_secrets.dpapi.json", '{"kimi":"encrypted"}')
+    write(source / "runtime" / ".env.runtime", "SECRET=1")
+    write(source / "runtime" / "key.txt", "secret")
+
+    plan = build_plan(source, target, include_runtime=True)
+    rendered = {item.source.relative_to(source).as_posix() for item in plan}
+    report = render_migration_report(source, target, plan, dry_run=True)
+
+    assert "runtime/artifacts/candidate.md" in rendered
+    assert "runtime/diffs/chapter.diff" in rendered
+    assert "runtime/backups/chapter.md" in rendered
+    assert "runtime/model_secrets.dpapi.json" not in rendered
+    assert "runtime/.env.runtime" not in rendered
+    assert "runtime/key.txt" not in rendered
+    assert "runtime 迁移提醒" in report
+    assert "不要把包含 `runtime` 的迁移包提交到 Git" in report

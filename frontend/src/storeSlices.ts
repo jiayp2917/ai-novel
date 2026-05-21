@@ -16,10 +16,20 @@ import type { WorkbenchState } from './storeTypes';
 
 type SliceCreator = StateCreator<WorkbenchState, [], [], Partial<WorkbenchState>>;
 
+function canNavigate(get: () => WorkbenchState, force?: boolean): boolean {
+  if (force) {
+    return true;
+  }
+  return get().writingNavigationGuard?.() ?? true;
+}
+
 export const createNavigationSlice: SliceCreator = (set, get) => ({
   activeView: initialActiveView(),
   theme: initialTheme(),
-  setActiveView: (view) => {
+  setActiveView: (view, options) => {
+    if (view !== get().activeView && !canNavigate(get, options?.force)) {
+      return false;
+    }
     storeValue(STORAGE_KEYS.activeView, view);
     set((state) => {
       const next = {
@@ -41,6 +51,7 @@ export const createNavigationSlice: SliceCreator = (set, get) => ({
       storeValue(STORAGE_KEYS.inspectorTab, next.inspectorTab);
       return next;
     });
+    return true;
   },
   setTheme: (theme) => {
     storeValue('novel-editor-theme', theme);
@@ -52,13 +63,16 @@ export const createNavigationSlice: SliceCreator = (set, get) => ({
   },
 });
 
-export const createDocumentSlice: SliceCreator = (set) => ({
+export const createDocumentSlice: SliceCreator = (set, get) => ({
   selectedChapterId: storedNumber(STORAGE_KEYS.selectedChapterId),
   selectedSourceFileId: storedNumber(STORAGE_KEYS.selectedSourceFileId),
   openChapterTabIds: storedNumberArray(STORAGE_KEYS.openChapterTabIds),
   recentChapterIds: storedNumberArray(STORAGE_KEYS.recentChapterIds),
   chapterFilter: storedString(STORAGE_KEYS.chapterFilter) ?? '',
-  setSelectedChapterId: (id) => {
+  setSelectedChapterId: (id, options) => {
+    if (id !== get().selectedChapterId && !canNavigate(get, options?.force)) {
+      return false;
+    }
     storeValue(STORAGE_KEYS.selectedChapterId, id);
     storeValue(STORAGE_KEYS.selectedSourceFileId, null);
     set((state) => {
@@ -94,6 +108,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
         selectedChapterVersionId: null,
       };
     });
+    return true;
   },
   rememberChapter: (id) =>
     set((state) => {
@@ -101,7 +116,10 @@ export const createDocumentSlice: SliceCreator = (set) => ({
       storeJson(STORAGE_KEYS.recentChapterIds, recentChapterIds);
       return { recentChapterIds };
     }),
-  setSelectedSourceFileId: (id) => {
+  setSelectedSourceFileId: (id, options) => {
+    if (id !== get().selectedSourceFileId && !canNavigate(get, options?.force)) {
+      return false;
+    }
     storeValue(STORAGE_KEYS.selectedSourceFileId, id);
     storeValue(STORAGE_KEYS.selectedChapterId, null);
     set({
@@ -114,8 +132,12 @@ export const createDocumentSlice: SliceCreator = (set) => ({
       activeArtifactId: null,
       selectedChapterVersionId: null,
     });
+    return true;
   },
-  closeChapterTab: (id) =>
+  closeChapterTab: (id, options) => {
+    if (get().selectedChapterId === id && !canNavigate(get, options?.force)) {
+      return false;
+    }
     set((state) => {
       const openChapterTabIds = state.openChapterTabIds.filter((item) => item !== id);
       const selectedChapterId = state.selectedChapterId === id ? openChapterTabIds[0] ?? null : state.selectedChapterId;
@@ -130,7 +152,9 @@ export const createDocumentSlice: SliceCreator = (set) => ({
         activeArtifactId: state.selectedChapterId === id ? null : state.activeArtifactId,
         selectedChapterVersionId: state.selectedChapterId === id ? null : state.selectedChapterVersionId,
       };
-    }),
+    });
+    return true;
+  },
   setChapterFilter: (value) => {
     storeValue(STORAGE_KEYS.chapterFilter, value);
     set({ chapterFilter: value });
@@ -169,11 +193,17 @@ export const createAnnotationSlice: SliceCreator = (set) => ({
   setDraftAnnotationSelection: (selection) => set({ draftAnnotationSelection: selection }),
 });
 
-export const createArtifactSlice: SliceCreator = (set) => ({
+export const createArtifactSlice: SliceCreator = (set, get) => ({
   activeArtifactId: null,
   selectedChapterVersionId: null,
   setActiveArtifactId: (id) => set({ activeArtifactId: id }),
-  setSelectedChapterVersionId: (id) => set({ selectedChapterVersionId: id }),
+  setSelectedChapterVersionId: (id, options) => {
+    if (id !== get().selectedChapterVersionId && !canNavigate(get, options?.force)) {
+      return false;
+    }
+    set({ selectedChapterVersionId: id });
+    return true;
+  },
 });
 
 export const createUiSlice: SliceCreator = (set) => ({
@@ -181,6 +211,7 @@ export const createUiSlice: SliceCreator = (set) => ({
   catalogPanelOpen: storedBoolean(STORAGE_KEYS.catalogPanelOpen, true),
   writingFullscreen: storedBoolean(STORAGE_KEYS.writingFullscreen, false),
   inspectorTab: initialInspectorTab(),
+  writingNavigationGuard: null,
   setRightPanelOpen: (open) => {
     storeValue(STORAGE_KEYS.rightPanelOpen, open);
     set({ rightPanelOpen: open });
@@ -197,6 +228,7 @@ export const createUiSlice: SliceCreator = (set) => ({
     storeValue(STORAGE_KEYS.inspectorTab, tab);
     set({ inspectorTab: tab });
   },
+  setWritingNavigationGuard: (guard) => set({ writingNavigationGuard: guard }),
 });
 
 export const createTaskFeedbackSlice: SliceCreator = (set) => ({

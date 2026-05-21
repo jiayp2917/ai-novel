@@ -91,7 +91,7 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
     mutationFn: ({ sourceFileId, chapterNo, title }: { sourceFileId: number; chapterNo: number; title: string }) =>
       apiRequest<CreateSourceFileResult>(`/api/source-files/${sourceFileId}/normalize-chapter`, {
         method: 'POST',
-        body: JSON.stringify({ chapter_no: chapterNo, title }),
+        body: JSON.stringify({ chapter_no: chapterNo, title, confirm_normalize: true }),
       }),
     onMutate: () => pushTask({ label: '规范化章节', status: 'running', detail: '正在把正文 Markdown 转成可识别章节。' }),
     onSuccess: (result) => {

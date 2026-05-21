@@ -48,6 +48,18 @@ class FixerService:
                 "issues": non_writer,
             }
         writer_issues = [issue for issue in issues if isinstance(issue, dict) and issue.get("owner") == "writer"]
+        invalid_writer_issues = [
+            issue
+            for issue in writer_issues
+            if not str(issue.get("evidence", "")).strip() or not str(issue.get("fix_instruction", "")).strip()
+        ]
+        if invalid_writer_issues:
+            return {
+                "status": "manual_required",
+                "artifact_id": artifact.id,
+                "review_id": review.id,
+                "issues": invalid_writer_issues,
+            }
         if not writer_issues:
             return {
                 "status": "no_fix_needed",

@@ -12,11 +12,17 @@ from backend.app.db.session import get_engine, reset_engine
 from backend.app.main import app
 from backend.app.repositories import Repository
 from backend.app.services.artifacts import ArtifactStore
+from backend.app.services.pipeline.fixer import FixerService
 from backend.app.services.pipeline.runs import PipelineRunService
 from backend.app.services.pipeline.state_machine import PipelineState, PipelineStateMachine
 from backend.app.services.worker import JobWorker
 from backend.tools.sandbox_pipeline_smoke import main as sandbox_pipeline_main
 from backend.tools.sandbox_pipeline_smoke import create_workspace, SmokeError
+
+
+class UnexpectedQuickFixModel:
+    def chat(self, **kwargs):
+        raise AssertionError("quick_fix should not be called for issues that lack evidence or fix instructions")
 
 
 def setup_app_db(tmp_path, monkeypatch) -> None:
@@ -120,6 +126,75 @@ def test_pipeline_run_api_rejects_invalid_mode_and_retry_from_queued(tmp_path, m
     retry = client.post(f"/api/pipeline/runs/{created.json()['id']}/retry")
     assert retry.status_code == 400
     assert "not retryable" in retry.json()["detail"]
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_run_operations_are_limited_to_valid_statuses(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/pipeline/runs",
+        json={"start_chapter": 1, "end_chapter": 1, "mode": "review_only"},
+    )
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+
+    assert client.post(f"/api/pipeline/runs/{run_id}/resume").status_code == 400
+    assert client.post(f"/api/pipeline/runs/{run_id}/retry").status_code == 400
+
+    paused = client.post(f"/api/pipeline/runs/{run_id}/pause")
+    assert paused.status_code == 200
+    assert paused.json()["status"] == "paused"
+
+    resumed = client.post(f"/api/pipeline/runs/{run_id}/resume")
+    assert resumed.status_code == 200
+    assert resumed.json()["status"] == "queued"
+
+    cancelled = client.post(f"/api/pipeline/runs/{run_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "failed_terminal"
+
+    assert client.post(f"/api/pipeline/runs/{run_id}/pause").status_code == 400
+    assert client.post(f"/api/pipeline/runs/{run_id}/resume").status_code == 400
+    assert client.post(f"/api/pipeline/runs/{run_id}/retry").status_code == 400
+    assert client.post(f"/api/pipeline/runs/{run_id}/cancel").status_code == 400
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_run_api_rejects_direct_publish_without_advanced_flag(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    monkeypatch.delenv("ALLOW_PIPELINE_DIRECT_PUBLISH", raising=False)
+    monkeypatch.delenv("ENABLE_TEST_SUPPORT", raising=False)
+    get_settings.cache_clear()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/pipeline/runs",
+        json={"start_chapter": 1, "end_chapter": 1, "mode": "full_auto", "dry_run": False},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "自动流水线当前只允许预演，不直接写回正文。请到 AI 工作台确认写回。"
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_run_api_allows_direct_publish_with_advanced_flag(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    monkeypatch.setenv("ALLOW_PIPELINE_DIRECT_PUBLISH", "true")
+    get_settings.cache_clear()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/pipeline/runs",
+        json={"start_chapter": 1, "end_chapter": 1, "mode": "full_auto", "dry_run": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["payload"]["dry_run"] is False
     get_settings.cache_clear()
     reset_engine()
 
@@ -406,6 +481,78 @@ def test_worker_runs_review_only_child_from_snapshot_candidate(tmp_path, monkeyp
         assert child.status == "manual_required"
         assert child.error and "Chapter has no current version" in child.error
         assert session.scalar(select(Artifact)) is None
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_fixer_requires_writer_issue_evidence_and_instruction(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    chapter_file = tmp_path / "content" / "chapters" / "book.md"
+    chapter_text = "# 绗?01绔?璧锋\n正文。"
+    chapter_file.parent.mkdir(parents=True, exist_ok=True)
+    chapter_file.write_text(chapter_text, encoding="utf-8")
+
+    with Session(get_engine()) as session:
+        source = Repository(session, SourceFile).create(
+            {
+                "path": "chapters/book.md",
+                "kind": "chapters",
+                "sha256": "source-hash",
+                "mtime": 1.0,
+                "size": len(chapter_text),
+                "active": True,
+            }
+        )
+        chapter = Repository(session, Chapter).create(
+            {
+                "chapter_no": 1,
+                "title": "璧锋",
+                "source_file_id": source.id,
+                "range_start": 0,
+                "range_end": len(chapter_text),
+                "active": True,
+            }
+        )
+        artifact = ArtifactStore(session).save_text(
+            kind="candidate",
+            text=chapter_text,
+            metadata={"task_type": "generate_chapter_draft"},
+            base_chapter=chapter,
+        )
+        review = Review(
+            artifact_id=artifact.id,
+            passed=False,
+            issues_json=json.dumps(
+                [
+                    {
+                        "chapter": 1,
+                        "severity": "medium",
+                        "type": "style",
+                        "description": "缺少证据的作者问题",
+                        "evidence": "",
+                        "owner": "writer",
+                        "fix_instruction": "修正节奏",
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            evidence_count=0,
+            manual_required=False,
+            candidate_hash=artifact.sha256,
+            base_source_file_hash=artifact.base_source_file_hash,
+            base_chapter_version_id=artifact.base_chapter_version_id,
+        )
+        session.add(review)
+        session.commit()
+
+        result = FixerService(session, model_client=UnexpectedQuickFixModel()).fix_candidate(artifact.id, review_id=review.id)
+
+        assert result["status"] == "manual_required"
+        assert result["artifact_id"] == artifact.id
+        assert result["review_id"] == review.id
+        assert result["issues"][0]["owner"] == "writer"
+        assert result["issues"][0]["evidence"] == ""
+        assert session.scalar(select(Artifact).where(Artifact.id != artifact.id)) is None
     get_settings.cache_clear()
     reset_engine()
 

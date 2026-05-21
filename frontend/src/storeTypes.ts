@@ -1,5 +1,11 @@
 import type { ActiveView, InspectorTab, SelectionRange, TaskEntry, ThemeMode, WorkspaceBookmark, WorkspaceStatus } from './types';
 
+export type NavigationOptions = {
+  force?: boolean;
+};
+
+export type WritingNavigationGuard = () => boolean;
+
 export type WorkbenchState = {
   activeView: ActiveView;
   theme: ThemeMode;
@@ -17,15 +23,16 @@ export type WorkbenchState = {
   writingFullscreen: boolean;
   chapterFilter: string;
   inspectorTab: InspectorTab;
+  writingNavigationGuard: WritingNavigationGuard | null;
   taskLog: TaskEntry[];
   workspaceBookmarks: WorkspaceBookmark[];
   recentChapterIds: number[];
-  setActiveView: (view: ActiveView) => void;
+  setActiveView: (view: ActiveView, options?: NavigationOptions) => boolean;
   setTheme: (theme: ThemeMode) => void;
   toggleTheme: () => void;
-  setSelectedChapterId: (id: number | null) => void;
-  setSelectedSourceFileId: (id: number | null) => void;
-  closeChapterTab: (id: number) => void;
+  setSelectedChapterId: (id: number | null, options?: NavigationOptions) => boolean;
+  setSelectedSourceFileId: (id: number | null, options?: NavigationOptions) => boolean;
+  closeChapterTab: (id: number, options?: NavigationOptions) => boolean;
   setSelectedAnnotationId: (id: number | null) => void;
   jumpToAnnotation: (id: number) => void;
   toggleAnnotationSelection: (id: number) => void;
@@ -34,12 +41,13 @@ export type WorkbenchState = {
   clearAnnotationSelection: () => void;
   setDraftAnnotationSelection: (selection: SelectionRange | null | undefined) => void;
   setActiveArtifactId: (id: number | null) => void;
-  setSelectedChapterVersionId: (id: number | null) => void;
+  setSelectedChapterVersionId: (id: number | null, options?: NavigationOptions) => boolean;
   setRightPanelOpen: (open: boolean) => void;
   setCatalogPanelOpen: (open: boolean) => void;
   setWritingFullscreen: (open: boolean) => void;
   setChapterFilter: (value: string) => void;
   setInspectorTab: (tab: InspectorTab) => void;
+  setWritingNavigationGuard: (guard: WritingNavigationGuard | null) => void;
   pushTask: (entry: Omit<TaskEntry, 'id'>) => void;
   rememberWorkspace: (workspace: WorkspaceStatus, name?: string) => void;
   renameWorkspaceBookmark: (id: string, name: string) => void;

@@ -88,6 +88,7 @@ export type CreateSourceFileResult = {
   path: string;
   source_file_id: number | null;
   chapter_id: number | null;
+  backup_path?: string | null;
   scan: CatalogStatus;
 };
 

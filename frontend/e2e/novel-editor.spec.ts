@@ -28,7 +28,6 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await expect(page.locator('.annotation-card').filter({ hasText: '新手路径：确认开篇人物位置清晰。' })).toBeVisible();
 
   await page.getByRole('button', { name: '编辑正文' }).click();
-  await page.locator('.cm-content').click();
   await page.keyboard.type('\n新手路径正文版本保存验证。');
   await page.getByRole('button', { name: '保存正文版本' }).click();
   await expect(page.locator('.task-latest')).toContainText('正文版本已保存');
@@ -295,6 +294,7 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   await expect(page.locator('.cm-content')).toContainText(longInput);
   const fullEditorText = await page.locator('.cm-content').innerText();
   expect(fullEditorText).toContain(longInput);
+  expect(fullEditorText.trim().endsWith(longInput)).toBeTruthy();
   await page.keyboard.press('Control+A');
   const selectedTextLength = await page.evaluate(() => window.getSelection()?.toString().length ?? 0);
   expect(selectedTextLength).toBeGreaterThan(50);
@@ -333,6 +333,61 @@ test('narrow writing viewport keeps editor usable while catalog and inspector us
   await page.getByRole('button', { name: '收起侧栏' }).click();
   await expect(page.locator('.editor-shell')).toHaveClass(/inspector-hidden/);
   await expectUsableNarrowWritingLayout(page);
+});
+
+test('unsaved writing version protects chapter and version switching', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  await mainNav(page, '写作').click();
+  await openChapter(page, '001');
+  await page.getByRole('button', { name: '编辑正文' }).click();
+  const unsavedMarker = '\n未保存切换保护验证。';
+  await page.keyboard.type(unsavedMarker);
+  await expect(page.locator('.cm-content')).toContainText('未保存切换保护验证');
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('当前正文版本还未保存');
+    await dialog.dismiss();
+  });
+  await openChapter(page, '002');
+  await expect(page.locator('.reader-header h1')).toContainText('第1章');
+  await expect(page.locator('.cm-content')).toContainText('未保存切换保护验证');
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('切换章节或版本会丢失这次修改');
+    await dialog.accept();
+  });
+  await openChapter(page, '002');
+  await expect(page.locator('.reader-header h1')).toContainText('第2章');
+
+  await openChapter(page, '001');
+  await page.getByRole('button', { name: '编辑正文' }).click();
+  await page.keyboard.type('\n未保存版本切换保护验证。');
+  await page.getByRole('button', { name: '保存正文版本' }).click();
+  await expect(page.locator('.history-card--active')).toBeVisible();
+  await page.locator('.history-card--current').click();
+  await expect(page.locator('.reader-header h1')).not.toContainText('历史版本');
+
+  await page.getByRole('button', { name: '编辑正文' }).click();
+  await page.keyboard.type('\n未保存历史版本切换保护验证。');
+  const historicalVersion = page.locator('.history-card:not(.history-card--current)').first();
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('当前正文版本还未保存');
+    await dialog.dismiss();
+  });
+  await historicalVersion.click();
+  await expect(page.locator('.reader-header h1')).not.toContainText('历史版本');
+  await expect(page.locator('.cm-content')).toContainText('未保存历史版本切换保护验证');
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('切换章节或版本会丢失这次修改');
+    await dialog.accept();
+  });
+  await historicalVersion.click();
+  await expect(page.locator('.reader-header h1')).toContainText('历史版本');
 });
 
 test('catalog can create folders, chapters, and normalize unrecognized markdown files', async ({ page }) => {
@@ -749,6 +804,14 @@ test('home and writing pages keep engineering details out of the main flow', asy
 });
 
 test('pipeline wizard can create, pause, resume, run once, and show 10-chapter timeline', async ({ page }) => {
+  let createdPipelinePayload: Record<string, unknown> | null = null;
+  await page.route('**/api/pipeline/runs', async (route) => {
+    if (route.request().method() === 'POST') {
+      createdPipelinePayload = JSON.parse(route.request().postData() ?? '{}') as Record<string, unknown>;
+    }
+    await route.continue();
+  });
+
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
   await page.goto('/');
@@ -762,8 +825,11 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
   await page.getByLabel('执行模式').selectOption('full_auto');
   await page.getByLabel('每批章节数').fill('3');
   await page.getByLabel('最大修订轮次').fill('2');
+  await expect(page.locator('.pipeline-mode-card')).toContainText('固定为预演');
+  await expect(page.locator('.pipeline-mode-card').locator('input[type="checkbox"]')).toHaveCount(0);
   await page.getByRole('button', { name: '创建自动流水线' }).click();
   await expect(page.locator('.task-latest')).toContainText('自动流水线');
+  await expect.poll(() => createdPipelinePayload?.dry_run).toBe(true);
   await expect(page.locator('.pipeline-run-item').first()).toContainText('第 1-10 章');
   await expect(page.locator('.pipeline-report-summary')).toContainText('任务结束后生成轻量报告');
 

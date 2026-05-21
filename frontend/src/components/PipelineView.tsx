@@ -18,7 +18,7 @@ const modeDescriptions: Record<PipelineRunCreatePayload['mode'], string> = {
   review_only: '适合已经有草稿，只想批量检查问题。',
   generate_missing: '适合缺章或短稿，只生成候选，不自动写回。',
   review_fix: '适合已有草稿，希望系统检查后按问题生成修订候选。',
-  full_auto: '适合沙盒或明确授权的批量流程；正式写回仍受发布门控制。',
+  full_auto: '适合沙盒预演完整链路；本界面不会直接写回正文。',
 };
 
 const statusLabels: Record<string, string> = {
@@ -89,7 +89,7 @@ export function PipelineView() {
     mutationFn: () =>
       apiRequest<PipelineRun>('/api/pipeline/runs', {
         method: 'POST',
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, dry_run: true }),
       }),
     onSuccess: (run) => {
       setSelectedRunId(run.id);
@@ -170,7 +170,7 @@ export function PipelineView() {
       mode: modeFromPayload(run),
       chunk_size: numberFromPayload(run, 'chunk_size', 3),
       max_fix_rounds: numberFromPayload(run, 'max_fix_rounds', 2),
-      dry_run: Boolean(run.payload.dry_run ?? true),
+      dry_run: true,
     });
     pushTask({ label: '自动流水线', status: 'succeeded', detail: `已套用流水线 #${run.id} 的设置，可调整后重新创建。` });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -213,9 +213,7 @@ export function PipelineView() {
             <p className="eyebrow">开始前确认</p>
             <h2>按 4 步创建自动任务</h2>
           </div>
-          <span className={form.dry_run ? 'chip ok' : 'chip warn'}>
-            {form.dry_run ? '只生成草稿和报告' : '允许进入写回确认'}
-          </span>
+          <span className="chip ok">只生成草稿和报告</span>
         </div>
         <div className="pipeline-wizard">
           <label>
@@ -250,11 +248,8 @@ export function PipelineView() {
           </label>
           <label className="pipeline-mode-card">
             <strong>4. 写回策略</strong>
-            <span>开启后只生成草稿、检查结果和改动对比，不覆盖正文。</span>
-            <span className="checkbox-row">
-              <input type="checkbox" checked={form.dry_run} onChange={(event) => setForm((current) => ({ ...current, dry_run: event.target.checked }))} />
-              只预演流程，不写回正文
-            </span>
+            <span>自动流水线固定为预演：只生成草稿、检查结果、改动对比和运行报告，不覆盖正文。</span>
+            <span className="checkbox-row">只预演流程，不写回正文</span>
           </label>
         </div>
         <div className="notice safe">所有 AI 输出都会先进入草稿/候选。正式正文写回仍必须经过发布门；设定和章纲只生成提案。</div>

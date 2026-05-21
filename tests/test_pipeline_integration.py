@@ -67,6 +67,7 @@ def test_pipeline_integration_generate_review_publish_updates_chapter(
     monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
     monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
     monkeypatch.setenv("MAX_INPUT_CHARS_PER_CALL", "20000")
+    monkeypatch.setenv("ALLOW_PIPELINE_DIRECT_PUBLISH", "true")
     get_settings.cache_clear()
     reset_engine()
     Base.metadata.create_all(get_engine())

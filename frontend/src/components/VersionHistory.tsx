@@ -36,7 +36,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
       void queryClient.invalidateQueries({ queryKey: ['chapters'] });
       void queryClient.invalidateQueries({ queryKey: ['memory-items'] });
       void queryClient.invalidateQueries({ queryKey: ['events'] });
-      setSelectedChapterVersionId(null);
+      setSelectedChapterVersionId(null, { force: true });
       pushTask({
         label: '发布正文版本',
         status: 'succeeded',
@@ -58,7 +58,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
       void queryClient.removeQueries({ queryKey: ['chapter-version-content', chapterId, result.version_id] });
       void queryClient.invalidateQueries({ queryKey: ['events'] });
       if (selectedVersionId === result.version_id) {
-        setSelectedChapterVersionId(null);
+        setSelectedChapterVersionId(null, { force: true });
       }
       pushTask({
         label: '删除正文版本',

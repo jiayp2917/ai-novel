@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import get_settings
 from backend.app.db.session import get_db
 from backend.app.services.pipeline.runs import PipelineRunError, PipelineRunService
 from backend.app.services.pipeline.state_machine import PipelineTransitionError
@@ -21,6 +22,9 @@ class PipelineRunCreateRequest(BaseModel):
 
 @router.post("/runs")
 def create_pipeline_run(payload: PipelineRunCreateRequest, session: Session = Depends(get_db)) -> dict:
+    settings = get_settings()
+    if not payload.dry_run and not (settings.enable_test_support or settings.allow_pipeline_direct_publish):
+        raise HTTPException(status_code=400, detail="自动流水线当前只允许预演，不直接写回正文。请到 AI 工作台确认写回。")
     try:
         return PipelineRunService(session).create_run(
             start_chapter=payload.start_chapter,
@@ -77,6 +81,7 @@ def delete_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict
 
 @router.post("/runs/{run_id}/delete")
 def delete_pipeline_run_compat(run_id: int, session: Session = Depends(get_db)) -> dict:
+    """Compatibility delete endpoint; new clients should prefer DELETE."""
     try:
         return PipelineRunService(session).delete_run(run_id)
     except PipelineRunError as exc:
@@ -95,7 +100,8 @@ def _mutate_run(session: Session, run_id: int, action: str) -> dict:
         if action == "cancel":
             return service.cancel(run_id)
     except PipelineRunError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     except PipelineTransitionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     raise HTTPException(status_code=400, detail="Unsupported pipeline action")

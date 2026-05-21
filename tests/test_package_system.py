@@ -10,7 +10,10 @@ def test_package_system_excludes_content_runtime_and_keys(tmp_path: Path) -> Non
         "config",
         "tests",
         "runtime",
+        "00-系统",
+        "01-设定",
         "02-正文",
+        "03-章纲",
         "content/settings",
         "content/outlines",
         "content/chapters",
@@ -22,7 +25,10 @@ def test_package_system_excludes_content_runtime_and_keys(tmp_path: Path) -> Non
     (tmp_path / "tests" / "test_ok.py").write_text("def test_ok(): pass", encoding="utf-8")
     (tmp_path / "README.md").write_text("# README", encoding="utf-8")
     (tmp_path / "runtime" / "app.db").write_text("db", encoding="utf-8")
+    (tmp_path / "00-系统" / "system.md").write_text("system", encoding="utf-8")
+    (tmp_path / "01-设定" / "setting.md").write_text("setting", encoding="utf-8")
     (tmp_path / "02-正文" / "chapter.md").write_text("novel", encoding="utf-8")
+    (tmp_path / "03-章纲" / "outline.md").write_text("outline", encoding="utf-8")
     (tmp_path / "content" / ".gitkeep").write_text("", encoding="utf-8")
     (tmp_path / "content" / "settings" / "settings.md").write_text("settings", encoding="utf-8")
     (tmp_path / "content" / "outlines" / "outline.md").write_text("outline", encoding="utf-8")
@@ -41,7 +47,10 @@ def test_package_system_excludes_content_runtime_and_keys(tmp_path: Path) -> Non
     assert "config/models.yaml" in rendered
     assert "tests/test_ok.py" in rendered
     assert "runtime/app.db" not in rendered
+    assert "00-系统/system.md" not in rendered
+    assert "01-设定/setting.md" not in rendered
     assert "02-正文/chapter.md" not in rendered
+    assert "03-章纲/outline.md" not in rendered
     assert "content/.gitkeep" in rendered
     assert "content/settings/settings.md" not in rendered
     assert "content/outlines/outline.md" not in rendered

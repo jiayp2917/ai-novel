@@ -132,6 +132,7 @@ def main() -> int:
             "CONTENT_ROOT": str(workspace),
             "APP_DB_PATH": str(runtime_root / "pipeline_smoke.db"),
             "WORKSPACE_RUNTIME_ROOT_OVERRIDE": str(runtime_root),
+            "ALLOW_PIPELINE_DIRECT_PUBLISH": "true" if args.publish else "false",
         }
     ):
         set_active_workspace(workspace)

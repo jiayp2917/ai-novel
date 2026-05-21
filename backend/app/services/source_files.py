@@ -1,13 +1,16 @@
 from dataclasses import dataclass
+import json
+import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.file_utils import safe_read_text, safe_write_text
-from backend.app.db.models import Chapter, SourceFile
+from backend.app.db.models import Chapter, Event, SourceFile
 from backend.app.services.library import LibraryScanner, parse_chapters
-from backend.app.services.workspace import SourceRootSpec, WorkspaceResolver
+from backend.app.services.workspace import SourceRootSpec, WorkspaceResolver, workspace_runtime_root
 from backend.app.utils.paths import safe_join
 
 
@@ -20,6 +23,7 @@ class CreatedSource:
     path: str
     source_file_id: int | None
     chapter_id: int | None = None
+    backup_path: str | None = None
     scan: dict | None = None
 
 
@@ -90,12 +94,22 @@ class SourceFileManager:
             scan=scan,
         )
 
-    def normalize_chapter(self, *, source_file_id: int, chapter_no: int, title: str, content_prefix: str | None = None) -> CreatedSource:
+    def normalize_chapter(
+        self,
+        *,
+        source_file_id: int,
+        chapter_no: int,
+        title: str,
+        content_prefix: str | None = None,
+        confirm_normalize: bool = False,
+    ) -> CreatedSource:
         source_file = self.session.get(SourceFile, source_file_id)
         if source_file is None or not source_file.active:
             raise SourceFileManagerError("Source file not found")
         if source_file.kind != "chapters":
             raise SourceFileManagerError("Only chapter source files can be normalized")
+        if not confirm_normalize:
+            raise SourceFileManagerError("规范化会修改这个 Markdown 文件并生成备份；请确认后再执行。")
         if chapter_no <= 0:
             raise SourceFileManagerError("Chapter number must be positive")
         if self._active_chapter_exists(chapter_no):
@@ -112,13 +126,35 @@ class SourceFileManager:
             pieces.append(prefix)
         if body:
             pieces.append(body)
+        backup_path = self._backup_source(path)
         safe_write_text(path, "\n\n".join(pieces).rstrip() + "\n", encoding="utf-8")
         scan = LibraryScanner(self.session).scan()
         chapter = self.session.scalar(select(Chapter).where(Chapter.chapter_no == chapter_no, Chapter.active.is_(True)))
+        relative_backup_path = self._relative_runtime_path(backup_path)
+        self.session.add(
+            Event(
+                event_type="source_file_normalized",
+                entity_type="source_file",
+                entity_id=source_file.id,
+                payload_json=json.dumps(
+                    {
+                        "source_file_id": source_file.id,
+                        "path": source_file.path,
+                        "backup_path": relative_backup_path,
+                        "chapter_no": chapter_no,
+                        "title": title,
+                        "note": "规范化未识别正文 Markdown，只补充标准章节标题，不等同于发布正文。",
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+        )
+        self.session.commit()
         return CreatedSource(
             path=source_file.path,
             source_file_id=source_file.id,
             chapter_id=chapter.id if chapter else None,
+            backup_path=relative_backup_path,
             scan=scan,
         )
 
@@ -179,6 +215,16 @@ class SourceFileManager:
         lowered_parts = {part.lower() for part in relative.split("/")}
         if "runtime" in lowered_parts or "key.txt" in lowered_parts or ".env" in lowered_parts:
             raise SourceFileManagerError("Protected workspace paths cannot be modified")
+
+    def _backup_source(self, source_file: Path) -> Path:
+        backup_dir = workspace_runtime_root(self.workspace.info) / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_path = backup_dir / f"{source_file.stem}_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}{source_file.suffix}"
+        shutil.copy2(source_file, backup_path)
+        return backup_path
+
+    def _relative_runtime_path(self, path: Path) -> str:
+        return path.resolve().relative_to(workspace_runtime_root(self.workspace.info).resolve()).as_posix()
 
     def _is_protected_component(self, value: str) -> bool:
         lowered = value.strip().lower()

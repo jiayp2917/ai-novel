@@ -301,6 +301,11 @@ export function ChapterEditor({
       return;
     }
     const view = viewRef.current;
+    const end = view.state.doc.length;
+    view.dispatch({
+      selection: EditorSelection.cursor(end),
+      effects: EditorView.scrollIntoView(end, { y: 'center' }),
+    });
     view.focus();
     const frame = window.requestAnimationFrame(() => view.focus());
     return () => window.cancelAnimationFrame(frame);

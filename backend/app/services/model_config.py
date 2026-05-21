@@ -5,6 +5,7 @@ import ctypes
 import json
 import os
 import platform
+from urllib.parse import urlparse
 from ctypes import wintypes
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -91,6 +92,9 @@ class ModelConfigService:
         api_key_env = str(payload.get("api_key_env") or _api_key_env_for_provider(provider, default_route.api_key_env)).strip()
         if not provider or not model or not base_url or not api_key_env:
             raise HTTPException(status_code=400, detail="模型、接口地址和密钥名称不能为空。")
+        _validate_provider(provider)
+        _validate_base_url(base_url)
+        _validate_api_key_env(api_key_env)
         try:
             max_tokens = int(payload.get("max_tokens") or default_route.max_tokens)
         except (TypeError, ValueError) as exc:
@@ -264,6 +268,22 @@ def _api_key_env_for_provider(provider: str, fallback: str) -> str:
         return provider_config_api_key_env(provider)
     except ModelRegistryError:
         return fallback
+
+
+def _validate_provider(provider: str) -> None:
+    if not provider.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="供应商名称只能包含字母、数字、横线或下划线。")
+
+
+def _validate_base_url(base_url: str) -> None:
+    parsed = urlparse(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="接口地址必须是有效的 http 或 https 地址。")
+
+
+def _validate_api_key_env(api_key_env: str) -> None:
+    if not api_key_env.replace("_", "").isalnum() or not api_key_env[0].isalpha():
+        raise HTTPException(status_code=400, detail="密钥名称必须是环境变量格式，例如 KIMI_API_KEY。")
 
 
 class DATA_BLOB(ctypes.Structure):

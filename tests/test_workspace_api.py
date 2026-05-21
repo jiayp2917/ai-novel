@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
-from backend.app.db.models import Chapter
+from backend.app.db.models import Chapter, Event
 from backend.app.db.session import get_engine, get_session_local, reset_engine
 from backend.app.main import app
 from backend.app.services.artifacts import ArtifactStore
@@ -279,10 +279,22 @@ def test_source_file_create_folder_file_and_normalize_chapter(tmp_path: Path, mo
         f"/api/source-files/{loose_source_id}/normalize-chapter",
         json={"chapter_no": 147, "title": "整理成章"},
     )
+    assert normalized.status_code == 400
+    assert "规范化会修改这个 Markdown 文件" in normalized.json()["detail"]
+
+    normalized = client.post(
+        f"/api/source-files/{loose_source_id}/normalize-chapter",
+        json={"chapter_no": 147, "title": "整理成章", "confirm_normalize": True},
+    )
     assert normalized.status_code == 200
     assert normalized.json()["chapter_id"] is not None
+    assert normalized.json()["backup_path"].startswith("backups/")
     assert [item["chapter_no"] for item in client.get("/api/chapters").json()] == [146, 147]
     assert "# 第147章 整理成章" in (workspace / "02-正文" / "06卷" / "待整理.md").read_text(encoding="utf-8")
+    assert (tmp_path / "runtime" / normalized.json()["backup_path"]).exists()
+    with get_session_local()() as session:
+        event = session.query(Event).filter_by(event_type="source_file_normalized").one()
+        assert event.entity_id == loose_source_id
 
     get_settings.cache_clear()
     reset_engine()

@@ -39,6 +39,7 @@ class NormalizeChapterRequest(BaseModel):
     chapter_no: int
     title: str
     content_prefix: str | None = None
+    confirm_normalize: bool = False
 
 
 @router.post("/library/scan")
@@ -89,6 +90,7 @@ def normalize_chapter_source(source_file_id: int, payload: NormalizeChapterReque
             chapter_no=payload.chapter_no,
             title=payload.title,
             content_prefix=payload.content_prefix,
+            confirm_normalize=payload.confirm_normalize,
         )
     except (SourceFileManagerError, ValueError) as exc:
         status = 404 if str(exc) == "Source file not found" else 400
@@ -97,6 +99,7 @@ def normalize_chapter_source(source_file_id: int, payload: NormalizeChapterReque
         "path": normalized.path,
         "source_file_id": normalized.source_file_id,
         "chapter_id": normalized.chapter_id,
+        "backup_path": normalized.backup_path,
         "scan": normalized.scan,
     }
 

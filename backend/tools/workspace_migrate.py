@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 SOURCE_DIRS = ("00-系统", "01-设定", "02-正文", "03-章纲")
+SENSITIVE_FILE_NAMES = {"key.txt", "model_secrets.dpapi.json"}
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,8 @@ def build_plan(source_root: Path, target_root: Path, *, include_runtime: bool) -
         if not source_dir.exists():
             continue
         for source in sorted(path for path in source_dir.rglob("*") if path.is_file()):
+            if _is_sensitive_migration_file(source):
+                continue
             relative = source.relative_to(source_root)
             items.append(
                 CopyPlanItem(
@@ -89,6 +92,13 @@ def existing_targets(plan: list[CopyPlanItem]) -> list[CopyPlanItem]:
     return [item for item in plan if item.target.exists()]
 
 
+def _is_sensitive_migration_file(path: Path) -> bool:
+    name = path.name.lower()
+    if name in SENSITIVE_FILE_NAMES:
+        return True
+    return name == ".env" or name.startswith(".env.")
+
+
 def render_report(
     source_root: Path,
     target_root: Path,
@@ -98,6 +108,7 @@ def render_report(
     conflicts: list[CopyPlanItem] | None = None,
 ) -> str:
     total_size = sum(item.size for item in plan)
+    includes_runtime = any(item.source.relative_to(source_root).parts[0] == "runtime" for item in plan)
     lines = [
         "# 工作区迁移报告",
         "",
@@ -141,9 +152,21 @@ def render_report(
             "- 默认 dry-run，不写入目标工作区，只生成计划报告。",
             "- 只有传入 `--execute` 才会复制；目标已存在时还必须显式传入 `--overwrite`。",
             "- `key.txt`、`.env` 不在迁移范围内。",
+            "- `runtime` 只有显式传入 `--include-runtime` 时才会迁移；它用于保留 artifact、diff、backup、模型调用日志、审核记录和发布记录，不是普通导出或清理入口。",
+            "- 即使迁移 `runtime`，`model_secrets.dpapi.json`、`key.txt`、`.env`、`.env.*` 也会被排除。",
             "",
         ]
     )
+    if includes_runtime:
+        lines.extend(
+            [
+                "## runtime 迁移提醒",
+                "",
+                "- 本报告包含 `runtime` 文件。请只在需要迁移审计证据、模型调用记录、diff、backup 或发布记录时使用。",
+                "- 不要把包含 `runtime` 的迁移包提交到 Git，也不要作为系统代码包分发。",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 

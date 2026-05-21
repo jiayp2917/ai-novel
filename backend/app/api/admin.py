@@ -43,6 +43,7 @@ class SaveModelSecretRequest(BaseModel):
 
 @router.post("/probe-model")
 def probe_model(payload: ProbeModelRequest, session: Session = Depends(get_db)) -> dict:
+    """Compatibility model probe endpoint; model-config/{role}/probe is preferred."""
     try:
         route = ModelRouter().route(payload.role)
         secret_overrides = {route.provider: payload.temporary_key.strip()} if payload.temporary_key and payload.temporary_key.strip() else None

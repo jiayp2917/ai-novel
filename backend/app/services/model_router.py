@@ -31,6 +31,7 @@ ROLE_PROVIDER_PRIORITY: dict[str, tuple[str, ...]] = {
     "memory": ("qwen", "deepseek", "glm"),
     "outliner": ("qwen", "glm"),
     "structural_fix": ("glm", "qwen", "kimi"),
+    # Arbiter is decision support only. It must not be wired to publish or source-write flows.
     "arbiter": ("qwen", "deepseek", "glm"),
 }
 

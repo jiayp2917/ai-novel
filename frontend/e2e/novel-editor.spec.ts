@@ -617,8 +617,8 @@ test('budget pause is visible in author language and can be resumed from AI task
 
   await page.reload();
   await openSettings(page);
-  await expect(page.getByText('今日调用额度已暂停').first()).toBeVisible();
-  await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('今日调用额度已暂停');
+  await expect(page.getByText('AI 调用已暂停').first()).toBeVisible();
+  await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('AI 调用已暂停');
 
   await page.getByRole('button', { name: '继续执行任务' }).click();
   await expect(page.locator('.task-latest')).toContainText('继续执行任务');

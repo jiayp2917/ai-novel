@@ -48,7 +48,7 @@ export function statusLabel(status: string): string {
     running: '运行中',
     succeeded: '成功',
     failed: '失败',
-    paused_budget: '今日调用额度已暂停',
+    paused_budget: 'AI 调用已暂停',
   };
   return labels[status] ?? status;
 }

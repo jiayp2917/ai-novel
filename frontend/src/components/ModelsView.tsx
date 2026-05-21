@@ -167,7 +167,7 @@ export function ModelsView() {
               继续执行任务
             </button>
           </div>
-          {pausedCount > 0 && <section className="notice danger">今日调用额度已暂停。请查看失败原因，确认预算后再继续执行任务。</section>}
+          {pausedCount > 0 && <section className="notice danger">AI 调用已暂停。请查看失败原因，确认预算后再继续执行任务。</section>}
           <JobList compact />
         </section>
 
@@ -317,14 +317,6 @@ function ModelConfigCard({
             接口地址
             <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="例如 https://api.moonshot.cn/v1" />
           </label>
-          <label>
-            供应商
-            <input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 kimi" />
-          </label>
-          <label>
-            输出上限
-            <input value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} inputMode="numeric" />
-          </label>
           <label className="model-config-form__secret">
             key：加密信息
             <input
@@ -340,6 +332,18 @@ function ModelConfigCard({
 
       <details className="advanced-details">
         <summary>高级设置</summary>
+        {editing && (
+          <div className="model-config-advanced-form">
+            <label>
+              供应商
+              <input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 kimi" />
+            </label>
+            <label>
+              输出上限
+              <input value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} inputMode="numeric" />
+            </label>
+          </div>
+        )}
         <small>role：{config.role}</small>
         <small>provider/model：{config.provider ?? '未识别'} / {config.model ?? '未识别'}</small>
         <small>base_url：{config.base_url ?? '暂无地址'}</small>

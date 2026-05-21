@@ -35,7 +35,7 @@ export function App() {
   const workspaceRoot = health.data?.workspace?.root ?? health.data?.content_root ?? '未连接工作区';
   const workspaceLabel = shortWorkspaceLabel(workspaceRoot);
   const themeShortLabel = theme === 'bright' ? '主题1' : '主题2';
-  const showCallSummary = activeView !== 'home' && activeView !== 'writing';
+  const showCallSummary = activeView === 'settings';
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -86,7 +86,7 @@ export function App() {
             >
               当前工作区：{workspaceLabel}
             </button>
-            {showCallSummary && <span className="chip calls-chip">今日调用 {cost.data?.today_model_calls ?? 0} 次</span>}
+            {showCallSummary && <span className="chip calls-chip">AI 用量 {cost.data?.today_model_calls ?? 0} 次</span>}
             <button
               className="btn theme-switch theme-switch--compact"
               type="button"

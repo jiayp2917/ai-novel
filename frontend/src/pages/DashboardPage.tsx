@@ -1,17 +1,41 @@
-import { useChapters, useCostDashboard, useSources } from '../hooks';
+import { useChapters, useCostDashboard, useJobs, useSources } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import animeHero from '../assets/theme/2917.png';
 import cyberpunkHero from '../assets/theme/cyberpunk-theme-hero.png';
 
 export function DashboardPage() {
   const setActiveView = useWorkbenchStore((state) => state.setActiveView);
+  const setSelectedChapterId = useWorkbenchStore((state) => state.setSelectedChapterId);
+  const recentChapterIds = useWorkbenchStore((state) => state.recentChapterIds);
   const sources = useSources();
   const chapters = useChapters();
   const cost = useCostDashboard();
+  const jobs = useJobs();
   const theme = useWorkbenchStore((state) => state.theme);
   const sourceCount = sources.data?.length ?? 0;
   const chapterCount = chapters.data?.length ?? 0;
   const heroImage = theme === 'anime' ? cyberpunkHero : animeHero;
+  const chapterMap = new Map((chapters.data ?? []).map((chapter) => [chapter.id, chapter]));
+  const recentChapters = recentChapterIds
+    .map((id) => chapterMap.get(id))
+    .filter((chapter): chapter is NonNullable<typeof chapter> => Boolean(chapter))
+    .slice(0, 5);
+  const allJobs = jobs.data ?? [];
+  const runningJobs = allJobs.filter((job) => job.status === 'running' || job.status === 'queued').length;
+  const pausedBudgetJobs = allJobs.filter((job) => job.status === 'paused_budget').length;
+  const manualRequiredJobs = allJobs.filter((job) => job.status === 'manual_required').length;
+  const failedJobs = allJobs.filter((job) => job.status === 'failed' || job.status === 'failed_retryable' || job.status === 'failed_terminal').length;
+  const attentionItems = [
+    { label: '后台任务', value: runningJobs, detail: runningJobs ? '有任务正在等待或执行。' : '当前没有运行中的后台任务。', view: 'pipeline' as const },
+    { label: '需人工处理', value: manualRequiredJobs, detail: manualRequiredJobs ? '有 AI 或流水线结果需要你判断。' : '暂无需要人工处理的任务。', view: 'ai' as const },
+    { label: 'AI 调用暂停', value: pausedBudgetJobs, detail: pausedBudgetJobs ? '确认预算后可到设置/模型继续处理。' : 'AI 调用没有暂停。', view: 'settings' as const },
+    { label: '失败任务', value: failedJobs, detail: failedJobs ? '查看失败原因后可重试或停止。' : '暂无失败任务。', view: 'pipeline' as const },
+  ];
+
+  const openChapter = (chapterId: number) => {
+    setSelectedChapterId(chapterId);
+    setActiveView('writing');
+  };
 
   return (
     <section className="page active dashboard-page">
@@ -33,7 +57,7 @@ export function DashboardPage() {
       <div className="grid">
         <div className="card metric span-3"><span>源文件</span><b>{sourceCount}</b><span>设定、章纲、正文索引</span></div>
         <div className="card metric span-3"><span>正文</span><b>{chapterCount}</b><span>当前工作区章节数</span></div>
-        <div className="card metric span-3"><span>运行任务</span><b>{cost.data?.running_jobs ?? 0}</b><span>需要关注的后台事项</span></div>
+        <div className="card metric span-3"><span>运行任务</span><b>{cost.data?.running_jobs ?? runningJobs}</b><span>需要关注的后台事项</span></div>
 
         <div className="card span-8">
           <div className="card-head">
@@ -60,6 +84,34 @@ export function DashboardPage() {
               <div className="muted">AI 生成内容先检查，人工保存的正文版本可确认后发布。</div>
             </div>
             <button className="btn" type="button" onClick={() => setActiveView('ai')}>打开 AI 工作台</button>
+          </div>
+        </div>
+
+        <div className="card span-6">
+          <div className="card-head"><h2>最近章节</h2></div>
+          <div className="chapter-list">
+            {recentChapters.map((chapter) => (
+              <button type="button" className="chapter-list-item" key={chapter.id} onClick={() => openChapter(chapter.id)}>
+                <strong>第 {String(chapter.chapter_no).padStart(3, '0')} 章</strong>
+                <span>{chapter.title}</span>
+              </button>
+            ))}
+            {!recentChapters.length && (
+              <div className="empty-state">还没有最近章节。进入写作并打开章节后，这里会显示继续写作入口。</div>
+            )}
+          </div>
+        </div>
+
+        <div className="card span-6">
+          <div className="card-head"><h2>待处理事项</h2></div>
+          <div className="attention-list">
+            {attentionItems.map((item) => (
+              <button type="button" className="attention-item" key={item.label} onClick={() => setActiveView(item.view)}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </button>
+            ))}
           </div>
         </div>
 

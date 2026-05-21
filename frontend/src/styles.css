@@ -840,6 +840,61 @@ pre {
   align-items: center;
 }
 
+.chapter-list,
+.attention-list {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.chapter-list-item,
+.attention-item {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  text-align: left;
+}
+
+.chapter-list-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.chapter-list-item span,
+.attention-item small {
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+}
+
+.attention-item strong {
+  font-size: 18px;
+}
+
+.attention-item small {
+  grid-column: 1 / -1;
+}
+
+.chapter-list-item:hover,
+.attention-item:hover {
+  border-color: var(--brand);
+  background: var(--surface-elevated);
+}
+
 .cover {
   width: 42px;
   height: 56px;
@@ -1588,6 +1643,12 @@ pre {
 
 .model-config-form__secret {
   grid-column: 1 / -1;
+}
+
+.model-config-advanced-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .model-config-actions {
@@ -3522,7 +3583,8 @@ textarea {
 
   .route-list--config,
   .model-config-summary,
-  .model-config-form {
+  .model-config-form,
+  .model-config-advanced-form {
     grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -35,7 +35,7 @@ const statusLabels: Record<string, string> = {
   done: '已完成',
   paused: '已暂停',
   manual_required: '需要人工判断',
-  paused_budget: '今日调用额度已暂停',
+  paused_budget: 'AI 调用已暂停',
   failed_retryable: '失败，可重试',
   failed_terminal: '已终止',
 };
@@ -202,7 +202,7 @@ export function PipelineView() {
         <div className="pipeline-summary">
           <span>已索引正文：{chapterCount} 章</span>
           <span>流水线任务：{runs.data?.length ?? 0}</span>
-          <span>今日 AI 调用：{cost.data?.today_model_calls ?? 0}</span>
+          <span>AI 用量：{cost.data?.today_model_calls ?? 0} 次</span>
           <span>运行中任务：{cost.data?.running_jobs ?? 0}</span>
         </div>
       </section>
@@ -551,7 +551,7 @@ function nextStepForRun(run: PipelineRun, summary: { total: number; done: number
     return { label: '可重试', text: '点击“重试”，再点击“运行一次队列”。如果连续失败，请先查看失败原因。', tone: 'danger' };
   }
   if (run.status === 'paused_budget') {
-    return { label: '额度暂停', text: '确认今日调用额度后点击“重试”或“恢复”，再运行队列。', tone: 'warn' };
+    return { label: '额度暂停', text: '确认 AI 调用预算后点击“重试”或“恢复”，再运行队列。', tone: 'warn' };
   }
   if (run.status === 'paused') {
     return { label: '已暂停', text: '点击“恢复”，再点击“运行一次队列”继续。', tone: 'info' };

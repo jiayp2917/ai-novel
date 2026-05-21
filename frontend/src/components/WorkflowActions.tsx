@@ -247,7 +247,7 @@ export function JobList({ compact = false }: { compact?: boolean }) {
               <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
               <span>{jobStatusLabel(job.status)}</span>
             </div>
-            {job.status === 'paused_budget' && <p>今日调用额度已暂停。查看原因后，可在设置/模型页点击“继续执行任务”。</p>}
+            {job.status === 'paused_budget' && <p>AI 调用已暂停。查看原因后，可在设置/模型页点击“继续执行任务”。</p>}
             {job.error && <p>{job.error}</p>}
             {job.result && (
               compact ? (
@@ -295,7 +295,7 @@ function jobStatusLabel(status: string): string {
     failed: '失败',
     failed_terminal: '失败',
     failed_retryable: '可重试',
-    paused_budget: '今日调用额度已暂停',
+    paused_budget: 'AI 调用已暂停',
   };
   return labels[status] ?? status;
 }

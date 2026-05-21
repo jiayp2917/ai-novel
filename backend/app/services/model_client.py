@@ -16,6 +16,7 @@ from backend.app.core.config import Settings, get_settings
 from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.db.models import ModelCall
 from backend.app.services.budget import BudgetExceededError, BudgetGuard
+from backend.app.services.model_config import ModelConfigService
 from backend.app.services.model_router import ModelRoute, ModelRouter
 from backend.app.services.workspace import workspace_runtime_root
 from backend.app.utils.hashing import sha256_text
@@ -53,11 +54,13 @@ class ModelClient:
         router: ModelRouter | None = None,
         settings: Settings | None = None,
         http_client: HttpClient | None = None,
+        secret_overrides: dict[str, str] | None = None,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
         self.router = router or ModelRouter(settings=self.settings)
         self.http_client = http_client or httpx.Client()
+        self.secret_overrides = secret_overrides or {}
 
     def chat(
         self,
@@ -109,7 +112,11 @@ class ModelClient:
             self.session.commit()
             raise ModelClientError(f"{exc}; call_id={call.id}") from exc
 
-        api_key = os.getenv(route.api_key_env, "").strip()
+        api_key = (
+            self.secret_overrides.get(route.provider)
+            or ModelConfigService().get_secret(route.provider)
+            or os.getenv(route.api_key_env, "").strip()
+        )
         if not api_key:
             self._update_call(
                 call,

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.models import Artifact
 from backend.app.db.session import get_db
 from backend.app.services.model_client import ChatMessage, ModelClient, ModelClientError
+from backend.app.services.model_config import ModelConfigService
 from backend.app.services.model_router import ModelRouteNotFoundError, ModelRouter
 from backend.app.services.skills import SkillLoader
 from backend.app.services.workspace import workspace_runtime_root
@@ -18,12 +19,34 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 class ProbeModelRequest(BaseModel):
     role: str
     force: bool = False
+    temporary_key: str | None = None
+
+
+class ProbeModelConfigRequest(BaseModel):
+    force: bool = False
+    temporary_key: str | None = None
+
+
+class SaveModelConfigRequest(BaseModel):
+    provider: str | None = None
+    model: str | None = None
+    base_url: str | None = None
+    api_key_env: str | None = None
+    max_tokens: int | None = None
+    cheap: bool | None = None
+    supports_json: bool | None = None
+
+
+class SaveModelSecretRequest(BaseModel):
+    key: str
 
 
 @router.post("/probe-model")
 def probe_model(payload: ProbeModelRequest, session: Session = Depends(get_db)) -> dict:
     try:
-        result = ModelClient(session).chat(
+        route = ModelRouter().route(payload.role)
+        secret_overrides = {route.provider: payload.temporary_key.strip()} if payload.temporary_key and payload.temporary_key.strip() else None
+        result = ModelClient(session, secret_overrides=secret_overrides).chat(
             role=payload.role,
             force=payload.force,
             require_json=True,
@@ -51,6 +74,31 @@ def probe_model(payload: ProbeModelRequest, session: Session = Depends(get_db)) 
         "content": result.content,
         "usage": result.usage,
     }
+
+
+@router.get("/model-config")
+def model_config() -> dict:
+    roles = ["writer", "reviewer", "quick_fix", "structural_fix", "long_context", "arbiter"]
+    return ModelConfigService().config_payload(roles)
+
+
+@router.patch("/model-config/{role}")
+def save_model_config(role: str, payload: SaveModelConfigRequest) -> dict:
+    saved = ModelConfigService().save_route(role, payload.model_dump(exclude_unset=True))
+    return {"saved": True, "role": role, "config": saved.__dict__}
+
+
+@router.post("/model-config/{role}/secret")
+def save_model_secret(role: str, payload: SaveModelSecretRequest) -> dict:
+    route = ModelRouter().route(role)
+    ModelConfigService().save_secret(route.provider, payload.key)
+    return {"saved": True, "role": role, "secret": ModelConfigService().secret_status(route)}
+
+
+@router.post("/model-config/{role}/probe")
+def probe_model_config(role: str, payload: ProbeModelConfigRequest | None = None, session: Session = Depends(get_db)) -> dict:
+    payload = payload or ProbeModelConfigRequest()
+    return probe_model(ProbeModelRequest(role=role, force=payload.force, temporary_key=payload.temporary_key), session=session)
 
 
 @router.get("/model-routes")

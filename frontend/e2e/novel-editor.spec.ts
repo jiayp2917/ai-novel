@@ -636,7 +636,8 @@ test('model task page shows quality trends and context budget warnings', async (
   await openModelsView(page);
   await expect(page.locator('.quality-grid')).toBeVisible();
   await expect(page.locator('.models-section--workspace')).toContainText('AI 输出去向与安全边界');
-  await expect(page.locator('.models-section--connectivity')).toContainText('模型连通');
+  await expect(page.locator('.models-section--connectivity')).toContainText('AI 助手配置');
+  await expect(page.locator('.models-section--connectivity')).toContainText('按用途配置模型、接口和密钥');
   await expect(page.locator('.models-section--calls')).toContainText('最近调用');
   await expect(page.locator('.models-section--skills')).toContainText('Skills / 事件');
   await expect(page.locator('.quality-card')).toHaveCount(3);
@@ -646,10 +647,20 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(page.locator('.context-budget-list')).toBeVisible();
   await expect(page.locator('.context-budget-card')).toContainText('timeline');
   await expect(page.locator('.context-budget-card')).toContainText('500');
-  await expect(page.locator('.route-card').first()).toContainText('已配置，可测试连通');
-  await expect(page.locator('.route-card').first().locator('div').first()).not.toContainText('/');
-  await page.locator('.route-card').first().getByText('高级详情').click();
-  await expect(page.locator('.route-card').first()).toContainText('/');
+  const writerConfigCard = page.locator('.model-config-card').filter({ hasText: 'AI 写作' });
+  await expect(writerConfigCard).toContainText('模型');
+  await expect(writerConfigCard).toContainText('接口地址');
+  await expect(writerConfigCard).toContainText('密钥');
+  await expect(writerConfigCard).toContainText(/可测试连接|缺少密钥/);
+  await expect(writerConfigCard.locator('.model-config-summary')).not.toContainText(/provider|api_key_env|raw JSON|token/);
+  await writerConfigCard.getByText('高级设置').click();
+  await expect(writerConfigCard).toContainText('provider/model');
+  await writerConfigCard.getByRole('button', { name: '编辑配置' }).click();
+  await expect(writerConfigCard.getByLabel('模型')).toBeVisible();
+  await expect(writerConfigCard.getByLabel('接口地址')).toBeVisible();
+  await expect(writerConfigCard.getByPlaceholder('留空则不修改已保存密钥')).toBeVisible();
+  await expect(writerConfigCard.getByRole('button', { name: '保存配置' })).toBeEnabled();
+  await expect(writerConfigCard.getByRole('button', { name: '测试连接' })).toBeVisible();
   await expect(page.getByText('本地记录仅供排错')).toBeVisible();
   await page.getByText('查看 Skills').click();
   await expect(page.locator('.skill-card').first()).toContainText(/参与最近一次记录的上下文|最近一次记录的上下文未使用/);
@@ -887,6 +898,28 @@ test('drag selection can create annotation from context menu', async ({ page }) 
   await annotationCard.getByRole('button').filter({ hasText: '拖选批注 E2E 验证。' }).click();
   await expect(annotationCard).toHaveClass(/annotation-card--active/);
   await expect(page.locator('.cm-annotation--selected')).toBeVisible();
+});
+
+test('version history uses an internal scrollbar inside the right sidebar', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  await mainNav(page, '写作').click();
+  await openChapter(page, '001');
+  await openSidebarIfClosed(page);
+  await page.getByRole('button', { name: '版本', exact: true }).click();
+  await expect(page.locator('.inspector-section--history')).toBeVisible();
+  const scrollState = await page.locator('.inspector-section--history').evaluate((node) => ({
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+    overflowY: window.getComputedStyle(node).overflowY,
+  }));
+  expect(scrollState.clientHeight).toBeGreaterThan(120);
+  expect(['auto', 'scroll']).toContain(scrollState.overflowY);
+  expect(scrollState.scrollHeight).toBeGreaterThanOrEqual(scrollState.clientHeight);
+  await expect(page.locator('.annotations-panel')).toBeVisible();
 });
 
 test('memory learning gives feedback and learns only resolved annotations', async ({ page }) => {

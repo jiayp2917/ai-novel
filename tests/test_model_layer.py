@@ -3,13 +3,18 @@ from pathlib import Path
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings
+from backend.app.core.config import get_settings
 from backend.app.db.base import Base
 from backend.app.db.models import ModelCall
+from backend.app.db.session import get_engine, reset_engine
+from backend.app.main import app
 from backend.app.services.model_client import ChatMessage, ModelClient, ModelClientError
+from backend.app.services.model_config import ModelConfigService
 from backend.app.services.model_router import ModelRouter
 from backend.tools.key_env import load_key_file
 
@@ -343,3 +348,97 @@ GLM_API_KEY:glm-key-value
         "QWEN_API_KEY": "sk-qwen-key",
         "GLM_API_KEY": "glm-key-value",
     }
+
+
+def setup_app_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "content"))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("APP_RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+
+
+def test_model_config_api_hides_secret_and_keeps_yaml_unchanged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    config_path = Path("config/model_registry.yaml")
+    before = config_path.read_text(encoding="utf-8")
+    client = TestClient(app)
+
+    listed = client.get("/api/admin/model-config")
+    assert listed.status_code == 200
+    writer = next(item for item in listed.json()["roles"] if item["role"] == "writer")
+    assert writer["label"] == "AI 写作"
+    assert writer["secret"]["status"] in {"missing", "env", "stored"}
+    assert "plain-secret" not in json.dumps(listed.json()).lower()
+
+    saved = client.patch(
+        "/api/admin/model-config/writer",
+        json={
+            "provider": "kimi",
+            "model": "kimi-k2.6",
+            "base_url": "https://api.changed.local/v1",
+            "api_key_env": "KIMI_API_KEY",
+            "max_tokens": 1234,
+        },
+    )
+
+    assert saved.status_code == 200
+    assert ModelRouter().route("writer").base_url == "https://api.changed.local/v1"
+    assert ModelRouter().route("writer").max_tokens == 1234
+    assert config_path.read_text(encoding="utf-8") == before
+
+
+def test_model_config_secret_response_never_returns_plaintext(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    secret_value = "unit-test-secret-value"
+
+    def fake_save_secret(self: ModelConfigService, provider: str, value: str) -> None:
+        assert value == secret_value
+        self.runtime_root.mkdir(parents=True, exist_ok=True)
+        self.secrets_path.write_text(json.dumps({provider: "encrypted-placeholder"}), encoding="utf-8")
+
+    def fake_get_secret(self: ModelConfigService, provider: str) -> str | None:
+        return "stored-secret" if provider == "kimi" else None
+
+    monkeypatch.setattr(ModelConfigService, "can_store_secret", lambda self: True)
+    monkeypatch.setattr(ModelConfigService, "save_secret", fake_save_secret)
+    monkeypatch.setattr(ModelConfigService, "get_secret", fake_get_secret)
+    client = TestClient(app)
+
+    response = client.post("/api/admin/model-config/writer/secret", json={"key": secret_value})
+
+    assert response.status_code == 200
+    rendered = json.dumps(response.json(), ensure_ascii=False)
+    assert secret_value not in rendered
+    assert response.json()["secret"]["status"] == "stored"
+
+
+def test_probe_model_config_temporary_key_is_not_persisted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    monkeypatch.delenv("KIMI_API_KEY", raising=False)
+    monkeypatch.setattr(ModelConfigService, "get_secret", lambda self, provider: None)
+    client = TestClient(app)
+    seen_authorization: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_authorization.append(request.headers.get("Authorization", ""))
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}], "usage": {"total_tokens": 1}})
+
+    class FakeHttpClient:
+        def post(self, url: str, *, headers: dict[str, str], json: dict, timeout: float) -> httpx.Response:
+            request = httpx.Request("POST", url, headers=headers, json=json)
+            response = handler(request)
+            response.request = request
+            return response
+
+    monkeypatch.setattr("backend.app.services.model_client.httpx.Client", lambda: FakeHttpClient())
+
+    response = client.post("/api/admin/model-config/writer/probe", json={"temporary_key": "temporary-only"})
+
+    assert response.status_code == 200
+    assert seen_authorization == ["Bearer temporary-only"]
+    assert not (tmp_path / "runtime" / "model_secrets.dpapi.json").exists()
+    assert "temporary-only" not in json.dumps(response.json(), ensure_ascii=False)

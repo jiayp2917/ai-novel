@@ -41,11 +41,20 @@ class ModelRouter:
         registry: ModelRegistry | None = None,
         settings: Settings | None = None,
         registry_path: Path | str = DEFAULT_REGISTRY_PATH,
+        use_runtime_overrides: bool = True,
     ) -> None:
         self.settings = settings or get_settings()
         self.registry = registry or ModelRegistry(registry_path)
+        self.use_runtime_overrides = use_runtime_overrides
 
     def route(self, role: str) -> ModelRoute:
+        if self.use_runtime_overrides:
+            from backend.app.services.model_config import ModelConfigService
+
+            override = ModelConfigService().route_for_role(role)
+            if override is not None:
+                return override
+
         candidates = self._candidates_for_role(role)
         if not candidates:
             raise ModelRouteNotFoundError(f"No enabled model found for role: {role}")

@@ -15,6 +15,7 @@ import type {
   Job,
   MemoryItem,
   ModelCallRecord,
+  ModelConfigPayload,
   ModelUsageReport,
   ModelRoutesPayload,
   ModelConstraints,
@@ -193,6 +194,13 @@ export function useModelRoutes() {
   return useQuery({
     queryKey: ['model-routes'],
     queryFn: () => apiRequest<ModelRoutesPayload>('/api/admin/model-routes'),
+  });
+}
+
+export function useModelConfig() {
+  return useQuery({
+    queryKey: ['model-config'],
+    queryFn: () => apiRequest<ModelConfigPayload>('/api/admin/model-config'),
   });
 }
 

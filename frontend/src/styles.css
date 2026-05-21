@@ -1496,6 +1496,22 @@ pre {
   background: var(--surface);
 }
 
+.inspector-section--fill {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.inspector-section--history {
+  padding: 12px;
+}
+
+.annotations-panel > .panel-header,
+.annotations-panel > .inspector-tabs {
+  flex: 0 0 auto;
+}
+
 .annotation-list {
   flex: 1;
   padding: 12px;
@@ -1511,6 +1527,73 @@ pre {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-elevated);
+}
+
+.route-list--config {
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+}
+
+.model-config-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.model-config-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.model-config-card__head div {
+  display: grid;
+  gap: 4px;
+}
+
+.model-config-card__head span:not(.chip) {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.model-config-summary,
+.model-config-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.model-config-summary div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.model-config-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-config-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-config-form__secret {
+  grid-column: 1 / -1;
+}
+
+.model-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .annotation-card {
@@ -3435,5 +3518,11 @@ textarea {
   .inspector {
     top: 102px;
     width: min(320px, calc(100vw - 64px));
+  }
+
+  .route-list--config,
+  .model-config-summary,
+  .model-config-form {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

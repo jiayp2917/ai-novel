@@ -5,20 +5,20 @@ import {
   useCostDashboard,
   useEvents,
   useModelCalls,
+  useModelConfig,
   useModelConstraints,
-  useModelRoutes,
   useModelUsageReport,
   usePublishDecisions,
   useSkills,
 } from '../hooks';
 import { useWorkbenchStore } from '../store';
-import type { EventRecord, ModelCallRecord, ProbeModelPayload, PublishDecisionRecord, SkillInfo } from '../types';
+import type { EventRecord, ModelCallRecord, ModelConfigRole, ProbeModelPayload, PublishDecisionRecord, SkillInfo } from '../types';
 import { ContextBudgetSection, QualityTrendSection } from './ModelQualitySections';
-import { assistantRoles, roleLabel, statusLabel, taskTypeLabel, usageSummary } from './modelViewUtils';
+import { roleLabel, statusLabel, taskTypeLabel, usageSummary } from './modelViewUtils';
 import { JobList } from './WorkflowActions';
 
 export function ModelsView() {
-  const routes = useModelRoutes();
+  const modelConfig = useModelConfig();
   const cost = useCostDashboard();
   const constraints = useModelConstraints();
   const modelCalls = useModelCalls();
@@ -28,15 +28,14 @@ export function ModelsView() {
   const skills = useSkills();
   const pushTask = useWorkbenchStore((state) => state.pushTask);
   const [probeResult, setProbeResult] = useState<ProbeModelPayload | null>(null);
-  const [probeConfirmed, setProbeConfirmed] = useState(false);
 
   const probeMutation = useMutation({
-    mutationFn: (role: string) =>
-      apiRequest<ProbeModelPayload>('/api/admin/probe-model', {
+    mutationFn: ({ role, temporaryKey }: { role: string; temporaryKey?: string }) =>
+      apiRequest<ProbeModelPayload>(`/api/admin/model-config/${role}/probe`, {
         method: 'POST',
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ temporary_key: temporaryKey || undefined }),
       }),
-    onMutate: (role) => pushTask({ label: 'AI 连通测试', status: 'running', detail: `正在测试 ${role}` }),
+    onMutate: ({ role }) => pushTask({ label: 'AI 连通测试', status: 'running', detail: `正在测试 ${roleLabel(role)}` }),
     onSuccess: (result) => {
       setProbeResult(result);
       pushTask({ label: 'AI 连通测试', status: 'succeeded', detail: `${roleLabel(result.role)} 可用。` });
@@ -104,46 +103,27 @@ export function ModelsView() {
       <section className="workflow-card models-section models-section--connectivity">
         <div className="section-title">
           <div>
-            <p className="eyebrow">模型连通</p>
-            <h2>按岗位测试 AI 助手是否可用</h2>
-            <p className="form-hint">连通测试会向供应商发送短请求，可能产生少量调用费用。</p>
+            <p className="eyebrow">AI 助手配置</p>
+            <h2>按用途配置模型、接口和密钥</h2>
+            <p className="form-hint">测试连接会发送一次很短的真实 AI 请求，可能产生少量费用。</p>
           </div>
         </div>
-        <label className="token-confirm">
-          <input type="checkbox" checked={probeConfirmed} onChange={(event) => setProbeConfirmed(event.target.checked)} />
-          我确认“连通测试”会调用真实 AI
-        </label>
-        <div className="route-list">
-          {assistantRoles.map(({ role, label }) => {
-            const route = routes.data?.routes?.[role];
-            const usable = route && !route.error;
-            return (
-              <article className="route-card" key={role}>
-                <div>
-                  <strong>{label}</strong>
-                  <span>{usable ? '已配置，可测试连通' : route?.error ?? '正在读取配置'}</span>
-                </div>
-                <details className="advanced-details">
-                  <summary>高级详情</summary>
-                  <small>provider/model：{route?.provider ?? '未识别'} / {route?.model ?? '未识别'}</small>
-                  <small>base_url：{route?.base_url ?? '暂无地址'}</small>
-                </details>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => probeMutation.mutate(role)}
-                  disabled={!probeConfirmed || probeMutation.isPending || Boolean(route?.error)}
-                >
-                  连通测试
-                </button>
-              </article>
-            );
-          })}
-          {routes.isLoading && <p className="muted">正在加载 AI 分工...</p>}
+        {modelConfig.data && <p className="form-hint">密钥状态：{modelConfig.data.secret_store.label}。</p>}
+        <div className="route-list route-list--config">
+          {modelConfig.data?.roles.map((config) => (
+            <ModelConfigCard
+              config={config}
+              key={config.role}
+              onProbe={(role, temporaryKey) => probeMutation.mutate({ role, temporaryKey })}
+              probePending={probeMutation.isPending}
+              pushTask={pushTask}
+            />
+          ))}
+          {modelConfig.isLoading && <p className="muted">正在加载 AI 助手配置...</p>}
         </div>
         {probeResult && (
           <details className="advanced-details" open>
-            <summary>查看本次测试详情</summary>
+            <summary>查看本次测试排错信息</summary>
             <pre className="json-preview">{JSON.stringify(probeResult, null, 2)}</pre>
           </details>
         )}
@@ -254,6 +234,145 @@ function StatusCard({ label, value, detail, tone = 'neutral' }: { label: string;
   );
 }
 
+type TaskPush = (task: { label: string; status: 'running' | 'succeeded' | 'failed'; detail: string }) => void;
+
+function ModelConfigCard({
+  config,
+  onProbe,
+  probePending,
+  pushTask,
+}: {
+  config: ModelConfigRole;
+  onProbe: (role: string, temporaryKey?: string) => void;
+  probePending: boolean;
+  pushTask: TaskPush;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [provider, setProvider] = useState(config.provider ?? '');
+  const [model, setModel] = useState(config.model ?? '');
+  const [baseUrl, setBaseUrl] = useState(config.base_url ?? '');
+  const [maxTokens, setMaxTokens] = useState(String(config.max_tokens ?? ''));
+  const [secret, setSecret] = useState('');
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest<{ saved: boolean }>(`/api/admin/model-config/${config.role}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          provider,
+          model,
+          base_url: baseUrl,
+          max_tokens: Number(maxTokens),
+          cheap: config.cheap,
+          supports_json: config.supports_json,
+        }),
+      });
+      if (secret.trim()) {
+        await apiRequest<{ saved: boolean }>(`/api/admin/model-config/${config.role}/secret`, {
+          method: 'POST',
+          body: JSON.stringify({ key: secret }),
+        });
+      }
+      return { saved: true };
+    },
+    onMutate: () => pushTask({ label: '保存模型配置', status: 'running', detail: `正在保存 ${config.label}` }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['model-config'] });
+      void queryClient.invalidateQueries({ queryKey: ['model-routes'] });
+      pushTask({ label: '保存模型配置', status: 'succeeded', detail: `${config.label} 已保存。` });
+      setEditing(false);
+      setSecret('');
+    },
+    onError: (error: Error) => pushTask({ label: '保存模型配置', status: 'failed', detail: error.message }),
+  });
+
+  const hasError = Boolean(config.error);
+  const secretLabel = config.secret?.label ?? '未知';
+  const statusText = hasError ? config.error : config.secret?.status === 'missing' ? '缺少密钥，配置后再测试' : '可测试连接';
+
+  return (
+    <article className={`route-card model-config-card ${hasError ? 'model-config-card--error' : ''}`}>
+      <div className="model-config-card__head">
+        <div>
+          <strong>{config.label}</strong>
+          <span>{config.purpose}</span>
+        </div>
+        <span className={`chip ${config.secret?.status === 'missing' || hasError ? 'danger' : 'ok'}`}>{statusText}</span>
+      </div>
+
+      <div className="model-config-summary">
+        <div><span>模型</span><strong>{config.model ?? '未配置'}</strong></div>
+        <div><span>接口地址</span><strong>{friendlyUrl(config.base_url)}</strong></div>
+        <div><span>密钥</span><strong>{secretLabel}</strong></div>
+        <div><span>配置来源</span><strong>{config.overridden ? '本机自定义' : '默认配置'}</strong></div>
+      </div>
+
+      {editing && (
+        <div className="model-config-form">
+          <label>
+            模型
+            <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="例如 kimi-k2.6" />
+          </label>
+          <label>
+            接口地址
+            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="例如 https://api.moonshot.cn/v1" />
+          </label>
+          <label>
+            供应商
+            <input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 kimi" />
+          </label>
+          <label>
+            输出上限
+            <input value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} inputMode="numeric" />
+          </label>
+          <label className="model-config-form__secret">
+            key：加密信息
+            <input
+              type="password"
+              value={secret}
+              onChange={(event) => setSecret(event.target.value)}
+              placeholder="留空则不修改已保存密钥"
+              autoComplete="new-password"
+            />
+          </label>
+        </div>
+      )}
+
+      <details className="advanced-details">
+        <summary>高级设置</summary>
+        <small>role：{config.role}</small>
+        <small>provider/model：{config.provider ?? '未识别'} / {config.model ?? '未识别'}</small>
+        <small>base_url：{config.base_url ?? '暂无地址'}</small>
+        <small>api_key_env：{config.api_key_env ?? '未识别'}</small>
+        <small>max_tokens：{config.max_tokens ?? '-'}</small>
+        <small>JSON 输出：{config.supports_json ? '支持' : '不支持'}</small>
+      </details>
+
+      <div className="model-config-actions">
+        <button className="secondary-button" type="button" onClick={() => setEditing((current) => !current)}>
+          {editing ? '收起编辑' : '编辑配置'}
+        </button>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => onProbe(config.role, editing && secret ? secret : undefined)}
+          disabled={probePending || hasError}
+        >
+          测试连接
+        </button>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => saveMutation.mutate()}
+          disabled={!editing || saveMutation.isPending || hasError}
+        >
+          {saveMutation.isPending ? '保存中...' : '保存配置'}
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function ModelCallRow({ call }: { call: ModelCallRecord }) {
   return (
     <div className={`observability-row status-${call.status}`} role="row">
@@ -325,6 +444,18 @@ function PublishCard({ decision }: { decision: PublishDecisionRecord }) {
       </details>
     </article>
   );
+}
+
+function friendlyUrl(value?: string): string {
+  if (!value) {
+    return '未配置';
+  }
+  try {
+    const url = new URL(value);
+    return url.hostname;
+  } catch {
+    return value;
+  }
 }
 
 function formatDate(value: string | null): string {

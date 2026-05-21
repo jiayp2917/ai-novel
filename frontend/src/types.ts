@@ -483,6 +483,39 @@ export type ModelRoutesPayload = {
   routes: Record<string, ModelRouteInfo>;
 };
 
+export type ModelSecretStatus = {
+  status: 'stored' | 'env' | 'missing';
+  label: string;
+  can_save: boolean;
+  env_name: string;
+};
+
+export type ModelConfigRole = {
+  role: string;
+  label: string;
+  purpose: string;
+  provider?: string;
+  provider_label?: string;
+  model?: string;
+  base_url?: string;
+  api_key_env?: string;
+  max_tokens?: number;
+  cheap?: boolean;
+  supports_json?: boolean;
+  overridden?: boolean;
+  default?: ModelRouteInfo & { provider_label?: string };
+  secret?: ModelSecretStatus;
+  error?: string;
+};
+
+export type ModelConfigPayload = {
+  roles: ModelConfigRole[];
+  secret_store: {
+    available: boolean;
+    label: string;
+  };
+};
+
 export type SkillInfo = {
   name: string;
   version: string;

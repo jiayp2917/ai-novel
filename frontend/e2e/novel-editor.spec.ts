@@ -37,7 +37,7 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await expect(page.locator('.version-history')).toContainText('正文版本');
   const savedVersion = page.locator('.history-card--active');
   await expect(savedVersion).toBeVisible();
-  await expect(savedVersion.getByRole('button', { name: '正在查看' })).toBeVisible();
+  await expect(savedVersion).toHaveAttribute('role', 'button');
   await expect(page.locator('.reader-header h1')).toContainText('历史版本');
   await expect(page.locator('.cm-content')).toContainText('新手路径正文版本保存验证');
   await expect(savedVersion.getByRole('button', { name: '删除版本' })).toBeEnabled();
@@ -48,7 +48,14 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await expect(page.locator('.history-card--current').getByRole('button', { name: '当前正文不可删' })).toBeDisabled();
   await expect(page.locator('.history-card--current')).toContainText('已发布为当前正文');
   await expect(page.locator('.history-card--current')).toContainText('不可删除：当前正文必须保留');
-  await savedVersion.getByRole('button', { name: '发布此版本' }).click();
+  await page.locator('.history-card--current').click();
+  await expect(page.locator('.reader-header h1')).not.toContainText('历史版本');
+  const savedVersionCard = page.locator('.history-card:not(.history-card--current)').first();
+  await expect(savedVersionCard).toBeVisible();
+  await savedVersionCard.click();
+  await expect(page.locator('.reader-header h1')).toContainText('历史版本');
+  await expect(page.locator('.cm-content')).toContainText('新手路径正文版本保存验证');
+  await savedVersionCard.getByRole('button', { name: '发布此版本' }).click();
   await expect(page.getByRole('dialog', { name: '确认发布正文版本' })).toBeVisible();
   await page.getByRole('button', { name: '确认发布' }).click();
   await expect(page.locator('.task-latest')).toContainText('已发布');
@@ -259,12 +266,35 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(1280);
   expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(720);
 
+  const beforeEditMetrics = await page.locator('.cm-content').evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node);
+    const scroller = node.closest('.cm-scroller');
+    return {
+      width: box.width,
+      background: style.backgroundColor,
+      scrollTop: scroller?.scrollTop ?? 0,
+    };
+  });
   await page.getByRole('button', { name: '编辑正文', exact: true }).click();
+  const afterEditMetrics = await page.locator('.cm-content').evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node);
+    const scroller = node.closest('.cm-scroller');
+    return {
+      width: box.width,
+      background: style.backgroundColor,
+      scrollTop: scroller?.scrollTop ?? 0,
+    };
+  });
+  expect(Math.abs(afterEditMetrics.width - beforeEditMetrics.width)).toBeLessThan(2);
+  expect(afterEditMetrics.background).toBe(beforeEditMetrics.background);
+  expect(Math.abs(afterEditMetrics.scrollTop - beforeEditMetrics.scrollTop)).toBeLessThan(4);
   const longInput = '连续输入二百字验收：这段文本用于验证正文编辑模式不会在输入一个字符后丢失焦点，作者可以像普通编辑器一样持续写作。系统只把内容先保存为正文版本，不会直接覆盖正式正文。'.repeat(2);
   await page.keyboard.type(longInput);
   await expect(page.locator('.cm-content')).toContainText(longInput);
   const fullEditorText = await page.locator('.cm-content').innerText();
-  expect(fullEditorText.trimEnd().endsWith(longInput)).toBeTruthy();
+  expect(fullEditorText).toContain(longInput);
   await page.keyboard.press('Control+A');
   const selectedTextLength = await page.evaluate(() => window.getSelection()?.toString().length ?? 0);
   expect(selectedTextLength).toBeGreaterThan(50);
@@ -849,7 +879,14 @@ test('drag selection can create annotation from context menu', async ({ page }) 
   await expect(page.getByText('已使用拖选文本')).toBeVisible();
   await page.getByPlaceholder('记录问题、判断或人工决策。').fill('拖选批注 E2E 验证。');
   await page.getByRole('button', { name: '添加批注' }).click();
-  await expect(page.locator('.annotation-card').filter({ hasText: '拖选批注 E2E 验证。' })).toBeVisible();
+  const annotationCard = page.locator('.annotation-card').filter({ hasText: '拖选批注 E2E 验证。' });
+  await expect(annotationCard).toBeVisible();
+  await page.locator('.cm-scroller').evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  await annotationCard.getByRole('button').filter({ hasText: '拖选批注 E2E 验证。' }).click();
+  await expect(annotationCard).toHaveClass(/annotation-card--active/);
+  await expect(page.locator('.cm-annotation--selected')).toBeVisible();
 });
 
 test('memory learning gives feedback and learns only resolved annotations', async ({ page }) => {

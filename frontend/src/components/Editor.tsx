@@ -135,9 +135,11 @@ type ChapterEditorProps = {
   searchIndex?: number;
   editable?: boolean;
   focusAtEndSignal?: number;
+  annotationJumpSignal?: number;
   onSelectionChange: (selection: SelectionRange | null) => void;
   onTextChange?: (text: string) => void;
   onContextMenu?: (menu: ContextMenuState) => void;
+  onAnnotationJumpFailure?: (message: string) => void;
 };
 
 export function ChapterEditor({
@@ -149,9 +151,11 @@ export function ChapterEditor({
   searchIndex = 0,
   editable = false,
   focusAtEndSignal = 0,
+  annotationJumpSignal = 0,
   onSelectionChange,
   onTextChange,
   onContextMenu,
+  onAnnotationJumpFailure,
 }: ChapterEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -159,10 +163,10 @@ export function ChapterEditor({
   const searchCompartmentRef = useRef(new Compartment());
   const readOnlyCompartmentRef = useRef(new Compartment());
   const editableCompartmentRef = useRef(new Compartment());
-  const callbacksRef = useRef({ onSelectionChange, onTextChange, onContextMenu });
+  const callbacksRef = useRef({ onSelectionChange, onTextChange, onContextMenu, onAnnotationJumpFailure });
   const skippedSearchForFocusSignalRef = useRef(0);
 
-  callbacksRef.current = { onSelectionChange, onTextChange, onContextMenu };
+  callbacksRef.current = { onSelectionChange, onTextChange, onContextMenu, onAnnotationJumpFailure };
 
   useLayoutEffect(() => {
     if (!hostRef.current || !content) {
@@ -257,36 +261,48 @@ export function ChapterEditor({
   }, [documentKey, editable, focusAtEndSignal, searchQuery, searchIndex]);
 
   useEffect(() => {
-    if (!content || selectedAnnotationId === null || !viewRef.current) {
+    if (selectedAnnotationId === null || !viewRef.current) {
       return;
     }
     const annotation = annotations.find((item) => item.id === selectedAnnotationId);
-    if (!annotation || annotation.status === 'needs_relocate') {
+    if (!annotation) {
       return;
     }
-    const from = codePointToUtf16Offset(content.text, annotation.range_start);
+    if (annotation.status === 'needs_relocate') {
+      callbacksRef.current.onAnnotationJumpFailure?.('这条批注的原文位置已经失效，请先使用“自动定位”或手动重定位。');
+      return;
+    }
+    const view = viewRef.current;
+    const visibleText = view.state.doc.toString();
+    let from = codePointToUtf16Offset(visibleText, annotation.range_start);
+    let to = codePointToUtf16Offset(visibleText, annotation.range_end);
+    const quoteText = annotation.quote_text?.trim();
+    const rangeText = from >= 0 && to > from && to <= visibleText.length ? visibleText.slice(from, to) : '';
+    if (!rangeText || (quoteText && rangeText !== annotation.quote_text)) {
+      const quoteIndex = quoteText ? visibleText.indexOf(annotation.quote_text) : -1;
+      if (quoteIndex >= 0) {
+        from = quoteIndex;
+        to = quoteIndex + annotation.quote_text.length;
+      }
+    }
+    if (from < 0 || to <= from || to > visibleText.length) {
+      callbacksRef.current.onAnnotationJumpFailure?.('当前正文里没有找到这条批注对应的原文，请先重定位批注。');
+      return;
+    }
     viewRef.current.dispatch({
-      selection: EditorSelection.range(from, codePointToUtf16Offset(content.text, annotation.range_end)),
+      selection: EditorSelection.range(from, to),
       effects: EditorView.scrollIntoView(from, { y: 'center' }),
     });
-  }, [annotations, content, selectedAnnotationId]);
+    view.focus();
+  }, [annotationJumpSignal, annotations, selectedAnnotationId]);
 
   useLayoutEffect(() => {
     if (!editable || !viewRef.current || focusAtEndSignal <= 0) {
       return;
     }
     const view = viewRef.current;
-    const end = view.state.doc.length;
     view.focus();
-    view.dispatch({ selection: EditorSelection.cursor(end) });
-    const frame = window.requestAnimationFrame(() => {
-      const nextEnd = view.state.doc.length;
-      view.focus();
-      view.dispatch({
-        selection: EditorSelection.cursor(nextEnd),
-        effects: EditorView.scrollIntoView(nextEnd, { y: 'end' }),
-      });
-    });
+    const frame = window.requestAnimationFrame(() => view.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [editable, focusAtEndSignal]);
 

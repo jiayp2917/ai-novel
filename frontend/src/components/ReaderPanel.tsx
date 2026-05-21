@@ -30,6 +30,7 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const selectedSourceFileId = useWorkbenchStore((state) => state.selectedSourceFileId);
   const openChapterTabIds = useWorkbenchStore((state) => state.openChapterTabIds);
   const selectedAnnotationId = useWorkbenchStore((state) => state.selectedAnnotationId);
+  const annotationJumpSignal = useWorkbenchStore((state) => state.annotationJumpSignal);
   const selectedChapterVersionId = useWorkbenchStore((state) => state.selectedChapterVersionId);
   const writingFullscreen = useWorkbenchStore((state) => state.writingFullscreen);
   const setRightPanelOpen = useWorkbenchStore((state) => state.setRightPanelOpen);
@@ -78,9 +79,9 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const activeText = draftActive ? draftText : activeContent?.text || '';
   const matchCount = searchMatchCount(activeText, searchQuery);
   const documentKey = content.data
-    ? `chapter:${content.data.id}:${selectedChapterVersionId ?? content.data.current_version_id ?? 'none'}:${draftActive ? 'draft' : 'source'}`
+    ? `chapter:${content.data.id}:${selectedChapterVersionId ?? content.data.current_version_id ?? 'none'}`
     : sourceContent.data
-      ? `source:${sourceContent.data.id}:${draftActive ? 'draft' : 'source'}`
+      ? `source:${sourceContent.data.id}`
       : 'empty';
   const viewingVersion = Boolean(selectedChapterVersionId && versionContent.data);
   const dirty = Boolean(activeContent && draftActive && draftText !== activeContent.text);
@@ -357,8 +358,10 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
           searchIndex={searchIndex}
           editable={editing}
           focusAtEndSignal={focusAtEndSignal}
+          annotationJumpSignal={annotationJumpSignal}
           onSelectionChange={setSelection}
           onTextChange={setDraftText}
+          onAnnotationJumpFailure={(message) => pushTask({ label: '定位批注', status: 'failed', detail: message })}
           onContextMenu={(menu) => {
             const placedMenu = placeContextMenu(menu);
             setContextMenu(placedMenu);

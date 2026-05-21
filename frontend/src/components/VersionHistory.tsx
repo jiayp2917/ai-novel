@@ -117,7 +117,11 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
                 active={selectedVersionId === version.id}
                 publishing={publishMutation.isPending && publishMutation.variables === version.id}
                 deleting={deleteMutation.isPending && deleteMutation.variables === version.id}
-                onPreview={() => setSelectedChapterVersionId(version.is_current ? null : version.id)}
+                onSelect={() => {
+                  if (version.can_preview) {
+                    setSelectedChapterVersionId(version.is_current ? null : version.id);
+                  }
+                }}
                 onPublish={() => handlePublish(version)}
                 onDelete={() => handleDelete(version)}
               />
@@ -152,7 +156,7 @@ function VersionCard({
   active,
   publishing,
   deleting,
-  onPreview,
+  onSelect,
   onPublish,
   onDelete,
 }: {
@@ -161,7 +165,7 @@ function VersionCard({
   active: boolean;
   publishing: boolean;
   deleting: boolean;
-  onPreview: () => void;
+  onSelect: () => void;
   onPublish: () => void;
   onDelete: () => void;
 }) {
@@ -185,7 +189,25 @@ function VersionCard({
   const previousVersion = previousByCreatedAt(version, versions);
 
   return (
-    <article className={version.is_current ? 'history-card history-card--current' : active ? 'history-card history-card--active' : 'history-card'}>
+    <article
+      className={version.is_current ? 'history-card history-card--current' : active ? 'history-card history-card--active' : 'history-card'}
+      onClick={() => {
+        if (version.can_preview) {
+          onSelect();
+        }
+      }}
+      onKeyDown={(event) => {
+        if (!version.can_preview || (event.key !== 'Enter' && event.key !== ' ')) {
+          return;
+        }
+        event.preventDefault();
+        onSelect();
+      }}
+      role="button"
+      tabIndex={version.can_preview ? 0 : -1}
+      aria-disabled={!version.can_preview}
+      aria-label={version.is_current ? '查看当前正文' : active ? '正在查看此版本' : `切换到版本 ${version.id}`}
+    >
       <div className="history-card__head">
         <div>
           <strong>{version.is_current ? '当前正文' : '历史版本'}</strong>
@@ -199,20 +221,33 @@ function VersionCard({
         <span><strong>发布状态</strong>{publishStatus}</span>
         <span><strong>删除说明</strong>{deleteReason}</span>
       </div>
-      <details className="version-advanced">
+      <details className="version-advanced" onClick={(event) => event.stopPropagation()}>
         <summary>排错信息</summary>
         <code>正文校验 {shortHash(version.body_hash)} · 文件校验 {shortHash(version.source_file_hash)}</code>
         <small>上一版本：{previousVersion ? `#${previousVersion.id} / ${formatDate(previousVersion.created_at)}` : '无'}</small>
       </details>
       {!version.can_preview && <small className="form-hint form-hint--error">该历史版本缺少可查看的正文内容，不能切换，只能保留记录或删除。</small>}
       <div className="history-actions">
-        <button className="secondary-button" type="button" onClick={onPreview} disabled={!version.can_preview}>
-          {version.is_current ? '查看当前正文' : active ? '正在查看' : '切换查看'}
-        </button>
-        <button className="secondary-button danger-button" type="button" onClick={onPublish} disabled={!version.can_publish || publishing}>
+        <button
+          className="secondary-button danger-button"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onPublish();
+          }}
+          disabled={!version.can_publish || publishing}
+        >
           {version.is_current ? '已是当前正文' : publishing ? '发布中...' : '发布此版本'}
         </button>
-        <button className="secondary-button danger-button" type="button" onClick={onDelete} disabled={!version.can_delete || deleting}>
+        <button
+          className="secondary-button danger-button"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+          disabled={!version.can_delete || deleting}
+        >
           {version.is_current ? '当前正文不可删' : deleting ? '删除中...' : '删除版本'}
         </button>
       </div>

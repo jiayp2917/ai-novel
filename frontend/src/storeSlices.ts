@@ -27,6 +27,7 @@ export const createNavigationSlice: SliceCreator = (set, get) => ({
         selectedChapterId: view === 'planning' ? null : state.selectedChapterId,
         selectedSourceFileId: view === 'writing' ? null : state.selectedSourceFileId,
         selectedAnnotationId: view === 'planning' || view === 'writing' ? null : state.selectedAnnotationId,
+        annotationJumpSignal: view === 'planning' || view === 'writing' ? state.annotationJumpSignal + 1 : state.annotationJumpSignal,
         selectedAnnotationIds: view === 'planning' || view === 'writing' ? [] : state.selectedAnnotationIds,
         draftAnnotationSelection: view === 'planning' || view === 'writing' ? undefined : state.draftAnnotationSelection,
         activeArtifactId: view === 'writing' || view === 'planning' ? state.activeArtifactId : null,
@@ -74,6 +75,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
           openChapterTabIds,
           recentChapterIds,
           selectedAnnotationId: null,
+          annotationJumpSignal: state.annotationJumpSignal + 1,
           selectedAnnotationIds: [],
           draftAnnotationSelection: undefined,
           activeArtifactId: null,
@@ -85,6 +87,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
         selectedSourceFileId: null,
         openChapterTabIds,
         selectedAnnotationId: null,
+        annotationJumpSignal: state.annotationJumpSignal + 1,
         selectedAnnotationIds: [],
         draftAnnotationSelection: undefined,
         activeArtifactId: null,
@@ -105,6 +108,7 @@ export const createDocumentSlice: SliceCreator = (set) => ({
       selectedSourceFileId: id,
       selectedChapterId: null,
       selectedAnnotationId: null,
+      annotationJumpSignal: 0,
       selectedAnnotationIds: [],
       draftAnnotationSelection: undefined,
       activeArtifactId: null,
@@ -135,9 +139,15 @@ export const createDocumentSlice: SliceCreator = (set) => ({
 
 export const createAnnotationSlice: SliceCreator = (set) => ({
   selectedAnnotationId: null,
+  annotationJumpSignal: 0,
   selectedAnnotationIds: [],
   draftAnnotationSelection: undefined,
   setSelectedAnnotationId: (id) => set({ selectedAnnotationId: id }),
+  jumpToAnnotation: (id) =>
+    set((state) => ({
+      selectedAnnotationId: id,
+      annotationJumpSignal: state.annotationJumpSignal + 1,
+    })),
   toggleAnnotationSelection: (id) =>
     set((state) => ({
       selectedAnnotationIds: state.selectedAnnotationIds.includes(id)

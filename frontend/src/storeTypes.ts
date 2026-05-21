@@ -7,6 +7,7 @@ export type WorkbenchState = {
   selectedSourceFileId: number | null;
   openChapterTabIds: number[];
   selectedAnnotationId: number | null;
+  annotationJumpSignal: number;
   selectedAnnotationIds: number[];
   draftAnnotationSelection: SelectionRange | null | undefined;
   activeArtifactId: number | null;
@@ -26,6 +27,7 @@ export type WorkbenchState = {
   setSelectedSourceFileId: (id: number | null) => void;
   closeChapterTab: (id: number) => void;
   setSelectedAnnotationId: (id: number | null) => void;
+  jumpToAnnotation: (id: number) => void;
   toggleAnnotationSelection: (id: number) => void;
   selectAnnotationForRevision: (id: number) => void;
   removeAnnotationFromSelection: (id: number) => void;

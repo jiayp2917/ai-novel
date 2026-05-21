@@ -28,6 +28,7 @@ export function AnnotationSidebar({
   const inspectorTab = useWorkbenchStore((state) => state.inspectorTab);
   const setInspectorTab = useWorkbenchStore((state) => state.setInspectorTab);
   const setSelectedAnnotationId = useWorkbenchStore((state) => state.setSelectedAnnotationId);
+  const jumpToAnnotation = useWorkbenchStore((state) => state.jumpToAnnotation);
   const toggleAnnotationSelection = useWorkbenchStore((state) => state.toggleAnnotationSelection);
   const setDraftAnnotationSelection = useWorkbenchStore((state) => state.setDraftAnnotationSelection);
   const selectAnnotationForRevision = useWorkbenchStore((state) => state.selectAnnotationForRevision);
@@ -174,7 +175,9 @@ export function AnnotationSidebar({
             updatingAnnotationId={updateMutation.variables?.annotation.id ?? null}
             deletingAnnotationId={deleteMutation.variables?.id ?? null}
             relocatingAnnotationId={relocateMutation.variables ?? null}
-            onSelect={setSelectedAnnotationId}
+            onSelect={(annotationId) => {
+              jumpToAnnotation(annotationId);
+            }}
             onToggleForRevision={toggleAnnotationSelection}
             onRelocate={(annotationId) => relocateMutation.mutate(annotationId)}
             onUpdate={(annotation, payload) => updateMutation.mutate({ annotation, payload })}

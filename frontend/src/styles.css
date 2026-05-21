@@ -2521,6 +2521,17 @@ textarea {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-elevated);
+  cursor: pointer;
+}
+
+.history-card[aria-disabled="true"] {
+  cursor: default;
+}
+
+.history-card:hover,
+.history-card:focus-visible {
+  border-color: var(--brand);
+  outline: none;
 }
 
 .history-card--current {

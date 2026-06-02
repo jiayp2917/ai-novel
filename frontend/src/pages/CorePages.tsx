@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AnnotationSidebar } from '../components/Annotations';
 import { CatalogPanel } from '../components/CatalogPanel';
 import { MemoryView } from '../components/MemoryView';
@@ -14,12 +15,22 @@ export function WritingPage() {
   const rightPanelOpen = useWorkbenchStore((state) => state.rightPanelOpen);
   const catalogPanelOpen = useWorkbenchStore((state) => state.catalogPanelOpen);
   const writingFullscreen = useWorkbenchStore((state) => state.writingFullscreen);
+  const setRightPanelOpen = useWorkbenchStore((state) => state.setRightPanelOpen);
+  const setCatalogPanelOpen = useWorkbenchStore((state) => state.setCatalogPanelOpen);
   const shellClassName = [
     'editor-shell',
     rightPanelOpen && !writingFullscreen ? '' : 'inspector-hidden',
     catalogPanelOpen && !writingFullscreen ? '' : 'catalog-hidden',
     writingFullscreen ? 'writing-fullscreen' : '',
   ].filter(Boolean).join(' ');
+
+  useEffect(() => {
+    if (!window.matchMedia('(max-width: 520px)').matches) {
+      return;
+    }
+    setCatalogPanelOpen(false);
+    setRightPanelOpen(false);
+  }, [setCatalogPanelOpen, setRightPanelOpen]);
 
   return (
     <section className="page active page-editor">
@@ -43,10 +54,13 @@ export function PlanningPage() {
   const sourceContent = useSourceFileContent(selectedSourceFileId);
 
   return (
-    <section className="page active">
-      <h2 className="page-title">AI 素材库</h2>
-      <p className="page-subtitle">这里只整理系统设定、小说设定和章纲，供 AI 理解作品背景。正文编辑请回到写作页。</p>
-      <div className="outline-layout">
+    <section className="page active page-stack">
+      <header className="page-intro">
+        <p className="eyebrow">设定与章纲</p>
+        <h2 className="page-title">AI 素材库</h2>
+        <p className="page-subtitle">这里只整理系统设定、小说设定和章纲，供 AI 理解作品背景。正文编辑请回到写作页。</p>
+      </header>
+      <div className="outline-layout page-section">
         <aside className="card catalog-card"><CatalogPanel variant="library" /></aside>
         <div className="card">
           <div className="card-head">
@@ -72,7 +86,7 @@ export function PlanningPage() {
 
 export function PipelinePage() {
   return (
-    <section className="page active">
+    <section className="page active page-stack">
       <PipelineView />
     </section>
   );
@@ -84,8 +98,11 @@ export function AiWorkbenchPage() {
 
   return (
     <section className="page active ai-workbench-page">
-      <h2 className="page-title">AI 工作台</h2>
-      <p className="page-subtitle">集中处理草稿检查、AI 修订、记忆整理与写回确认。人工写作不强制走 AI 检查。</p>
+      <header className="page-intro">
+        <p className="eyebrow">草稿检查与安全写回</p>
+        <h2 className="page-title">AI 工作台</h2>
+        <p className="page-subtitle">按“选择章节或草稿 → 检查 → 查看改动 → 确认写回”的顺序处理。人工写作不强制走 AI 检查。</p>
+      </header>
       <div className="ai-workbench-layout">
         <div className="ai-main-row">
           <aside className="card catalog-card ai-catalog-card"><CatalogPanel variant="ai" /></aside>
@@ -122,22 +139,25 @@ export function AiWorkbenchPage() {
 
 export function SettingsModelsPage() {
   return (
-    <section className="page active">
-      <h2 className="page-title">设置/模型</h2>
-      <p className="page-subtitle">管理作品路径、模型连通性、调用统计和成本提示。高级信息默认留在这里。</p>
-      <div className="grid">
-        <div className="card span-5">
-          <div className="card-head"><h2>作品列表 / 最近打开</h2><span className="chip blue">本地</span></div>
+    <section className="page active page-stack settings-page">
+      <header className="page-intro">
+        <p className="eyebrow">本机配置</p>
+        <h2 className="page-title">设置/模型</h2>
+        <p className="page-subtitle">先管理作品路径和 AI 助手是否可用；调用记录、事件和高级排错信息放在下方分区。</p>
+      </header>
+      <div className="settings-dashboard-grid">
+        <section className="card settings-workspace-card">
+          <div className="card-head"><h2>工作区</h2><span className="chip blue">本地</span></div>
           <div className="pad">
             <WorkspacePanel />
           </div>
-        </div>
-        <div className="card span-7">
-          <div className="card-head"><h2>模型与调用质量</h2><span className="chip warn">高级</span></div>
+        </section>
+        <section className="card settings-model-card">
+          <div className="card-head"><h2>AI 助手配置与运行状态</h2><span className="chip warn">可配置</span></div>
           <div className="pad">
             <ModelsView />
           </div>
-        </div>
+        </section>
       </div>
     </section>
   );

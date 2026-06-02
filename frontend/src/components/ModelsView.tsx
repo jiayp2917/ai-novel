@@ -72,18 +72,12 @@ export function ModelsView() {
 
   return (
     <main className="content-view models-view">
-      <div className="view-header">
-        <div>
-          <p className="eyebrow">设置 / 模型</p>
-          <h1>模型状态、任务和排错信息</h1>
-        </div>
-      </div>
-
-      <section className="workflow-card models-section models-section--workspace">
+      <section className="workflow-card models-section models-section--overview">
         <div className="section-title">
           <div>
-            <p className="eyebrow">工作区</p>
-            <h2>AI 输出去向与安全边界</h2>
+            <p className="eyebrow">运行概览</p>
+            <h2>AI 助手当前是否可用</h2>
+            <p className="form-hint">AI 输出去向与安全边界：写作、检查、修订和记忆整理各司其职，正文写回仍需要人工确认。</p>
           </div>
           <span className="chip safe">本地运行</span>
         </div>
@@ -129,14 +123,17 @@ export function ModelsView() {
         )}
       </section>
 
-      <QualityTrendSection report={usageReport.data} isLoading={usageReport.isLoading} />
-      <ContextBudgetSection report={usageReport.data} isLoading={usageReport.isLoading} />
+      <div className="settings-metrics-grid">
+        <QualityTrendSection report={usageReport.data} isLoading={usageReport.isLoading} />
+        <ContextBudgetSection report={usageReport.data} isLoading={usageReport.isLoading} />
+      </div>
 
       <section className="workflow-card models-section models-section--calls">
         <div className="section-title">
           <div>
             <p className="eyebrow">最近调用</p>
-            <h2>高级观测，本地记录仅供排错</h2>
+            <h2>AI 请求记录</h2>
+            <p className="form-hint">默认展示时间、分工和结果；供应商、用量和原始细节只在排错信息里展开。</p>
           </div>
           <button className="secondary-button" type="button" onClick={() => modelCalls.refetch()}>
             刷新
@@ -156,7 +153,7 @@ export function ModelsView() {
         </div>
       </section>
 
-      <div className="split-grid models-bottom-grid">
+      <div className="models-bottom-grid">
         <section className="workflow-card models-section models-section--tasks">
           <div className="section-title">
             <div>
@@ -174,11 +171,11 @@ export function ModelsView() {
         <section className="workflow-card models-section models-section--skills">
           <div className="section-title">
             <div>
-              <p className="eyebrow">Skills / 事件</p>
+              <p className="eyebrow">高级日志 / Skills</p>
               <h2>规则片段与运行事件</h2>
             </div>
           </div>
-          <details className="advanced-details" open>
+          <details className="advanced-details">
             <summary>查看 Skills</summary>
             <div className="skill-grid">
               {skills.data?.skills.map((skill) => <SkillCard skill={skill} key={skill.path} />)}

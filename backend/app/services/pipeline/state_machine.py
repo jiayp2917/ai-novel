@@ -33,6 +33,9 @@ class PipelineState(str, Enum):
 
 TERMINAL_STATES = {
     PipelineState.DONE.value,
+    PipelineState.APPROVED.value,
+    PipelineState.PUBLISHED.value,
+    PipelineState.SUMMARIZED.value,
     PipelineState.MANUAL_REQUIRED.value,
     PipelineState.FAILED_TERMINAL.value,
 }
@@ -135,16 +138,11 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     PipelineState.APPROVED.value: {
         PipelineState.PUBLISHED.value,
         PipelineState.DONE.value,
-        PipelineState.PAUSED.value,
         PipelineState.MANUAL_REQUIRED.value,
-        PipelineState.FAILED_TERMINAL.value,
     },
     PipelineState.PUBLISHED.value: {
         PipelineState.SUMMARIZED.value,
         PipelineState.DONE.value,
-        PipelineState.PAUSED.value,
-        PipelineState.FAILED_RETRYABLE.value,
-        PipelineState.FAILED_TERMINAL.value,
     },
     PipelineState.SUMMARIZED.value: {PipelineState.DONE.value},
     PipelineState.PAUSED.value: {

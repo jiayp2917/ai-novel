@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import get_settings
 from backend.app.core.file_utils import safe_write_text
 from backend.app.db.models import Chapter, Job
 from backend.app.services.workspace import ensure_workspace_runtime_subdir, workspace_runtime_root
@@ -73,6 +74,20 @@ TASK_LABELS = {
 
 FINISHED_CHILD_STATUSES = {"approved", "published", "summarized", "done"}
 PROBLEM_CHILD_STATUSES = {"manual_required", "failed_terminal", "failed_retryable", "paused_budget"}
+MUTABLE_CHILD_STATUSES = {
+    "planned",
+    "queued",
+    "running",
+    "context_built",
+    "draft_generated",
+    "local_validated",
+    "reviewed",
+    "fixing",
+    "paused",
+    "paused_budget",
+    "failed_retryable",
+}
+DIRECT_PUBLISH_ERROR = "自动流水线当前只允许预演，不直接写回正文。请到 AI 工作台确认写回。"
 
 
 class PipelineRunError(ValueError):
@@ -95,6 +110,8 @@ class PipelineRunService:
         max_fix_rounds: int = 2,
         dry_run: bool = True,
     ) -> dict[str, Any]:
+        if not dry_run and not _direct_publish_allowed():
+            raise PipelineRunError(DIRECT_PUBLISH_ERROR)
         if mode not in PIPELINE_RUN_MODES:
             raise PipelineRunError("Unsupported pipeline mode")
         if max_fix_rounds < 0 or max_fix_rounds > 5:
@@ -401,7 +418,7 @@ class PipelineRunService:
         job = self._run(run_id)
         self.machine.pause(job)
         for child in self._child_jobs(job):
-            if child.status in {"planned", "queued", "running", "context_built", "draft_generated", "local_validated", "reviewed", "fixing", "approved", "published"}:
+            if child.status in MUTABLE_CHILD_STATUSES:
                 self._transition_child_if_allowed(child, PipelineState.PAUSED, error="Paused by user")
         return self.serialize(job)
 
@@ -427,7 +444,7 @@ class PipelineRunService:
             raise PipelineRunError(f"Run cannot be cancelled from {job.status}")
         self.machine.transition(job, PipelineState.FAILED_TERMINAL, error="Cancelled by user")
         for child in self._child_jobs(job):
-            if child.status not in {"done", "manual_required", "failed_terminal"}:
+            if child.status in MUTABLE_CHILD_STATUSES:
                 self._transition_child_if_allowed(child, PipelineState.FAILED_TERMINAL, error="Cancelled by user")
         self._ensure_report(job)
         return self.serialize(job)
@@ -654,3 +671,8 @@ def _collect_int_result_values(child_tasks: list[dict[str, Any]], key: str) -> l
         if isinstance(result, dict) and isinstance(result.get(key), int):
             values.append(result[key])
     return values
+
+
+def _direct_publish_allowed() -> bool:
+    settings = get_settings()
+    return settings.enable_test_support or settings.allow_pipeline_direct_publish

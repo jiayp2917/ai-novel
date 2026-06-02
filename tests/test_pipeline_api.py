@@ -7,17 +7,19 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
-from backend.app.db.models import Artifact, Chapter, Job, ModelCall, PublishDecision, Review, SourceFile
+from backend.app.db.models import Artifact, Chapter, ChapterVersion, Job, ModelCall, PublishDecision, Review, SourceFile
 from backend.app.db.session import get_engine, reset_engine
 from backend.app.main import app
 from backend.app.repositories import Repository
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.pipeline.fixer import FixerService
-from backend.app.services.pipeline.runs import PipelineRunService
+from backend.app.services.pipeline.executor import PipelineTaskExecutor
+from backend.app.services.pipeline.runs import DIRECT_PUBLISH_ERROR, PipelineRunError, PipelineRunService
 from backend.app.services.pipeline.state_machine import PipelineState, PipelineStateMachine
 from backend.app.services.worker import JobWorker
 from backend.tools.sandbox_pipeline_smoke import main as sandbox_pipeline_main
 from backend.tools.sandbox_pipeline_smoke import create_workspace, SmokeError
+from backend.tools.sandbox_publish_smoke import _is_sandbox_workspace
 
 
 class UnexpectedQuickFixModel:
@@ -195,6 +197,112 @@ def test_pipeline_run_api_allows_direct_publish_with_advanced_flag(tmp_path, mon
 
     assert response.status_code == 200
     assert response.json()["payload"]["dry_run"] is False
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_run_service_rejects_direct_publish_without_advanced_flag(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    monkeypatch.delenv("ALLOW_PIPELINE_DIRECT_PUBLISH", raising=False)
+    monkeypatch.delenv("ENABLE_TEST_SUPPORT", raising=False)
+    get_settings.cache_clear()
+
+    with Session(get_engine()) as session:
+        with pytest.raises(PipelineRunError, match=DIRECT_PUBLISH_ERROR):
+            PipelineRunService(session).create_run(
+                start_chapter=1,
+                end_chapter=1,
+                mode="full_auto",
+                dry_run=False,
+            )
+
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_pipeline_executor_blocks_non_dry_run_publish_without_advanced_flag(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    monkeypatch.delenv("ALLOW_PIPELINE_DIRECT_PUBLISH", raising=False)
+    monkeypatch.delenv("ENABLE_TEST_SUPPORT", raising=False)
+    get_settings.cache_clear()
+    chapter_text = "# 第001章 First\nBody."
+    chapter_file = tmp_path / "content" / "chapters" / "book.md"
+    chapter_file.parent.mkdir(parents=True, exist_ok=True)
+    chapter_file.write_text(chapter_text, encoding="utf-8")
+
+    with Session(get_engine()) as session:
+        source = Repository(session, SourceFile).create(
+            {
+                "path": "chapters/book.md",
+                "kind": "chapters",
+                "sha256": "source-hash",
+                "mtime": 1.0,
+                "size": len(chapter_text),
+                "active": True,
+            }
+        )
+        chapter = Repository(session, Chapter).create(
+            {
+                "chapter_no": 1,
+                "title": "First",
+                "source_file_id": source.id,
+                "range_start": 0,
+                "range_end": len(chapter_text),
+                "active": True,
+            }
+        )
+        version = ChapterVersion(
+            chapter_id=chapter.id,
+            source_file_id=source.id,
+            body_hash="b" * 64,
+            source_file_hash=source.sha256,
+            title=chapter.title,
+            range_start=chapter.range_start,
+            range_end=chapter.range_end,
+        )
+        session.add(version)
+        session.flush()
+        chapter.current_version_id = version.id
+        artifact = ArtifactStore(session).save_text(
+            kind="candidate",
+            text="# 第001章 First\nChanged body.",
+            metadata={"task_type": "pipeline_publish_guard"},
+            base_chapter=chapter,
+        )
+        session.add(
+            Review(
+                artifact_id=artifact.id,
+                passed=True,
+                issues_json="[]",
+                evidence_count=0,
+                manual_required=False,
+                candidate_hash=artifact.sha256,
+                base_source_file_hash=artifact.base_source_file_hash,
+                base_chapter_version_id=artifact.base_chapter_version_id,
+            )
+        )
+        job = Repository(session, Job).create(
+            {
+                "type": "publish_chapter_candidate",
+                "status": "running",
+                "payload_json": json.dumps({"chapter_no": 1, "artifact_id": artifact.id, "dry_run": False}, ensure_ascii=False),
+                "locked_chapter_id": chapter.id,
+                "locked_source_file_id": source.id,
+            }
+        )
+        session.commit()
+
+        result = PipelineTaskExecutor(session).run_job(job.id)
+
+        assert result["manual_required"] is True
+        assert result["published"] is False
+        stored = session.get(Job, job.id)
+        assert stored is not None
+        assert stored.status == "manual_required"
+        assert stored.error == DIRECT_PUBLISH_ERROR
+        assert session.scalar(select(PublishDecision)) is None
+        assert chapter_file.read_text(encoding="utf-8") == chapter_text
+
     get_settings.cache_clear()
     reset_engine()
 
@@ -648,6 +756,48 @@ def test_pipeline_run_marks_downstream_manual_when_dependency_needs_manual(tmp_p
     reset_engine()
 
 
+def test_pipeline_run_pause_and_cancel_preserve_finished_child_tasks(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    with Session(get_engine()) as session:
+        run = PipelineRunService(session).create_run(
+            start_chapter=1,
+            end_chapter=1,
+            mode="full_auto",
+            dry_run=True,
+        )
+        child_ids = [task["id"] for task in run["child_tasks"]]
+        finished_statuses = ["done", "approved", "published", "summarized"]
+        for child_id, status in zip(child_ids[:4], finished_statuses):
+            child = session.get(Job, child_id)
+            assert child is not None
+            child.status = status
+        session.commit()
+
+        paused = PipelineRunService(session).pause(run["id"])
+
+        assert paused["status"] == "paused"
+        paused_statuses = {task["id"]: task["status"] for task in paused["child_tasks"]}
+        for child_id, status in zip(child_ids[:4], finished_statuses):
+            assert paused_statuses[child_id] == status
+        assert all(paused_statuses[child_id] == "paused" for child_id in child_ids[4:])
+
+        cancelled = PipelineRunService(session).cancel(run["id"])
+
+        assert cancelled["status"] == "failed_terminal"
+        cancelled_statuses = {task["id"]: task["status"] for task in cancelled["child_tasks"]}
+        for child_id, status in zip(child_ids[:4], finished_statuses):
+            assert cancelled_statuses[child_id] == status
+        assert all(cancelled_statuses[child_id] == "failed_terminal" for child_id in child_ids[4:])
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_sandbox_pipeline_smoke_refuses_to_reset_plain_runtime(tmp_path) -> None:
     with pytest.raises(SmokeError, match="non-sandbox"):
         create_workspace(tmp_path / "runtime", 1)
+
+
+def test_sandbox_publish_smoke_workspace_guard_requires_sandbox_name(tmp_path) -> None:
+    assert _is_sandbox_workspace(tmp_path / "sandbox_workspace") is True
+    assert _is_sandbox_workspace(tmp_path / "runtime" / "sandbox_publish_workspace") is True
+    assert _is_sandbox_workspace(tmp_path / "real_novel_workspace") is False

@@ -21,7 +21,11 @@ def main() -> int:
     parser.add_argument("--chapter-no", type=int, default=2)
     args = parser.parse_args()
 
-    set_active_workspace(Path(args.workspace))
+    workspace = Path(args.workspace).resolve()
+    if not _is_sandbox_workspace(workspace):
+        raise SystemExit("Refusing to publish smoke test in a non-sandbox workspace. Use a path containing 'sandbox'.")
+
+    set_active_workspace(workspace)
     with get_session_local()() as session:
         scan = LibraryScanner(session).scan()
         memory = MemoryService(session).rebuild()
@@ -71,6 +75,10 @@ def main() -> int:
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["published"].get("published") and report["source_contains_marker"] else 1
+
+
+def _is_sandbox_workspace(workspace: Path) -> bool:
+    return "sandbox" in workspace.name.lower()
 
 
 if __name__ == "__main__":

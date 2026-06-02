@@ -9,7 +9,7 @@ from backend.app.services.annotations import NotFoundError
 from backend.app.services.pipeline.fixer import FixerService
 from backend.app.services.pipeline.planner import PipelineTaskType
 from backend.app.services.pipeline.reviewer import ReviewerService
-from backend.app.services.pipeline.runs import PipelineRunService
+from backend.app.services.pipeline.runs import DIRECT_PUBLISH_ERROR, PipelineRunService, _direct_publish_allowed
 from backend.app.services.pipeline.state_machine import PipelineState, PipelineStateMachine, job_payload, job_result
 from backend.app.services.pipeline.summarizer import SummarizerService
 from backend.app.services.pipeline.writer import WriterService
@@ -156,6 +156,16 @@ class PipelineTaskExecutor:
                 result_updates=result,
                 payload_updates={"execution": "executed"},
                 error=None,
+            )
+            return result
+        if not _direct_publish_allowed():
+            result = {"artifact_id": artifact_id, "dry_run": False, "published": False, "manual_required": True}
+            self.machine.transition(
+                job,
+                PipelineState.MANUAL_REQUIRED,
+                result_updates=result,
+                payload_updates={"execution": "blocked"},
+                error=DIRECT_PUBLISH_ERROR,
             )
             return result
         result = ReviewPublishService(self.session).publish_artifact(artifact_id, approved_by_user=True)

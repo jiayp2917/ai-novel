@@ -1,9 +1,11 @@
 from pathlib import Path
 
+import pytest
+
 from backend.app.core.config import get_settings
 from backend.app.db.models import Job, Review
 from backend.app.db.session import reset_engine
-from backend.tools.production_pipeline_validate import ValidationOptions, _chapter_results, run_validation
+from backend.tools.production_pipeline_validate import ValidationOptions, _chapter_results, _source_hashes, run_validation
 from backend.tools.sandbox_pipeline_smoke import FakePipelineModelClient, create_workspace
 
 
@@ -79,6 +81,51 @@ def test_production_pipeline_validate_stops_on_consecutive_failures(tmp_path, mo
     assert report["published_count"] == 0
     get_settings.cache_clear()
     reset_engine()
+
+
+def test_source_hashes_tracks_direct_content_layout(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    (workspace / "settings").mkdir(parents=True)
+    (workspace / "outlines").mkdir(parents=True)
+    (workspace / "chapters").mkdir(parents=True)
+    (workspace / "settings" / "world.md").write_text("# 设定\nA", encoding="utf-8")
+    (workspace / "outlines" / "outline.md").write_text("# 章纲\nB", encoding="utf-8")
+    (workspace / "chapters" / "book.md").write_text("# 第001章 First\nC", encoding="utf-8")
+
+    hashes = _source_hashes(workspace)
+
+    assert set(hashes) == {"settings/world.md", "outlines/outline.md", "chapters/book.md"}
+
+
+def test_source_hashes_tracks_nested_content_layout(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    (workspace / "content" / "settings").mkdir(parents=True)
+    (workspace / "content" / "chapters").mkdir(parents=True)
+    (workspace / "content" / "settings" / "world.md").write_text("# 设定\nA", encoding="utf-8")
+    (workspace / "content" / "chapters" / "book.md").write_text("# 第001章 First\nC", encoding="utf-8")
+
+    hashes = _source_hashes(workspace)
+
+    assert set(hashes) == {"content/settings/world.md", "content/chapters/book.md"}
+
+
+def test_production_pipeline_validate_rejects_workspace_without_tracked_sources(tmp_path) -> None:
+    workspace = tmp_path / "empty_workspace"
+    workspace.mkdir()
+
+    with pytest.raises(ValueError, match="No workspace source files were tracked"):
+        run_validation(
+            ValidationOptions(
+                workspace=workspace,
+                start_chapter=1,
+                end_chapter=1,
+                mode="full_dry_run",
+                key_file=tmp_path / "missing-key.txt",
+                max_iterations=50,
+                max_role_failure_rate=0.30,
+                max_consecutive_chapter_failures=2,
+            )
+        )
 
 
 def test_chapter_results_deduplicates_reviews_when_artifact_appears_in_multiple_jobs() -> None:

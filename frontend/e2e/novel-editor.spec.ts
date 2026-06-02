@@ -8,7 +8,7 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await page.evaluate(() => window.localStorage.clear());
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: '首页工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '今天从哪里继续' })).toBeVisible();
   await expect(page.getByText('小说编辑器').first()).toBeVisible();
 
   await switchWorkspace(page);
@@ -130,6 +130,9 @@ test('core views remain separated and writing layout does not use bottom overlay
   }
   await settingsEntry(page).click();
   await expect(page.locator('.crumb')).toContainText('设置/模型');
+  await expect(page.locator('.settings-dashboard-grid')).toBeVisible();
+  await expect(page.locator('.settings-workspace-card')).toContainText('工作区');
+  await expect(page.locator('.settings-model-card')).toContainText('AI 助手配置与运行状态');
   await expect(mainNav(page, '设置/模型')).toHaveCount(0);
   await expect(page.locator('.side-note')).toHaveCount(0);
   await expect(page.locator('.top-actions').getByRole('button', { name: /^工作区$/ })).toHaveCount(0);
@@ -193,12 +196,11 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   await expect(page.locator('.chapter-row').filter({ hasText: '002' })).toHaveCount(1);
   await page.getByPlaceholder('章号或标题').fill('');
 
-  const outlineToggle = page.locator('.catalog-toggle').filter({ hasText: '章纲' });
-  await expect(outlineToggle).toHaveAttribute('aria-expanded', 'false');
-  await outlineToggle.click();
-  await expect(outlineToggle).toHaveAttribute('aria-expanded', 'true');
-  await outlineToggle.click();
-  await expect(outlineToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.page.active .catalog-toggle').filter({ hasText: '系统设定' })).toHaveCount(0);
+  await expect(page.locator('.page.active .catalog-toggle').filter({ hasText: '小说设定' })).toHaveCount(0);
+  await expect(page.locator('.page.active .catalog-toggle').filter({ hasText: '章纲' })).toHaveCount(0);
+  await expect(page.locator('.page.active .source-row').filter({ hasText: '01-设定' })).toHaveCount(0);
+  await expect(page.locator('.page.active .source-row').filter({ hasText: '03-章纲' })).toHaveCount(0);
 
   const volumeToggle = page.locator('.volume-title').first();
   await expect(volumeToggle).toBeVisible();
@@ -689,12 +691,15 @@ test('model task page shows quality trends and context budget warnings', async (
 
   await page.reload();
   await openModelsView(page);
+  await expect(page.locator('.settings-dashboard-grid')).toBeVisible();
+  await expect(page.locator('.settings-metrics-grid')).toBeVisible();
   await expect(page.locator('.quality-grid')).toBeVisible();
-  await expect(page.locator('.models-section--workspace')).toContainText('AI 输出去向与安全边界');
+  await expect(page.locator('.models-section--overview')).toContainText('AI 助手当前是否可用');
+  await expect(page.locator('.models-section--overview')).toContainText('AI 输出去向与安全边界');
   await expect(page.locator('.models-section--connectivity')).toContainText('AI 助手配置');
   await expect(page.locator('.models-section--connectivity')).toContainText('按用途配置模型、接口和密钥');
   await expect(page.locator('.models-section--calls')).toContainText('最近调用');
-  await expect(page.locator('.models-section--skills')).toContainText('Skills / 事件');
+  await expect(page.locator('.models-section--skills')).toContainText('高级日志 / Skills');
   await expect(page.locator('.quality-card')).toHaveCount(3);
   await expect(page.locator('.quality-card').nth(0)).toContainText('1');
   await expect(page.locator('.quality-card').nth(1)).toContainText('2000-2600');
@@ -716,7 +721,7 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(writerConfigCard.getByPlaceholder('留空则不修改已保存密钥')).toBeVisible();
   await expect(writerConfigCard.getByRole('button', { name: '保存配置' })).toBeEnabled();
   await expect(writerConfigCard.getByRole('button', { name: '测试连接' })).toBeVisible();
-  await expect(page.getByText('本地记录仅供排错')).toBeVisible();
+  await expect(page.getByText('供应商、用量和原始细节只在排错信息里展开')).toBeVisible();
   await page.getByText('查看 Skills').click();
   await expect(page.locator('.skill-card').first()).toContainText(/参与最近一次记录的上下文|最近一次记录的上下文未使用/);
   await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(2);

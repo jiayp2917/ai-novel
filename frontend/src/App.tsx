@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TaskPanel } from './components/TaskPanel';
-import { useCostDashboard, useHealth } from './hooks';
+import { useHealth } from './hooks';
 import { DashboardPage } from './pages/DashboardPage';
 import { AiWorkbenchPage, PipelinePage, PlanningPage, SettingsModelsPage, WritingPage } from './pages/CorePages';
 import { useWorkbenchStore } from './store';
@@ -31,11 +31,9 @@ export function App() {
   const theme = useWorkbenchStore((state) => state.theme);
   const toggleTheme = useWorkbenchStore((state) => state.toggleTheme);
   const health = useHealth();
-  const cost = useCostDashboard();
   const workspaceRoot = health.data?.workspace?.root ?? health.data?.content_root ?? '未连接工作区';
   const workspaceLabel = shortWorkspaceLabel(workspaceRoot);
   const themeShortLabel = theme === 'bright' ? '主题1' : '主题2';
-  const showCallSummary = activeView === 'settings';
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -86,7 +84,6 @@ export function App() {
             >
               当前工作区：{workspaceLabel}
             </button>
-            {showCallSummary && <span className="chip calls-chip">AI 用量 {cost.data?.today_model_calls ?? 0} 次</span>}
             <button
               className="btn theme-switch theme-switch--compact"
               type="button"
@@ -97,7 +94,6 @@ export function App() {
               {themeShortLabel}
               <span>切换为{themeLabels[nextTheme(theme)]}</span>
             </button>
-            <button className="btn primary" type="button" onClick={() => setActiveView('ai')}>AI 工作台</button>
           </div>
         </header>
         <TaskPanel compact={activeView === 'writing'} />

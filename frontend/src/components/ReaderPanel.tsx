@@ -63,6 +63,12 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const catalogStatus = useCatalogStatus();
   const chapterAnnotations = useAnnotations(selectedChapterId);
   const sourceAnnotations = useSourceAnnotations(selectedSourceFileId);
+  const isUnparsedChapterSource = Boolean(
+    sourceContent.data
+    && sourceContent.data.kind === 'chapters'
+    && (catalogStatus.data?.unparsed_chapter_files ?? []).includes(sourceContent.data.path),
+  );
+  const canShowSourceContent = variant !== 'writing' || isUnparsedChapterSource;
   const activeContent = versionContent.data
     ? {
         ...content.data,
@@ -71,27 +77,34 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         text: versionContent.data.text,
         offset_unit: 'python_code_point' as const,
       }
-    : content.data ?? sourceContent.data;
-  const activeAnnotations = selectedChapterId ? chapterAnnotations.data ?? [] : sourceAnnotations.data ?? [];
+    : content.data ?? (canShowSourceContent ? sourceContent.data : undefined);
+  const activeAnnotations = selectedChapterId
+    ? chapterAnnotations.data ?? []
+    : canShowSourceContent
+      ? sourceAnnotations.data ?? []
+      : [];
   const title = content.data
     ? `第${content.data.chapter_no}章：${versionContent.data ? `${versionContent.data.title}（历史版本）` : content.data.title}`
-    : sourceContent.data?.path ?? '阅读器';
-  const kindLabel = content.data ? '正文' : sourceContent.data ? sourceKindLabel(sourceContent.data.kind) : '未选择';
+    : canShowSourceContent && sourceContent.data
+      ? sourceContent.data.path
+      : variant === 'writing'
+        ? '请选择一章正文'
+        : '阅读器';
+  const kindLabel = content.data
+    ? '正文'
+    : canShowSourceContent && sourceContent.data
+      ? sourceKindLabel(sourceContent.data.kind)
+      : '未选择';
   const activeText = draftActive ? draftText : activeContent?.text || '';
   const matchCount = searchMatchCount(activeText, searchQuery);
   const documentKey = content.data
     ? `chapter:${content.data.id}:${selectedChapterVersionId ?? content.data.current_version_id ?? 'none'}`
-    : sourceContent.data
+    : canShowSourceContent && sourceContent.data
       ? `source:${sourceContent.data.id}`
       : 'empty';
   const viewingVersion = Boolean(selectedChapterVersionId && versionContent.data);
   const dirty = Boolean(activeContent && draftActive && draftText !== activeContent.text);
-  const isSourceProposal = Boolean(sourceContent.data && sourceContent.data.kind !== 'chapters');
-  const isUnparsedChapterSource = Boolean(
-    sourceContent.data
-    && sourceContent.data.kind === 'chapters'
-    && (catalogStatus.data?.unparsed_chapter_files ?? []).includes(sourceContent.data.path),
-  );
+  const isSourceProposal = Boolean(canShowSourceContent && sourceContent.data && sourceContent.data.kind !== 'chapters');
 
   const startEditing = () => {
     if (!activeContent) {

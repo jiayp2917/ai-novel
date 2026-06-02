@@ -21,14 +21,15 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
   const chapters = useChapters();
   const catalogStatus = useCatalogStatus();
   const showChapterCatalog = variant === 'writing' || variant === 'ai';
+  const showSourceCatalog = variant === 'library';
   const showCreateButton = variant !== 'ai';
   const createModes = useMemo<CreateMode[]>(
-    () => (variant === 'library' ? ['system', 'settings', 'outlines'] : ['system', 'settings', 'outlines', 'chapter-folder', 'chapter-file', 'chapter-markdown']),
+    () => (variant === 'library' ? ['system', 'settings', 'outlines'] : ['chapter-folder', 'chapter-file', 'chapter-markdown']),
     [variant],
   );
   const visibleSourceCount = variant === 'library'
     ? groupedSourceCountPlaceholder(sources.data ?? [])
-    : (sources.data ?? []).length;
+    : (chapters.data ?? []).length + unparsedSourceCount(sources.data ?? [], catalogStatus.data);
   const selectedChapterId = useWorkbenchStore((state) => state.selectedChapterId);
   const selectedSourceFileId = useWorkbenchStore((state) => state.selectedSourceFileId);
   const chapterFilter = useWorkbenchStore((state) => state.chapterFilter);
@@ -148,8 +149,8 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
     <aside className="panel catalog-panel">
       <div className="panel-header">
         <div>
-          <p className="eyebrow">资源管理器</p>
-          <h2>{variant === 'library' ? 'AI 素材库' : '项目素材库'}</h2>
+          <p className="eyebrow">{variant === 'library' ? 'AI 上下文' : '正文管理'}</p>
+          <h2>{variant === 'library' ? 'AI 素材库' : variant === 'ai' ? '章节选择' : '正文目录'}</h2>
         </div>
         <div className="catalog-header-actions">
           <span className="count-badge">{variant === 'library' ? grouped.system.length + grouped.settings.length + grouped.outlines.length : visibleSourceCount}</span>
@@ -162,38 +163,42 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
       </div>
 
       <div className="catalog-scroll">
-        <SourceSection
-          count={grouped.system.length}
-          files={grouped.system}
-          label="系统设定"
-          open={openSections.system}
-          emptyText="尚未索引系统设定。"
-          selectedSourceFileId={selectedSourceFileId}
-          onToggle={() => toggleSection('system')}
-          onSelectSource={setSelectedSourceFileId}
-        />
+        {showSourceCatalog && (
+          <>
+            <SourceSection
+              count={grouped.system.length}
+              files={grouped.system}
+              label="系统设定"
+              open={openSections.system}
+              emptyText="尚未索引系统设定。"
+              selectedSourceFileId={selectedSourceFileId}
+              onToggle={() => toggleSection('system')}
+              onSelectSource={setSelectedSourceFileId}
+            />
 
-        <SourceSection
-          count={grouped.settings.length}
-          files={grouped.settings}
-          label="小说设定"
-          open={openSections.settings}
-          emptyText="尚未索引小说设定。"
-          selectedSourceFileId={selectedSourceFileId}
-          onToggle={() => toggleSection('settings')}
-          onSelectSource={setSelectedSourceFileId}
-        />
+            <SourceSection
+              count={grouped.settings.length}
+              files={grouped.settings}
+              label="小说设定"
+              open={openSections.settings}
+              emptyText="尚未索引小说设定。"
+              selectedSourceFileId={selectedSourceFileId}
+              onToggle={() => toggleSection('settings')}
+              onSelectSource={setSelectedSourceFileId}
+            />
 
-        <SourceSection
-          count={grouped.outlines.length}
-          files={grouped.outlines}
-          label="章纲"
-          open={openSections.outlines}
-          emptyText="尚未索引章纲。"
-          selectedSourceFileId={selectedSourceFileId}
-          onToggle={() => toggleSection('outlines')}
-          onSelectSource={setSelectedSourceFileId}
-        />
+            <SourceSection
+              count={grouped.outlines.length}
+              files={grouped.outlines}
+              label="章纲"
+              open={openSections.outlines}
+              emptyText="尚未索引章纲。"
+              selectedSourceFileId={selectedSourceFileId}
+              onToggle={() => toggleSection('outlines')}
+              onSelectSource={setSelectedSourceFileId}
+            />
+          </>
+        )}
 
         {showChapterCatalog && (
         <section className="catalog-section catalog-section--chapters">
@@ -311,6 +316,11 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
 function groupedSourceCountPlaceholder(files: SourceFile[]): number {
   const grouped = groupSourceFiles(files);
   return grouped.system.length + grouped.settings.length + grouped.outlines.length;
+}
+
+function unparsedSourceCount(files: SourceFile[], status: { unparsed_chapter_files?: string[] } | undefined): number {
+  const unparsed = new Set(status?.unparsed_chapter_files ?? []);
+  return files.filter((file) => file.kind === 'chapters' && unparsed.has(file.path)).length;
 }
 
 function SourceSection({

@@ -24,7 +24,7 @@ from backend.app.services.pipeline.reviewer import ReviewerService
 from backend.app.services.pipeline.planner import canonical_json
 from backend.app.services.pipeline.writer import WriterService
 from backend.app.services.review_publish import ReviewPublishService
-from backend.app.services.workspace import set_active_workspace, workspace_runtime_root
+from backend.app.services.workspace import detect_workspace, set_active_workspace, workspace_runtime_root
 from backend.tools.key_env import load_key_file
 from backend.tools.model_usage_report import render_report as render_model_usage_report
 
@@ -75,11 +75,13 @@ def main() -> int:
 def run_validation(options: ValidationOptions) -> dict[str, Any]:
     if options.start_chapter > options.end_chapter:
         raise ValueError("start-chapter must be <= end-chapter")
-    load_key_file(options.key_file, override=False)
     runtime_root = options.workspace / "runtime" / "production_validation"
     app_db_path = runtime_root / "app.db"
     stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     source_hashes_before = _source_hashes(options.workspace)
+    if not source_hashes_before:
+        raise ValueError("No workspace source files were tracked; check the workspace layout before validation")
+    load_key_file(options.key_file, override=False)
     report: dict[str, Any]
     with temporary_environment(
         {
@@ -266,6 +268,7 @@ def build_validation_report(
         "completed_chapters": run_result["completed_chapters"],
         "run_status": "dry_run_completed" if stop_reason == "completed" else "dry_run_stopped",
         "source_hash_unchanged": source_hash_unchanged,
+        "source_hash_tracked_count": len(source_hashes_before),
         "source_hash_changed_count": len(_changed_hashes(source_hashes_before, source_hashes_after)),
         "job_status_counts": dict(Counter(job.status for job in jobs)),
         "artifact_count": len(artifacts),
@@ -365,10 +368,9 @@ def temporary_environment(values: dict[str, str]):
 def _source_hashes(workspace: Path) -> dict[str, str]:
     from backend.tools.workspace_migrate import sha256_file
 
-    roots = ("00-系统", "01-设定", "02-正文", "03-章纲")
     hashes: dict[str, str] = {}
-    for root in roots:
-        directory = workspace / root
+    for spec in detect_workspace(workspace).source_roots:
+        directory = spec.directory
         if not directory.exists():
             continue
         for path in sorted(directory.rglob("*")):

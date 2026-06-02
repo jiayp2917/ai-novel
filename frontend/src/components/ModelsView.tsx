@@ -131,9 +131,9 @@ export function ModelsView() {
       <section className="workflow-card models-section models-section--calls">
         <div className="section-title">
           <div>
-            <p className="eyebrow">最近调用</p>
-            <h2>AI 请求记录</h2>
-            <p className="form-hint">默认展示时间、分工和结果；供应商、用量和原始细节只在排错信息里展开。</p>
+            <p className="eyebrow">排错信息</p>
+            <h2>AI 调用记录</h2>
+            <p className="form-hint">默认只看时间、分工和结果；供应商、用量和原始细节只在排错信息里展开。</p>
           </div>
           <button className="secondary-button" type="button" onClick={() => modelCalls.refetch()}>
             刷新
@@ -171,8 +171,8 @@ export function ModelsView() {
         <section className="workflow-card models-section models-section--skills">
           <div className="section-title">
             <div>
-              <p className="eyebrow">高级日志 / Skills</p>
-              <h2>规则片段与运行事件</h2>
+              <p className="eyebrow">排错信息</p>
+              <h2>高级日志 / Skills</h2>
             </div>
           </div>
           <details className="advanced-details">
@@ -207,7 +207,7 @@ export function ModelsView() {
       <section className="workflow-card models-section models-section--publish">
         <div className="section-title">
           <div>
-            <p className="eyebrow">写回记录</p>
+            <p className="eyebrow">排错信息</p>
             <h2>备份与改动追踪</h2>
           </div>
         </div>
@@ -301,7 +301,6 @@ function ModelConfigCard({
         <div><span>模型</span><strong>{config.model ?? '未配置'}</strong></div>
         <div><span>接口地址</span><strong>{friendlyUrl(config.base_url)}</strong></div>
         <div><span>密钥</span><strong>{secretLabel}</strong></div>
-        <div><span>配置来源</span><strong>{config.overridden ? '本机自定义' : '默认配置'}</strong></div>
       </div>
 
       {editing && (

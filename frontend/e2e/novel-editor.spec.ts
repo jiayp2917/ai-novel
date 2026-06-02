@@ -54,9 +54,15 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await savedVersionCard.click();
   await expect(page.locator('.reader-header h1')).toContainText('历史版本');
   await expect(page.locator('.cm-content')).toContainText('新手路径正文版本保存验证');
-  await savedVersionCard.getByRole('button', { name: '发布此版本' }).click();
-  await expect(page.getByRole('dialog', { name: '确认发布正文版本' })).toBeVisible();
-  await page.getByRole('button', { name: '确认发布' }).click();
+  await expect(savedVersionCard.getByRole('button', { name: '先查看改动' })).toBeDisabled();
+  await savedVersionCard.getByRole('button', { name: '查看改动', exact: true }).click();
+  await expect(savedVersionCard).toContainText('已查看改动');
+  await expect(savedVersionCard.locator('.diff-preview')).toContainText('新手路径正文版本保存验证');
+  await savedVersionCard.getByRole('button', { name: '确认发布' }).click();
+  const publishDialog = page.getByRole('dialog', { name: '确认发布正文版本' });
+  await expect(publishDialog).toBeVisible();
+  await expect(publishDialog).toContainText('已经查看过改动');
+  await publishDialog.getByRole('button', { name: '确认发布' }).click();
   await expect(page.locator('.task-latest')).toContainText('已发布');
   const chapterAfterManualPublish = await chapterContent(page, 1);
   expect(chapterAfterManualPublish.text).toContain('新手路径正文版本保存验证');
@@ -310,6 +316,7 @@ test('narrow writing viewport keeps editor usable while catalog and inspector us
   await switchWorkspace(page);
 
   await mainNav(page, '写作').click();
+  await page.getByRole('button', { name: '打开目录' }).click();
   await openChapter(page, '001');
   await expect(page.locator('.reader-panel')).toBeVisible();
 
@@ -335,6 +342,36 @@ test('narrow writing viewport keeps editor usable while catalog and inspector us
   await page.getByRole('button', { name: '收起侧栏' }).click();
   await expect(page.locator('.editor-shell')).toHaveClass(/inspector-hidden/);
   await expectUsableNarrowWritingLayout(page);
+});
+
+test('narrow navigation keeps all entry points understandable', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+
+  for (const entry of [
+    { label: '首页', short: '首页' },
+    { label: '写作', short: '写作' },
+    { label: 'AI 素材库', short: '素材' },
+    { label: 'AI 工作台', short: 'AI' },
+    { label: '自动流水线', short: '流水线' },
+  ]) {
+    const button = page.getByRole('button', { name: `打开${entry.label}` });
+    await expect(button).toBeVisible();
+    await expect(button).toHaveAttribute('title', entry.label);
+    await expect(button.locator('.nav-short-label')).toContainText(entry.short);
+    await button.click();
+    await expect(page.locator('.crumb')).toContainText(entry.label === '首页' ? '首页工作台' : entry.label);
+  }
+
+  const settings = page.getByRole('button', { name: '打开设置/模型' });
+  await expect(settings).toBeVisible();
+  await expect(settings).toHaveAttribute('title', '设置/模型');
+  await expect(settings.locator('.nav-short-label')).toContainText('设置');
+  await settings.click();
+  await expect(page.locator('.crumb')).toContainText('设置/模型');
 });
 
 test('unsaved writing version protects chapter and version switching', async ({ page }) => {
@@ -610,17 +647,21 @@ test('AI workbench keeps advanced actions and engineering fields out of the main
   const workbench = page.locator('.ai-workbench-page');
   const primary = page.locator('.ai-primary-card');
   await expect(primary).toContainText('草稿检查与写回');
-  await expect(primary.getByRole('button', { name: '上下文预览', exact: true })).toBeVisible();
   await expect(primary.getByRole('button', { name: '按批注创建修订', exact: true })).toBeVisible();
-  await expect(primary.getByRole('button', { name: '继续处理队列', exact: true })).toBeVisible();
+  await expect(primary.getByRole('button', { name: '上下文预览', exact: true })).toHaveCount(0);
+  await expect(primary.getByRole('button', { name: '推进待处理任务', exact: true })).toHaveCount(0);
+  await expect(primary.locator('details.advanced-details').filter({ hasText: '辅助操作' })).toBeVisible();
   await expect(primary).not.toContainText('运行任务一次');
   await expect(primary).not.toContainText('snapshot-candidate');
   await expect(primary.locator('details.advanced-details').filter({ hasText: '高级选择草稿' })).toBeVisible();
   await expect(primary).not.toContainText(/artifact_id|raw JSON|provider|token|手动输入草稿编号/);
-  await expect(primary.locator('details.advanced-details').filter({ hasText: '高级操作：检查当前正文副本' })).toBeVisible();
+  await expect(primary.locator('details.advanced-details').filter({ hasText: '排错操作：创建待检查副本' })).toBeVisible();
   await expect(primary.getByRole('button', { name: '创建待检查副本', exact: true })).toHaveCount(0);
 
-  await primary.getByText('高级操作：检查当前正文副本').click();
+  await primary.getByText('辅助操作').click();
+  await expect(primary.getByRole('button', { name: '上下文预览', exact: true })).toBeVisible();
+  await expect(primary.getByRole('button', { name: '推进待处理任务', exact: true })).toBeVisible();
+  await primary.getByText('排错操作：创建待检查副本').click();
   await expect(primary.getByRole('button', { name: '创建待检查副本', exact: true })).toBeVisible();
   await expect(workbench).not.toContainText('运行任务一次');
 });
@@ -698,7 +739,7 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(page.locator('.models-section--overview')).toContainText('AI 输出去向与安全边界');
   await expect(page.locator('.models-section--connectivity')).toContainText('AI 助手配置');
   await expect(page.locator('.models-section--connectivity')).toContainText('按用途配置模型、接口和密钥');
-  await expect(page.locator('.models-section--calls')).toContainText('最近调用');
+  await expect(page.locator('.models-section--calls')).toContainText('排错信息');
   await expect(page.locator('.models-section--skills')).toContainText('高级日志 / Skills');
   await expect(page.locator('.quality-card')).toHaveCount(3);
   await expect(page.locator('.quality-card').nth(0)).toContainText('1');
@@ -711,6 +752,7 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(writerConfigCard).toContainText('模型');
   await expect(writerConfigCard).toContainText('接口地址');
   await expect(writerConfigCard).toContainText('密钥');
+  await expect(writerConfigCard.locator('.model-config-summary')).not.toContainText('配置来源');
   await expect(writerConfigCard).toContainText(/可测试连接|缺少密钥/);
   await expect(writerConfigCard.locator('.model-config-summary')).not.toContainText(/provider|api_key_env|raw JSON|token/);
   await writerConfigCard.getByText('高级设置').click();
@@ -831,6 +873,7 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
   await page.getByLabel('每批章节数').fill('3');
   await page.getByLabel('最大修订轮次').fill('2');
   await expect(page.locator('.pipeline-mode-card')).toContainText('固定为预演');
+  await expect(page.locator('.pipeline-mode-card')).toContainText('只预演流程，不写回正文');
   await expect(page.locator('.pipeline-mode-card').locator('input[type="checkbox"]')).toHaveCount(0);
   await page.getByRole('button', { name: '创建自动流水线' }).click();
   await expect(page.locator('.task-latest')).toContainText('自动流水线');
@@ -848,9 +891,10 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
   await expect(page.locator('.pipeline-next-step')).toContainText('已暂停');
   await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '恢复' }).click();
   await expect(page.locator('.pipeline-status-grid')).toContainText('等待执行');
-  await expect(page.locator('.pipeline-next-step')).toContainText('运行一次队列');
+  await expect(page.locator('.pipeline-next-step')).toContainText('推进一次任务');
+  await expect(page.locator('.pipeline-status-grid')).toContainText('只生成草稿，不写回正文');
 
-  await page.getByRole('button', { name: '运行一次队列' }).click();
+  await page.getByRole('button', { name: '推进一次任务' }).click();
   await expect(page.locator('.pipeline-chapter-card')).toHaveCount(10);
   await expect(page.locator('.pipeline-chapter-card').first()).toContainText('生成草稿');
   await expect(page.locator('.pipeline-progress')).toContainText('/60');

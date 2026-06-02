@@ -48,19 +48,19 @@ export function ChapterActions({
         '/api/jobs/run-once',
         { method: 'POST' },
       ),
-    onMutate: () => pushTask({ label: '继续处理队列', status: 'running', detail: '正在处理待办任务。' }),
+    onMutate: () => pushTask({ label: '推进待处理任务', status: 'running', detail: '正在处理待办任务。' }),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       void queryClient.refetchQueries({ queryKey: ['jobs'] });
       void queryClient.invalidateQueries({ queryKey: ['cost-dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       pushTask({
-        label: '继续处理队列',
+        label: '推进待处理任务',
         status: result.failed ? 'failed' : 'succeeded',
         detail: `启动 ${result.started}，成功 ${result.succeeded}，失败 ${result.failed}。`,
       });
     },
-    onError: (error: Error) => pushTask({ label: '继续处理队列', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '推进待处理任务', status: 'failed', detail: error.message }),
   });
 
   const contextMutation = useMutation({
@@ -121,22 +121,28 @@ export function ChapterActions({
       </div>
       {showGeneration && (
         <div className="action-row">
-          <button type="button" className="secondary-button" onClick={() => contextMutation.mutate()} disabled={contextMutation.isPending}>
-            上下文预览
-          </button>
           <button type="button" className="secondary-button" onClick={() => reviseMutation.mutate()} disabled={reviseMutation.isPending}>
             按批注创建修订
           </button>
-          {mode !== 'writing' && (
-            <button type="button" className="secondary-button" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending}>
-              继续处理队列
-            </button>
-          )}
         </div>
+      )}
+      {showGeneration && mode !== 'writing' && (
+        <details className="advanced-details">
+          <summary>辅助操作</summary>
+          <p className="form-hint">这些操作用于补充上下文或推进后台任务；日常写回只需要选择草稿、检查、查看改动、确认写回。</p>
+          <div className="action-row">
+            <button type="button" className="secondary-button" onClick={() => contextMutation.mutate()} disabled={contextMutation.isPending}>
+              上下文预览
+            </button>
+            <button type="button" className="secondary-button" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending}>
+              推进待处理任务
+            </button>
+          </div>
+        </details>
       )}
       {showSnapshotAdvanced && (
         <details className="advanced-details">
-          <summary>高级操作：检查当前正文副本</summary>
+          <summary>排错操作：创建待检查副本</summary>
           <p className="form-hint">用于把当前正文复制成待检查草稿，不写回源文件；普通手写保存请回到写作页保存正文版本。</p>
           <div className="action-row">
             <button type="button" className="secondary-button" onClick={() => snapshotMutation.mutate()} disabled={snapshotMutation.isPending}>

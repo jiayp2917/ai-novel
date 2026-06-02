@@ -16,6 +16,15 @@ const navItems: Array<{ id: ActiveView; icon: string; label: string }> = [
   { id: 'pipeline', icon: '⇄', label: '自动流水线' },
 ];
 
+const shortNavLabels: Record<ActiveView, string> = {
+  home: '首页',
+  writing: '写作',
+  planning: '素材',
+  ai: 'AI',
+  pipeline: '流水线',
+  settings: '设置',
+};
+
 const viewTitles: Record<ActiveView, string> = {
   home: '首页工作台',
   writing: '写作',
@@ -52,20 +61,26 @@ export function App() {
               className={item.id === activeView ? 'active' : ''}
               key={item.id}
               type="button"
+              title={item.label}
+              aria-label={`打开${item.label}`}
               onClick={() => setActiveView(item.id)}
             >
               <span className="ico">{item.icon}</span>
               <span>{item.label}</span>
+              <small className="nav-short-label">{shortNavLabels[item.id]}</small>
             </button>
           ))}
         </nav>
         <button
           className={activeView === 'settings' ? 'sidebar-settings active' : 'sidebar-settings'}
           type="button"
+          title="设置/模型"
+          aria-label="打开设置/模型"
           onClick={() => setActiveView('settings')}
         >
           <span className="ico">⚙</span>
           <span>设置/模型</span>
+          <small className="nav-short-label">{shortNavLabels.settings}</small>
         </button>
       </aside>
 

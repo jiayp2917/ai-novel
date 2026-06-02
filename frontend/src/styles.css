@@ -305,6 +305,13 @@ pre {
   opacity: 0.95;
 }
 
+.nav-short-label {
+  display: none;
+  font-size: 10px;
+  line-height: 1;
+  color: inherit;
+}
+
 .sidebar-settings {
   margin-top: auto;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -3424,6 +3431,25 @@ textarea {
     display: none;
   }
 
+  .nav-short-label {
+    display: block;
+    max-width: 54px;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav button,
+  .sidebar-settings {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-height: 48px;
+    padding: 6px 4px;
+    text-align: center;
+  }
+
   .brand h1 {
     font-size: 14px;
   }
@@ -3618,6 +3644,7 @@ textarea {
 
   .sidebar {
     padding: 14px 8px;
+    z-index: 80;
   }
 
   .brand {
@@ -3656,15 +3683,15 @@ textarea {
 
   .reader-header {
     position: relative;
-    z-index: 47;
+    z-index: 90;
   }
 
   .chapter-pane {
     position: fixed;
-    top: 102px;
+    top: 170px;
     left: 64px;
     bottom: 0;
-    z-index: 46;
+    z-index: 70;
     display: block;
     width: min(300px, calc(100vw - 64px));
     max-width: calc(100vw - 64px);
@@ -3682,8 +3709,8 @@ textarea {
   }
 
   .inspector {
-    top: 102px;
-    z-index: 46;
+    top: 170px;
+    z-index: 70;
     width: min(320px, calc(100vw - 64px));
   }
 

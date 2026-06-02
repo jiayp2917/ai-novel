@@ -93,7 +93,7 @@ export function ReaderToolbar({
         </div>
         {editing && unparsedChapterSource && <p className="form-hint">当前文件还不是可识别章节；保存只会生成文件草稿。请在目录中补充章号和标题后转为章节。</p>}
         {editing && !unparsedChapterSource && <p className="form-hint">当前只是在编辑正文版本；已定位到文末，可直接输入。点击“保存正文版本”会先保存版本，不会直接覆盖正式正文。</p>}
-        {viewingVersion && !editing && <p className="form-hint">正在查看历史正文版本。确认无误后可在右侧“版本”里发布此版本。</p>}
+        {viewingVersion && !editing && <p className="form-hint">正在查看历史正文版本。确认无误后请在右侧“版本”里先查看改动，再确认发布。</p>}
       </div>
       <div className="reader-meta">
         <span>{activeContentExists ? `${activeTextLength} 字符` : '等待选择'}</span>

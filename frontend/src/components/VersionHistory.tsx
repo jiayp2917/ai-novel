@@ -18,6 +18,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
   const pushTask = useWorkbenchStore((state) => state.pushTask);
   const queryClient = useQueryClient();
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  const [viewedDiffs, setViewedDiffs] = useState<Record<number, string>>({});
 
   const publishMutation = useMutation({
     mutationFn: (versionId: number) =>
@@ -46,6 +47,16 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
     onError: (error: Error) => pushTask({ label: '发布正文版本', status: 'failed', detail: error.message }),
   });
 
+  const diffMutation = useMutation({
+    mutationFn: (versionId: number) => apiRequest<{ diff: string }>(`/api/chapters/${chapterId}/versions/${versionId}/diff`),
+    onMutate: () => pushTask({ label: '查看版本改动', status: 'running', detail: '正在整理这个正文版本的改动。' }),
+    onSuccess: (result, versionId) => {
+      setViewedDiffs((current) => ({ ...current, [versionId]: result.diff || '这个版本和当前正文没有可显示的差异。' }));
+      pushTask({ label: '查看版本改动', status: 'succeeded', detail: '改动已生成，确认无误后可以发布。' });
+    },
+    onError: (error: Error) => pushTask({ label: '查看版本改动', status: 'failed', detail: error.message }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (versionId: number) =>
       apiRequest<{ deleted: boolean; version_id: number; deleted_snapshot: boolean }>(
@@ -70,10 +81,17 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
   });
 
   const handlePublish = (version: ChapterVersion) => {
-    if (!version.can_publish || !chapterId) {
+    if (!version.can_publish || !chapterId || !viewedDiffs[version.id]) {
       return;
     }
     setPendingConfirm({ action: 'publish', version });
+  };
+
+  const handleViewDiff = (version: ChapterVersion) => {
+    if (!version.can_publish || !chapterId) {
+      return;
+    }
+    diffMutation.mutate(version.id);
   };
 
   const handleDelete = (version: ChapterVersion) => {
@@ -117,11 +135,14 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
                 active={selectedVersionId === version.id}
                 publishing={publishMutation.isPending && publishMutation.variables === version.id}
                 deleting={deleteMutation.isPending && deleteMutation.variables === version.id}
+                diffText={viewedDiffs[version.id]}
+                diffLoading={diffMutation.isPending && diffMutation.variables === version.id}
                 onSelect={() => {
                   if (version.can_preview) {
                     setSelectedChapterVersionId(version.is_current ? null : version.id);
                   }
                 }}
+                onViewDiff={() => handleViewDiff(version)}
                 onPublish={() => handlePublish(version)}
                 onDelete={() => handleDelete(version)}
               />
@@ -156,7 +177,10 @@ function VersionCard({
   active,
   publishing,
   deleting,
+  diffText,
+  diffLoading,
   onSelect,
+  onViewDiff,
   onPublish,
   onDelete,
 }: {
@@ -165,7 +189,10 @@ function VersionCard({
   active: boolean;
   publishing: boolean;
   deleting: boolean;
+  diffText: string | undefined;
+  diffLoading: boolean;
   onSelect: () => void;
+  onViewDiff: () => void;
   onPublish: () => void;
   onDelete: () => void;
 }) {
@@ -187,6 +214,7 @@ function VersionCard({
       ? '不可删除：当前正文必须保留。'
       : '不可删除：该版本仍受保护。';
   const previousVersion = previousByCreatedAt(version, versions);
+  const publishNeedsDiff = version.can_publish && !diffText;
 
   return (
     <article
@@ -227,7 +255,24 @@ function VersionCard({
         <small>上一版本：{previousVersion ? `#${previousVersion.id} / ${formatDate(previousVersion.created_at)}` : '无'}</small>
       </details>
       {!version.can_preview && <small className="form-hint form-hint--error">该历史版本缺少可查看的正文内容，不能切换，只能保留记录或删除。</small>}
+      {diffText && (
+        <details className="version-diff-preview" open onClick={(event) => event.stopPropagation()}>
+          <summary>已查看改动</summary>
+          <pre className="diff-preview diff-preview--compact">{diffText}</pre>
+        </details>
+      )}
       <div className="history-actions">
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onViewDiff();
+          }}
+          disabled={!version.can_publish || diffLoading}
+        >
+          {diffLoading ? '整理改动中...' : version.is_current ? '当前正文无需查看' : diffText ? '重新查看改动' : '查看改动'}
+        </button>
         <button
           className="secondary-button danger-button"
           type="button"
@@ -235,9 +280,10 @@ function VersionCard({
             event.stopPropagation();
             onPublish();
           }}
-          disabled={!version.can_publish || publishing}
+          disabled={!version.can_publish || publishNeedsDiff || publishing}
+          title={publishNeedsDiff ? '请先查看改动，再确认发布。' : undefined}
         >
-          {version.is_current ? '已是当前正文' : publishing ? '发布中...' : '发布此版本'}
+          {version.is_current ? '已是当前正文' : publishing ? '发布中...' : publishNeedsDiff ? '先查看改动' : '确认发布'}
         </button>
         <button
           className="secondary-button danger-button"
@@ -272,7 +318,7 @@ function VersionConfirmDialog({
   const isPublish = pending.action === 'publish';
   const title = isPublish ? '确认发布正文版本' : '确认删除正文版本';
   const body = isPublish
-    ? `发布“${pending.version.title}”这个正文版本？系统会先备份当前正文。`
+    ? `发布“${pending.version.title}”这个正文版本？你已经查看过改动，系统会先备份当前正文，发布后该版本会成为当前正文。`
     : '删除这个正文版本？这不会删除当前正文、备份和发布记录。';
 
   return (
@@ -287,7 +333,7 @@ function VersionConfirmDialog({
             <p>{body}</p>
           </div>
         </div>
-        {isPublish && <div className="notice safe">发布前会保留当前正文备份；发布成功后，该版本会成为当前正文。</div>}
+        {isPublish && <div className="notice safe">发布前会保留当前正文备份；发布成功后，该版本会成为当前正文。若还想复核，请取消后重新查看改动。</div>}
         {!isPublish && <div className="notice danger">删除只影响这个历史版本记录，不会删除当前正文。</div>}
         <div className="confirm-dialog__actions">
           <button className="secondary-button" type="button" onClick={onCancel} disabled={busy}>

@@ -587,14 +587,14 @@ class PipelineRunService:
         if run.status == PipelineState.FAILED_TERMINAL.value:
             return {"label": "已终止", "text": "这条流水线不会继续运行；可复用设置重新创建。", "tone": "danger"}
         if run.status == PipelineState.FAILED_RETRYABLE.value:
-            return {"label": "失败可重试", "text": "请先查看失败原因，再点击重试和继续队列。", "tone": "danger"}
+            return {"label": "失败可重试", "text": "请先查看失败原因，再点击重试和推进一次任务。", "tone": "danger"}
         if run.status == PipelineState.PAUSED_BUDGET.value:
-            return {"label": "额度暂停", "text": "确认今日调用额度后恢复或重试，再继续队列。", "tone": "warn"}
+            return {"label": "额度暂停", "text": "确认今日调用额度后恢复或重试，再推进一次任务。", "tone": "warn"}
         if run.status == PipelineState.PAUSED.value:
-            return {"label": "已暂停", "text": "点击恢复，再继续队列。", "tone": "info"}
+            return {"label": "已暂停", "text": "点击恢复，再推进一次任务。", "tone": "info"}
         if summary["failed_or_paused_steps"] > 0:
             return {"label": "有步骤失败", "text": "请查看失败摘要；可重试的步骤需要先点击重试。", "tone": "danger"}
-        return {"label": "下一步", "text": "点击运行一次队列推进任务。每次只执行一批，便于观察失败原因。", "tone": "info"}
+        return {"label": "下一步", "text": "点击推进一次任务继续。每次只执行一批，便于观察失败原因。", "tone": "info"}
 
     def _report_summary(self, run: Job) -> dict[str, Any]:
         result = job_result(run)
@@ -651,7 +651,7 @@ def _failure_next_step(status: str) -> str:
     if status == PipelineState.MANUAL_REQUIRED.value:
         return "需要人工判断后再决定是否复用设置重跑。"
     if status == PipelineState.FAILED_RETRYABLE.value:
-        return "可点击重试，再运行一次队列。"
+        return "可点击重试，再推进一次任务。"
     if status == PipelineState.PAUSED_BUDGET.value:
         return "确认今日调用额度后恢复或重试。"
     if status == PipelineState.FAILED_TERMINAL.value:

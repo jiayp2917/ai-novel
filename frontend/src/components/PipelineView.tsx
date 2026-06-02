@@ -50,8 +50,8 @@ const taskLabels: Record<string, string> = {
 
 const runOperationHelp: Record<string, string> = {
   pause: '暂停后不会继续领取新步骤；已完成的草稿、检查报告会保留。',
-  resume: '恢复后任务会回到队列，需要点击“运行一次队列”继续推进。',
-  retry: '只适用于失败可重试或额度暂停的任务；重试后需要再次运行队列。',
+  resume: '恢复后任务会回到待处理状态，需要点击“推进一次任务”继续。',
+  retry: '只适用于失败可重试或额度暂停的任务；重试后需要再次推进任务。',
   cancel: '停止后不能继续，只能复用相同设置重新创建一条流水线。',
   delete: '只删除这条流水线的任务记录，不删除草稿、报告、模型日志或正文。',
 };
@@ -150,12 +150,12 @@ export function PipelineView() {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       void queryClient.invalidateQueries({ queryKey: ['cost-dashboard'] });
       pushTask({
-        label: '执行流水线',
+        label: '推进自动流水线',
         status: result.failed ? 'failed' : 'succeeded',
         detail: `本次启动 ${result.started} 个任务，完成 ${result.succeeded} 个，失败 ${result.failed} 个。`,
       });
     },
-    onError: (error: Error) => pushTask({ label: '执行流水线', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '推进自动流水线', status: 'failed', detail: error.message }),
   });
 
   function updateNumber(name: keyof PipelineRunCreatePayload, value: string) {
@@ -258,7 +258,7 @@ export function PipelineView() {
             创建自动流水线
           </button>
           <button className="secondary-button" type="button" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending}>
-            运行一次队列
+            推进一次任务
           </button>
         </div>
       </section>
@@ -379,7 +379,7 @@ export function PipelineView() {
                 <span>状态：{statusText(selectedRun.status)}</span>
                 <span>需人工判断：{selectedSummary.manual}</span>
                 <span>失败/暂停：{selectedSummary.failed}</span>
-                <span>预演模式：{selectedRun.payload.dry_run ? '是' : '否'}</span>
+                <span>写回策略：{selectedRun.payload.dry_run ? '只生成草稿，不写回正文' : '允许写回正文'}</span>
               </div>
               {selectedNextStep && (
                 <div className={`pipeline-next-step pipeline-next-step--${selectedNextStep.tone}`}>
@@ -409,6 +409,7 @@ export function PipelineView() {
                 <summary>查看高级详情</summary>
                 <div className="pipeline-advanced-grid">
                   <span>任务编号：#{selectedRun.id}</span>
+                  <span>dry_run：{selectedRun.payload.dry_run ? 'true' : 'false'}</span>
                   <span>模式：{modeLabels[(selectedRun.payload.mode as PipelineRunCreatePayload['mode'])] ?? String(selectedRun.payload.mode ?? '未知')}</span>
                   <span>章节：第 {String(selectedRun.payload.start_chapter)}-{String(selectedRun.payload.end_chapter)} 章</span>
                   <span>报告：{selectedRun.report_summary.path ?? '暂无'}</span>
@@ -432,7 +433,7 @@ export function PipelineView() {
           <span>1 选择作品</span>
           <span>2 选择章节范围</span>
           <span>3 选择执行模式</span>
-          <span>4 设置预算和预演模式</span>
+          <span>4 设置预算和只生成草稿</span>
           <span>5 生成草稿/候选</span>
           <span>6 证据约束检查</span>
           <span>7 只修复可修 writer 问题</span>
@@ -543,18 +544,18 @@ function nextStepForRun(run: PipelineRun, summary: { total: number; done: number
     return { label: '已停止', text: '这条任务不会继续运行；可复用设置重新创建一条新任务。', tone: 'danger' };
   }
   if (run.status === 'failed_retryable') {
-    return { label: '可重试', text: '点击“重试”，再点击“运行一次队列”。如果连续失败，请先查看失败原因。', tone: 'danger' };
+    return { label: '可重试', text: '点击“重试”，再点击“推进一次任务”。如果连续失败，请先查看失败原因。', tone: 'danger' };
   }
   if (run.status === 'paused_budget') {
-    return { label: '额度暂停', text: '确认 AI 调用预算后点击“重试”或“恢复”，再运行队列。', tone: 'warn' };
+    return { label: '额度暂停', text: '确认 AI 调用预算后点击“重试”或“恢复”，再推进任务。', tone: 'warn' };
   }
   if (run.status === 'paused') {
-    return { label: '已暂停', text: '点击“恢复”，再点击“运行一次队列”继续。', tone: 'info' };
+    return { label: '已暂停', text: '点击“恢复”，再点击“推进一次任务”继续。', tone: 'info' };
   }
   if (summary.failed > 0) {
     return { label: '有步骤失败', text: '查看标红步骤原因；可重试的任务会显示重试入口。', tone: 'danger' };
   }
-  return { label: '下一步', text: '点击“运行一次队列”推进任务。每次只执行一批，便于观察失败原因和额度消耗。', tone: 'info' };
+  return { label: '下一步', text: '点击“推进一次任务”继续。每次只执行一批，便于观察失败原因和额度消耗。', tone: 'info' };
 }
 
 function deleteBlockReason(run: PipelineRun): string | null {

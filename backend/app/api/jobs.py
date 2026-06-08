@@ -2,7 +2,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,12 @@ from backend.tools.model_usage_report import collect_model_usage_report
 
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+
+
+class ModelCallCleanupRequest(BaseModel):
+    retain_days: int = Field(default=30, ge=1, le=365)
+    failed_only: bool = False
+    confirm_cleanup: bool = False
 
 
 def _clamp_limit(limit: int) -> int:
@@ -66,8 +73,11 @@ def run_jobs_once(session: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/model-calls")
-def list_model_calls(limit: int = 50, session: Session = Depends(get_db)) -> list[dict]:
-    calls = session.scalars(select(ModelCall).order_by(ModelCall.created_at.desc(), ModelCall.id.desc()).limit(_clamp_limit(limit)))
+def list_model_calls(limit: int = 50, failed_only: bool = False, session: Session = Depends(get_db)) -> list[dict]:
+    calls_stmt = select(ModelCall).order_by(ModelCall.created_at.desc(), ModelCall.id.desc()).limit(_clamp_limit(limit))
+    if failed_only:
+        calls_stmt = calls_stmt.where(ModelCall.status == "failed")
+    calls = session.scalars(calls_stmt)
     return [
         {
             "id": call.id,
@@ -86,6 +96,44 @@ def list_model_calls(limit: int = 50, session: Session = Depends(get_db)) -> lis
         }
         for call in calls
     ]
+
+
+@router.post("/model-calls/cleanup")
+def cleanup_model_calls(payload: ModelCallCleanupRequest, session: Session = Depends(get_db)) -> dict:
+    if not payload.confirm_cleanup:
+        raise HTTPException(status_code=400, detail="清理 AI 调用记录前需要确认。")
+
+    cutoff = datetime.now(UTC) - timedelta(days=payload.retain_days)
+    calls_stmt = select(ModelCall).where(ModelCall.created_at < cutoff)
+    if payload.failed_only:
+        calls_stmt = calls_stmt.where(ModelCall.status == "failed")
+    calls = list(session.scalars(calls_stmt))
+    deleted = len(calls)
+    for call in calls:
+        session.delete(call)
+    session.add(
+        Event(
+            event_type="model_calls_cleaned",
+            entity_type="model_calls",
+            entity_id=0,
+            payload_json=json.dumps(
+                {
+                    "deleted": deleted,
+                    "retain_days": payload.retain_days,
+                    "failed_only": payload.failed_only,
+                    "cutoff": cutoff.isoformat(),
+                },
+                ensure_ascii=False,
+            ),
+        )
+    )
+    session.commit()
+    return {
+        "deleted": deleted,
+        "retain_days": payload.retain_days,
+        "failed_only": payload.failed_only,
+        "cutoff": cutoff.isoformat(),
+    }
 
 
 @router.get("/model-usage-report")

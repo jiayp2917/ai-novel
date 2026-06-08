@@ -275,6 +275,18 @@ def seed_model_quality_report(session: Session = Depends(get_db)) -> dict:
                 cache_hit=False,
                 status="succeeded",
             ),
+            ModelCall(
+                role="writer",
+                provider="kimi",
+                model="kimi-k2.6",
+                prompt_hash="r" * 64,
+                input_chars=80,
+                output_chars=0,
+                usage_json="{}",
+                cache_hit=False,
+                status="failed",
+                error="测试连接失败",
+            ),
         ]
     )
     session.commit()

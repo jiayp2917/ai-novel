@@ -143,10 +143,10 @@ export function useJobs() {
   });
 }
 
-export function useModelCalls() {
+export function useModelCalls(limit = 50, failedOnly = false) {
   return useQuery({
-    queryKey: ['model-calls'],
-    queryFn: () => apiRequest<ModelCallRecord[]>('/api/jobs/model-calls'),
+    queryKey: ['model-calls', limit, failedOnly],
+    queryFn: () => apiRequest<ModelCallRecord[]>(`/api/jobs/model-calls?limit=${limit}&failed_only=${failedOnly ? 'true' : 'false'}`),
     refetchInterval: 5000,
   });
 }

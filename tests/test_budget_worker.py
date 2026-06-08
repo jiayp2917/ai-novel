@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -251,6 +252,171 @@ def test_model_concurrency_limiter_respects_memory_role_limit() -> None:
         thread.join()
 
     assert max_active == 1
+
+
+def test_model_calls_api_limits_filters_and_cleans_old_records(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "content"))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    now = datetime.now(UTC)
+    with Session(get_engine()) as session:
+        session.add_all(
+            [
+                ModelCall(
+                    role="reviewer",
+                    provider="deepseek",
+                    model="deepseek-v4-pro",
+                    prompt_hash="a" * 64,
+                    input_chars=10,
+                    output_chars=5,
+                    usage_json="{}",
+                    cache_hit=False,
+                    status="succeeded",
+                    created_at=now,
+                ),
+                ModelCall(
+                    role="writer",
+                    provider="kimi",
+                    model="kimi-k2.6",
+                    prompt_hash="b" * 64,
+                    input_chars=20,
+                    output_chars=8,
+                    usage_json="{}",
+                    cache_hit=False,
+                    status="failed",
+                    error="temporary failure",
+                    created_at=now - timedelta(minutes=1),
+                ),
+                ModelCall(
+                    role="reviewer",
+                    provider="deepseek",
+                    model="deepseek-v4-pro",
+                    prompt_hash="c" * 64,
+                    input_chars=30,
+                    output_chars=12,
+                    usage_json="{}",
+                    cache_hit=False,
+                    status="succeeded",
+                    created_at=now - timedelta(days=45),
+                ),
+                ModelCall(
+                    role="writer",
+                    provider="kimi",
+                    model="kimi-k2.6",
+                    prompt_hash="d" * 64,
+                    input_chars=40,
+                    output_chars=16,
+                    usage_json="{}",
+                    cache_hit=False,
+                    status="failed",
+                    error="old failure",
+                    created_at=now - timedelta(days=46),
+                ),
+            ]
+        )
+        session.commit()
+
+    client = TestClient(app)
+    limited = client.get("/api/jobs/model-calls?limit=2")
+    failed_only = client.get("/api/jobs/model-calls?limit=20&failed_only=true")
+    missing_confirm = client.post("/api/jobs/model-calls/cleanup", json={"retain_days": 30})
+    cleaned = client.post("/api/jobs/model-calls/cleanup", json={"retain_days": 30, "confirm_cleanup": True})
+
+    assert limited.status_code == 200
+    assert len(limited.json()) == 2
+    assert limited.json()[0]["prompt_hash"] == "a" * 64
+    assert failed_only.status_code == 200
+    assert {call["status"] for call in failed_only.json()} == {"failed"}
+    assert missing_confirm.status_code == 400
+    assert cleaned.status_code == 200
+    assert cleaned.json()["deleted"] == 2
+    assert cleaned.json()["retain_days"] == 30
+    assert cleaned.json()["failed_only"] is False
+
+    with Session(get_engine()) as session:
+        remaining = list(session.scalars(select(ModelCall)))
+        assert len(remaining) == 2
+        event = session.scalar(select(Event).where(Event.event_type == "model_calls_cleaned"))
+        assert event is not None
+        assert '"deleted": 2' in event.payload_json
+        assert "prompt" not in event.payload_json
+        assert "key" not in event.payload_json.lower()
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_model_calls_cleanup_can_target_old_failures_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+    now = datetime.now(UTC)
+    with Session(get_engine()) as session:
+        session.add_all(
+            [
+                ModelCall(
+                    role="reviewer",
+                    provider="deepseek",
+                    model="deepseek-v4-pro",
+                    prompt_hash="e" * 64,
+                    input_chars=10,
+                    output_chars=5,
+                    usage_json="{}",
+                    cache_hit=False,
+                    status="succeeded",
+                    created_at=now - timedelta(days=45),
+                ),
+                ModelCall(
+                    role="writer",
+                    provider="kimi",
+                    model="kimi-k2.6",
+                    prompt_hash="f" * 64,
+                    input_chars=20,
+                    output_chars=8,
+                    usage_json="{}",
+                    cache_hit=False,
+                    status="failed",
+                    error="old failure",
+                    created_at=now - timedelta(days=45),
+                ),
+                ModelCall(
+                    role="writer",
+                    provider="kimi",
+                    model="kimi-k2.6",
+                    prompt_hash="g" * 64,
+                    input_chars=30,
+                    output_chars=12,
+                    usage_json="{}",
+                    cache_hit=False,
+                    status="failed",
+                    error="recent failure",
+                    created_at=now,
+                ),
+            ]
+        )
+        session.commit()
+
+    client = TestClient(app)
+    cleaned = client.post(
+        "/api/jobs/model-calls/cleanup",
+        json={"retain_days": 30, "failed_only": True, "confirm_cleanup": True},
+    )
+
+    assert cleaned.status_code == 200
+    assert cleaned.json()["deleted"] == 1
+    assert cleaned.json()["failed_only"] is True
+    with Session(get_engine()) as session:
+        remaining_hashes = {call.prompt_hash for call in session.scalars(select(ModelCall))}
+        assert remaining_hashes == {"e" * 64, "g" * 64}
+        event = session.scalar(select(Event).where(Event.event_type == "model_calls_cleaned"))
+        assert event is not None
+        assert '"failed_only": true' in event.payload_json
+    get_settings.cache_clear()
+    reset_engine()
 
 
 def test_worker_claims_only_one_job_per_chapter() -> None:

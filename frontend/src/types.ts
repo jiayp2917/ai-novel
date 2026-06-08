@@ -254,6 +254,13 @@ export type ModelCallRecord = {
   created_at?: string;
 };
 
+export type ModelCallCleanupResult = {
+  deleted: number;
+  retain_days: number;
+  failed_only: boolean;
+  cutoff: string;
+};
+
 export type ModelUsageReport = {
   generated_at: string;
   usage_note: string;

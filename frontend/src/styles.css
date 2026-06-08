@@ -2088,6 +2088,64 @@ textarea {
   gap: 12px;
 }
 
+.call-records-panel {
+  display: block;
+}
+
+.call-records-panel > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(260px, auto);
+  gap: 16px;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.call-records-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.call-records-panel > summary::before {
+  content: '▶';
+  align-self: start;
+  margin-top: 4px;
+  color: var(--accent);
+}
+
+.call-records-panel[open] > summary::before {
+  content: '▼';
+}
+
+.call-records-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.call-records-summary span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.call-records-toolbar {
+  margin: 16px 0 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-records-cleanup {
+  margin-top: 12px;
+}
+
 .metric-card--ok {
   border-color: var(--ok-soft-border);
   background: var(--ok-bg);
@@ -2099,11 +2157,19 @@ textarea {
 }
 
 .observability-table--calls .observability-row {
-  grid-template-columns: minmax(120px, 0.85fr) minmax(90px, 0.7fr) minmax(100px, 0.7fr) minmax(160px, 1.2fr) minmax(140px, 1fr);
+  grid-template-columns: minmax(120px, 0.85fr) minmax(90px, 0.7fr) minmax(100px, 0.7fr) minmax(150px, 1fr) minmax(140px, 1fr);
 }
 
 .observability-table--calls .advanced-details {
   padding: 6px;
+}
+
+.model-call-error-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .models-bottom-grid {

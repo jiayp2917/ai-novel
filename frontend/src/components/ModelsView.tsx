@@ -12,7 +12,15 @@ import {
   useSkills,
 } from '../hooks';
 import { useWorkbenchStore } from '../store';
-import type { EventRecord, ModelCallRecord, ModelConfigRole, ProbeModelPayload, PublishDecisionRecord, SkillInfo } from '../types';
+import type {
+  EventRecord,
+  ModelCallCleanupResult,
+  ModelCallRecord,
+  ModelConfigRole,
+  ProbeModelPayload,
+  PublishDecisionRecord,
+  SkillInfo,
+} from '../types';
 import { ContextBudgetSection, QualityTrendSection } from './ModelQualitySections';
 import { roleLabel, statusLabel, taskTypeLabel, usageSummary } from './modelViewUtils';
 import { JobList } from './WorkflowActions';
@@ -21,7 +29,10 @@ export function ModelsView() {
   const modelConfig = useModelConfig();
   const cost = useCostDashboard();
   const constraints = useModelConstraints();
-  const modelCalls = useModelCalls();
+  const [modelCallLimit, setModelCallLimit] = useState(20);
+  const [modelCallFailedOnly, setModelCallFailedOnly] = useState(false);
+  const modelCallSummary = useModelCalls(20, false);
+  const modelCalls = useModelCalls(modelCallLimit, modelCallFailedOnly);
   const usageReport = useModelUsageReport();
   const events = useEvents();
   const publishDecisions = usePublishDecisions();
@@ -66,8 +77,35 @@ export function ModelsView() {
     onError: (error: Error) => pushTask({ label: '继续执行任务', status: 'failed', detail: error.message }),
   });
 
-  const pausedCount = modelCalls.data?.filter((call) => call.status === 'paused_budget').length ?? 0;
-  const lastCall = modelCalls.data?.[0];
+  const cleanupModelCallsMutation = useMutation({
+    mutationFn: () =>
+      apiRequest<ModelCallCleanupResult>('/api/jobs/model-calls/cleanup', {
+        method: 'POST',
+        body: JSON.stringify({ retain_days: 30, failed_only: false, confirm_cleanup: true }),
+      }),
+    onMutate: () => pushTask({ label: '清理 AI 请求记录', status: 'running', detail: '正在清理 30 天前的排错记录。' }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['model-calls'] });
+      void queryClient.invalidateQueries({ queryKey: ['model-usage-report'] });
+      void queryClient.invalidateQueries({ queryKey: ['cost-dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['events'] });
+      pushTask({ label: '清理 AI 请求记录', status: 'succeeded', detail: `已清理 ${result.deleted} 条 30 天前记录。` });
+    },
+    onError: (error: Error) => pushTask({ label: '清理 AI 请求记录', status: 'failed', detail: error.message }),
+  });
+
+  const handleCleanupModelCalls = () => {
+    const confirmed = window.confirm('将清理 30 天前的 AI 请求排错记录。不会删除正文、草稿、审核、改动对比、备份或发布记录。是否继续？');
+    if (confirmed) {
+      cleanupModelCallsMutation.mutate();
+    }
+  };
+
+  const pausedCount = modelCallSummary.data?.filter((call) => call.status === 'paused_budget').length ?? 0;
+  const lastCall = modelCallSummary.data?.[0];
+  const recentFailedCount = modelCallSummary.data?.filter((call) => call.status === 'failed').length ?? 0;
+  const displayedModelCalls = modelCallFailedOnly ? (modelCalls.data ?? []).filter((call) => call.status === 'failed') : (modelCalls.data ?? []);
+  const modelCallDisplayCount = displayedModelCalls.length;
   const recentEvents = (events.data ?? []).slice(0, 8);
 
   return (
@@ -129,28 +167,63 @@ export function ModelsView() {
       </div>
 
       <section className="workflow-card models-section models-section--calls">
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">排错信息</p>
-            <h2>AI 调用记录</h2>
-            <p className="form-hint">默认只看时间、分工和结果；供应商、用量和原始细节只在排错信息里展开。</p>
+        <details className="call-records-panel">
+          <summary>
+            <div>
+              <p className="eyebrow">排错信息</p>
+              <h2>AI 请求排错记录</h2>
+              <p className="form-hint">平时不用展开；连接失败、费用异常或 AI 无响应时再查看。</p>
+            </div>
+            <div className="call-records-summary">
+              <span>最近：{lastCall ? `${roleLabel(lastCall.role)} · ${statusLabel(lastCall.status)}` : '暂无记录'}</span>
+              <span>失败：{recentFailedCount} 条</span>
+              <span>当前显示：{modelCallDisplayCount} / {modelCallLimit} 条</span>
+            </div>
+          </summary>
+          <div className="call-records-toolbar">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setModelCallFailedOnly((value) => !value);
+                setModelCallLimit(20);
+              }}
+            >
+              {modelCallFailedOnly ? '显示全部' : '只看失败'}
+            </button>
+            <button className="secondary-button" type="button" onClick={() => modelCalls.refetch()}>
+              刷新
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setModelCallLimit((value) => Math.min(value + 20, 200))}
+              disabled={modelCallLimit >= 200}
+            >
+              查看更多
+            </button>
+            <span className="form-hint">{modelCallFailedOnly ? '当前只显示失败请求。' : '默认只显示最近 20 条。'}</span>
           </div>
-          <button className="secondary-button" type="button" onClick={() => modelCalls.refetch()}>
-            刷新
-          </button>
-        </div>
-        <div className="observability-table observability-table--calls" role="table" aria-label="最近 AI 调用">
-          <div className="observability-row observability-row--head" role="row">
-            <span>时间</span>
-            <span>分工</span>
-            <span>状态</span>
-            <span>错误摘要</span>
-            <span>排错信息</span>
+          <div className="observability-table observability-table--calls" role="table" aria-label="最近 AI 调用">
+            <div className="observability-row observability-row--head" role="row">
+              <span>时间</span>
+              <span>分工</span>
+              <span>状态</span>
+              <span>错误摘要</span>
+              <span>排错信息</span>
+            </div>
+            {displayedModelCalls.map((call) => <ModelCallRow call={call} key={call.id} />)}
+            {modelCalls.isLoading && <p className="muted">正在加载 AI 请求记录...</p>}
+            {!modelCalls.isLoading && !displayedModelCalls.length && <p className="muted">暂无符合条件的 AI 请求记录。</p>}
           </div>
-          {modelCalls.data?.map((call) => <ModelCallRow call={call} key={call.id} />)}
-          {modelCalls.isLoading && <p className="muted">正在加载 AI 调用记录...</p>}
-          {!modelCalls.isLoading && !modelCalls.data?.length && <p className="muted">暂无 AI 调用记录。</p>}
-        </div>
+          <details className="advanced-details call-records-cleanup">
+            <summary>高级清理</summary>
+            <p className="form-hint">只清理 30 天前的 AI 请求排错记录，不影响正文、草稿、审核、改动对比、备份或发布记录。</p>
+            <button className="secondary-button danger-button" type="button" onClick={handleCleanupModelCalls} disabled={cleanupModelCallsMutation.isPending}>
+              {cleanupModelCallsMutation.isPending ? '清理中...' : '清理 30 天前记录'}
+            </button>
+          </details>
+        </details>
       </section>
 
       <div className="models-bottom-grid">
@@ -374,12 +447,14 @@ function ModelConfigCard({
 }
 
 function ModelCallRow({ call }: { call: ModelCallRecord }) {
+  const errorSummary = summarizeModelCallError(call.error);
+  const sanitizedError = sanitizeModelCallError(call.error);
   return (
     <div className={`observability-row status-${call.status}`} role="row">
       <span>{formatDate(call.created_at ?? null)}</span>
       <span>{roleLabel(call.role)}</span>
       <span>{statusLabel(call.status)}{call.cache_hit ? ' / 缓存' : ''}</span>
-      <span>{call.error || '无'}</span>
+      <span className="model-call-error-summary">{errorSummary}</span>
       <span>
         <details className="advanced-details">
           <summary>高级详情</summary>
@@ -387,10 +462,52 @@ function ModelCallRow({ call }: { call: ModelCallRecord }) {
           <small>provider/model：{call.provider}/{call.model}</small>
           <small>输入/输出：{call.input_chars} / {call.output_chars}</small>
           <small>本地用量：{usageSummary(call.usage)}</small>
+          <small>错误：{sanitizedError}</small>
         </details>
       </span>
     </div>
   );
+}
+
+function summarizeModelCallError(error?: string | null): string {
+  if (!error) {
+    return '无';
+  }
+  const normalized = error.toLowerCase();
+  if (normalized.includes('missing api key') || normalized.includes('api_key') || normalized.includes('api key env')) {
+    return '缺少密钥配置';
+  }
+  if (normalized.includes('authentication') || normalized.includes('invalid') || normalized.includes('unauthorized') || normalized.includes('401')) {
+    return '密钥验证失败';
+  }
+  if (normalized.includes('timeout') || normalized.includes('timed out')) {
+    return '请求超时';
+  }
+  if (normalized.includes('rate limit') || normalized.includes('too many') || normalized.includes('429')) {
+    return '请求过多，稍后再试';
+  }
+  if (normalized.includes('budget')) {
+    return '预算限制，已暂停';
+  }
+  if (error.includes('测试连接失败') || normalized.includes('network') || normalized.includes('connection') || normalized.includes('fetch')) {
+    return '连接失败';
+  }
+  if (normalized.includes('json')) {
+    return '响应格式异常';
+  }
+  return '请求失败，可展开排错信息';
+}
+
+function sanitizeModelCallError(error?: string | null): string {
+  if (!error) {
+    return '无';
+  }
+  return error
+    .replace(/(api\s*key\s*[:=]\s*)[^\s"',}]+/gi, '$1已隐藏')
+    .replace(/(api_key\s*[:=]\s*)[^\s"',}]+/gi, '$1已隐藏')
+    .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s"',}]+/gi, '$1已隐藏')
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-已隐藏')
+    .replace(/[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/g, 'token-已隐藏');
 }
 
 function SkillCard({ skill }: { skill: SkillInfo }) {

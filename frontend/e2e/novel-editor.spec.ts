@@ -739,7 +739,11 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(page.locator('.models-section--overview')).toContainText('AI 输出去向与安全边界');
   await expect(page.locator('.models-section--connectivity')).toContainText('AI 助手配置');
   await expect(page.locator('.models-section--connectivity')).toContainText('按用途配置模型、接口和密钥');
-  await expect(page.locator('.models-section--calls')).toContainText('排错信息');
+  const callRecords = page.locator('.models-section--calls');
+  await expect(callRecords).toContainText('AI 请求排错记录');
+  await expect(callRecords).toContainText('平时不用展开');
+  await expect(callRecords.locator('.observability-table--calls')).toBeHidden();
+  await expect(callRecords.getByRole('button', { name: '清理 30 天前记录' })).toBeHidden();
   await expect(page.locator('.models-section--skills')).toContainText('高级日志 / Skills');
   await expect(page.locator('.quality-card')).toHaveCount(3);
   await expect(page.locator('.quality-card').nth(0)).toContainText('1');
@@ -763,11 +767,24 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(writerConfigCard.getByPlaceholder('留空则不修改已保存密钥')).toBeVisible();
   await expect(writerConfigCard.getByRole('button', { name: '保存配置' })).toBeEnabled();
   await expect(writerConfigCard.getByRole('button', { name: '测试连接' })).toBeVisible();
-  await expect(page.getByText('供应商、用量和原始细节只在排错信息里展开')).toBeVisible();
+  await expect(callRecords).toContainText('连接失败、费用异常或 AI 无响应时再查看');
+  await callRecords.getByRole('heading', { name: 'AI 请求排错记录' }).click();
+  await expect(callRecords.locator('.observability-table--calls')).toBeVisible();
+  const failedCallRow = callRecords.locator('.observability-row').filter({ hasText: '失败' }).first();
+  await expect(failedCallRow).toBeVisible();
+  await expect(failedCallRow.locator('.model-call-error-summary')).toContainText(/缺少密钥配置|密钥验证失败|连接失败|请求失败/);
+  await expect(failedCallRow.locator('.model-call-error-summary')).not.toContainText(/Missing API key|Authentication Fails|error|api key:/i);
+  await callRecords.getByRole('button', { name: '只看失败' }).click();
+  await expect(callRecords).toContainText('当前只显示失败请求。');
+  await expect(callRecords.locator('.observability-row').filter({ hasText: '成功' })).toHaveCount(0);
+  await expect(callRecords.getByRole('button', { name: '查看更多' })).toBeVisible();
+  await expect(callRecords.getByText('高级清理')).toBeVisible();
+  await callRecords.getByText('高级清理').click();
+  await expect(callRecords.getByRole('button', { name: '清理 30 天前记录' })).toBeVisible();
   await page.getByText('查看 Skills').click();
   await expect(page.locator('.skill-card').first()).toContainText(/参与最近一次记录的上下文|最近一次记录的上下文未使用/);
   await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(2);
-  await expect(page.locator('.models-section--calls .observability-row').first()).not.toContainText(/provider|token|base_url|JSON/);
+  await expect(callRecords.locator('.observability-row').first()).not.toContainText(/provider|token|base_url|JSON/);
 });
 
 test('cyberpunk theme keeps core work areas readable and uses project visual assets', async ({ page }) => {

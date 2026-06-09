@@ -9,7 +9,7 @@ from backend.app.services.workspace import app_root, workspace_runtime_root
 
 
 CODE_DIRS = {"backend", "frontend", "config", "skills", "tests", "docs"}
-CONTENT_DIRS = {"00-系统", "01-设定", "02-正文", "03-章纲", "content"}
+CONTENT_DIRS = {"00-系统", "00-设定", "01-设定", "01-大纲", "02-正文", "03-章纲", "content"}
 RUNTIME_DIRS = {"runtime"}
 CACHE_NAMES = {"__pycache__", ".pytest_cache", "dist", "node_modules"}
 SENSITIVE_NAMES = {"key.txt", ".env"}
@@ -80,7 +80,7 @@ def render_report(root: Path, items: list[InventoryItem]) -> str:
             "",
             "## 安全规则",
             "",
-            "- `00-系统/01-设定/02-正文/03-章纲` 禁止自动删除。",
+            "- `00-系统/00-设定/01-设定/01-大纲/02-正文/03-章纲` 禁止自动删除。",
             "- `key.txt` 和 `.env` 只记录文件名，不读取内容。",
             "- `runtime` 下历史 artifact、diff、backup、model log 默认保留，只允许归档。",
             "- 可自动清理范围仅限缓存、构建产物和明确的空日志。",

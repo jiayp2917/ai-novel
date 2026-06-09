@@ -11,6 +11,8 @@ def test_package_system_excludes_content_runtime_and_keys(tmp_path: Path) -> Non
         "tests",
         "runtime",
         "00-系统",
+        "00-设定",
+        "01-大纲",
         "01-设定",
         "02-正文",
         "03-章纲",
@@ -26,6 +28,8 @@ def test_package_system_excludes_content_runtime_and_keys(tmp_path: Path) -> Non
     (tmp_path / "README.md").write_text("# README", encoding="utf-8")
     (tmp_path / "runtime" / "app.db").write_text("db", encoding="utf-8")
     (tmp_path / "00-系统" / "system.md").write_text("system", encoding="utf-8")
+    (tmp_path / "00-设定" / "setting.md").write_text("setting", encoding="utf-8")
+    (tmp_path / "01-大纲" / "outline.md").write_text("outline", encoding="utf-8")
     (tmp_path / "01-设定" / "setting.md").write_text("setting", encoding="utf-8")
     (tmp_path / "02-正文" / "chapter.md").write_text("novel", encoding="utf-8")
     (tmp_path / "03-章纲" / "outline.md").write_text("outline", encoding="utf-8")
@@ -48,6 +52,8 @@ def test_package_system_excludes_content_runtime_and_keys(tmp_path: Path) -> Non
     assert "tests/test_ok.py" in rendered
     assert "runtime/app.db" not in rendered
     assert "00-系统/system.md" not in rendered
+    assert "00-设定/setting.md" not in rendered
+    assert "01-大纲/outline.md" not in rendered
     assert "01-设定/setting.md" not in rendered
     assert "02-正文/chapter.md" not in rendered
     assert "03-章纲/outline.md" not in rendered

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 
-SOURCE_DIRS = ("00-系统", "01-设定", "02-正文", "03-章纲")
+SOURCE_DIRS = ("00-系统", "00-设定", "01-设定", "01-大纲", "02-正文", "03-章纲")
 SENSITIVE_FILE_NAMES = {"key.txt", "model_secrets.dpapi.json"}
 
 

@@ -15,7 +15,9 @@ UNSUPPORTED_LAYOUT = "unsupported"
 
 LEGACY_SOURCE_DIRS: tuple[tuple[str, str, str], ...] = (
     ("00-系统", "settings", "系统设定"),
+    ("00-设定", "settings", "小说设定"),
     ("01-设定", "settings", "小说设定"),
+    ("01-大纲", "outlines", "全文大纲"),
     ("03-章纲", "outlines", "章纲"),
     ("02-正文", "chapters", "正文"),
 )

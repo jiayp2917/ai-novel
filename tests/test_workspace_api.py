@@ -79,6 +79,40 @@ def test_configured_workspace_overrides_content_root(tmp_path: Path, monkeypatch
     reset_engine()
 
 
+def test_workspace_api_accepts_numeric_alias_layout(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+
+    workspace = tmp_path / "workspace"
+    write(workspace / "00-设定" / "设定文档.md", "# 设定")
+    write(workspace / "01-大纲" / "00-全文总纲v3.md", "# 总纲")
+    write(workspace / "03-章纲" / "01-第一卷.md", "# 第一卷")
+    write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 First\nBody")
+
+    client = TestClient(app)
+    response = client.post("/api/workspace", json={"path": str(workspace)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["layout"] == "legacy"
+    assert payload["detected_counts"]["00-设定"] == 1
+    assert payload["detected_counts"]["01-大纲"] == 1
+    assert payload["detected_counts"]["03-章纲"] == 1
+    assert payload["detected_counts"]["02-正文"] == 1
+
+    scan = client.post("/api/library/scan")
+    assert scan.status_code == 200
+    assert scan.json()["source_files_seen"] == 4
+    assert client.get("/api/chapters").json()[0]["chapter_no"] == 1
+
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_artifacts_default_to_active_workspace_runtime(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
     monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "artifact-runtime"))

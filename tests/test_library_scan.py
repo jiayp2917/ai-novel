@@ -105,6 +105,31 @@ def test_scan_supports_legacy_workspace_layout(tmp_path: Path) -> None:
     assert [chapter.chapter_no for chapter in chapters] == [1, 2]
 
 
+def test_scan_supports_numeric_workspace_alias_layout(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    write(workspace / "00-设定" / "设定文档.md", "# 设定\n全民修仙。")
+    write(workspace / "01-大纲" / "00-全文总纲v3.md", "# 全文总纲\n四卷结构。")
+    write(workspace / "01-大纲" / "等级与副本规则.md", "# 规则\n秘境规则。")
+    write(workspace / "03-章纲" / "01-第一卷.md", "# 第一卷\n问灵大考。")
+    write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 问灵\n正文。")
+
+    session = make_session()
+    summary = LibraryScanner(session, workspace).scan()
+    sources = list(session.scalars(select(SourceFile).order_by(SourceFile.path)))
+    chapters = list(session.scalars(select(Chapter).order_by(Chapter.chapter_no)))
+
+    assert detect_workspace(workspace).layout == "legacy"
+    assert summary["source_files_seen"] == 5
+    assert [source.kind for source in sources] == ["settings", "outlines", "outlines", "chapters", "outlines"]
+    assert {source.path for source in sources if source.kind == "settings"} == {"00-设定/设定文档.md"}
+    assert {
+        source.path
+        for source in sources
+        if source.kind == "outlines"
+    } == {"01-大纲/00-全文总纲v3.md", "01-大纲/等级与副本规则.md", "03-章纲/01-第一卷.md"}
+    assert [chapter.chapter_no for chapter in chapters] == [1]
+
+
 def test_workspace_resolver_blocks_path_traversal(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     write(workspace / "content" / "settings" / "world.md", "# World")

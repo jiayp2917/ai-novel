@@ -265,7 +265,7 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
             <div className="empty-state">
               <strong>还没有识别到素材。</strong>
               <span>当前扫描目录：{current?.root ?? path}</span>
-              <span>请确认目录内存在旧目录 00-系统、01-设定、02-正文、03-章纲，或 content/settings、content/outlines、content/chapters。</span>
+              <span>请确认目录内存在 00-系统/01-设定/02-正文/03-章纲，或 00-设定/01-大纲/02-正文/03-章纲，或 content/settings/content/outlines/content/chapters。</span>
             </div>
           )}
         </section>

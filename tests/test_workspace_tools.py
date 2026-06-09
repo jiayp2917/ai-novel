@@ -11,12 +11,16 @@ def write(path: Path, text: str) -> None:
 
 def test_boundary_report_lists_sensitive_names_without_contents(tmp_path: Path) -> None:
     write(tmp_path / "key.txt", "secret-value")
+    write(tmp_path / "00-设定" / "设定文档.md", "# 设定")
+    write(tmp_path / "01-大纲" / "总纲.md", "# 总纲")
     write(tmp_path / "02-正文" / "01卷" / "第001章.md", "# 第001章\n正文")
     items = inventory(tmp_path)
     report = render_report(tmp_path, items)
 
     assert "key.txt" in report
     assert "secret-value" not in report
+    assert "00-设定" in report
+    assert "01-大纲" in report
     assert "02-正文" in report
     assert "keep_or_migrate" in report
 
@@ -25,12 +29,14 @@ def test_workspace_migrate_dry_plan_and_copy_preserve_hash(tmp_path: Path) -> No
     source = tmp_path / "source"
     target = tmp_path / "target"
     write(source / "00-系统" / "system.md", "# 系统")
+    write(source / "00-设定" / "设定文档.md", "# 设定")
+    write(source / "01-大纲" / "总纲.md", "# 总纲")
     write(source / "02-正文" / "01卷" / "第001章.md", "# 第001章\n正文")
     write(source / "key.txt", "secret")
 
     plan = build_plan(source, target, include_runtime=False)
 
-    assert len(plan) == 2
+    assert len(plan) == 4
     assert not (target / "02-正文").exists()
     assert all(item.source.name != "key.txt" for item in plan)
 
@@ -40,6 +46,8 @@ def test_workspace_migrate_dry_plan_and_copy_preserve_hash(tmp_path: Path) -> No
     assert copied.read_text(encoding="utf-8") == "# 第001章\n正文"
     assert {item.target for item in plan} == {
         target / "00-系统" / "system.md",
+        target / "00-设定" / "设定文档.md",
+        target / "01-大纲" / "总纲.md",
         target / "02-正文" / "01卷" / "第001章.md",
     }
 

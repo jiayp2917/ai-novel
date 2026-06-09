@@ -73,7 +73,7 @@ export function DashboardPage() {
             <div className="cover">文</div>
             <div>
               <div className="row-title">当前小说项目</div>
-              <div className="muted">支持旧目录：00-系统 / 01-设定 / 02-正文 / 03-章纲</div>
+              <div className="muted">支持旧目录、当前作品目录和 content 目录。</div>
               <div className="chips">
                 <span className="chip ok">版本安全</span>
                 <span className="chip blue">AI 辅助</span>

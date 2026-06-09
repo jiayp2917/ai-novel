@@ -783,7 +783,8 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(callRecords.getByRole('button', { name: '清理 30 天前记录' })).toBeVisible();
   await page.getByText('查看 Skills').click();
   await expect(page.locator('.skill-card').first()).toContainText(/参与最近一次记录的上下文|最近一次记录的上下文未使用/);
-  await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(2);
+  await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(3);
+  await expect(page.locator('.skill-card').filter({ hasText: 'numeric_xianxia_review_checklist' })).toBeVisible();
   await expect(callRecords.locator('.observability-row').first()).not.toContainText(/provider|token|base_url|JSON/);
 });
 

@@ -16,7 +16,11 @@ ROLE_TASK_SKILLS: dict[str, list[str]] = {
     ],
     "quick_fix": ["fix/no_new_setting.md", "fix/patch_rules.md"],
     "fixer": ["fix/no_new_setting.md", "fix/patch_rules.md"],
-    "reviewer": ["review/evidence_guard.md", "review/hallucination_guard.md"],
+    "reviewer": [
+        "review/evidence_guard.md",
+        "review/hallucination_guard.md",
+        "review/numeric_xianxia_review_checklist.md",
+    ],
     "long_context": ["memory/clue_extraction.md"],
     "memory": ["memory/clue_extraction.md"],
     "outliner": ["outline/webnovel_structure.md"],

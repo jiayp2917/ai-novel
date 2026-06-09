@@ -9,7 +9,11 @@ from backend.app.utils.hashing import sha256_text
 
 
 ROLE_TASK_SKILLS: dict[str, list[str]] = {
-    "writer": ["writing/fanqie_style.md", "writing/chapter_body_rules.md"],
+    "writer": [
+        "writing/fanqie_style.md",
+        "writing/chapter_body_rules.md",
+        "writing/numeric_xianxia_style.md",
+    ],
     "quick_fix": ["fix/no_new_setting.md", "fix/patch_rules.md"],
     "fixer": ["fix/no_new_setting.md", "fix/patch_rules.md"],
     "reviewer": ["review/evidence_guard.md", "review/hallucination_guard.md"],

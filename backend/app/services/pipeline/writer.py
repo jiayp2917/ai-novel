@@ -7,6 +7,7 @@ from backend.app.services.annotations import InvalidRequestError, NotFoundError
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.context_builder import ContextBuilder
 from backend.app.services.model_client import ChatMessage, ModelClient
+from backend.app.services.writing_cards import normalize_generation_mode
 
 
 class ChatRunner(Protocol):
@@ -19,7 +20,8 @@ class WriterService:
         self.session = session
         self.model_client = model_client or ModelClient(session)
 
-    def generate_chapter_draft(self, chapter_id: int, *, force: bool = False) -> dict:
+    def generate_chapter_draft(self, chapter_id: int, *, force: bool = False, generation_mode: str = "stable") -> dict:
+        mode = normalize_generation_mode(generation_mode)
         chapter = self._chapter(chapter_id)
         context = ContextBuilder(self.session).build(
             chapter_id=chapter.id,
@@ -40,13 +42,14 @@ class WriterService:
             ],
             force=force,
             require_json=False,
-            temperature=0.6,
+            temperature=self._temperature(mode),
         )
         artifact = ArtifactStore(self.session).save_text(
             kind="candidate",
             text=response.content,
             metadata={
                 "task_type": "generate_chapter_draft",
+                "generation_mode": mode,
                 "context_report": context.report,
                 "context_report_artifact_id": context.report_artifact_id,
                 "model_call_id": response.model_call_id,
@@ -64,6 +67,7 @@ class WriterService:
             "chapter_id": chapter.id,
             "chapter_no": chapter.chapter_no,
             "model_call_id": response.model_call_id,
+            "generation_mode": mode,
         }
 
     def _chapter(self, chapter_id: int) -> Chapter:
@@ -74,3 +78,9 @@ class WriterService:
             raise InvalidRequestError("Chapter has no current version")
         return chapter
 
+    def _temperature(self, generation_mode: str) -> float:
+        if generation_mode == "stable":
+            return 0.35
+        if generation_mode == "quality":
+            return 0.45
+        return 0.6

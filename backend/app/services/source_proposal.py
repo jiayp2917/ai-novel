@@ -68,6 +68,8 @@ class SourceProposalService:
             kind="proposal",
             text=response.content,
             metadata={
+                "purpose": "source_file_proposal",
+                "task_type": "generate_source_proposal",
                 "source_file_id": source_file.id,
                 "source_kind": source_file.kind,
                 "annotation_ids": [annotation.id for annotation in annotations],

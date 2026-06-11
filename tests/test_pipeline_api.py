@@ -50,6 +50,7 @@ def test_pipeline_run_api_create_list_pause_resume_cancel(tmp_path, monkeypatch)
             "chunk_size": 2,
             "max_fix_rounds": 2,
             "dry_run": True,
+            "generation_mode": "quality",
         },
     )
 
@@ -63,6 +64,7 @@ def test_pipeline_run_api_create_list_pause_resume_cancel(tmp_path, monkeypatch)
     assert run["report_summary"]["path"] is None
     assert run["payload"]["chapters"] == [1, 2, 3]
     assert run["payload"]["dry_run"] is True
+    assert run["payload"]["generation_mode"] == "quality"
     assert run["payload"]["input_hash"]
     assert len(run["payload"]["child_task_ids"]) == 9
     assert [task["type"] for task in run["child_tasks"][:3]] == [
@@ -72,6 +74,7 @@ def test_pipeline_run_api_create_list_pause_resume_cancel(tmp_path, monkeypatch)
     ]
     assert all(task["status"] == "planned" for task in run["child_tasks"])
     assert all(task["payload"]["execution"] == "queued" for task in run["child_tasks"])
+    assert all(task["payload"]["generation_mode"] == "quality" for task in run["child_tasks"])
 
     listed = client.get("/api/pipeline/runs")
     assert listed.status_code == 200

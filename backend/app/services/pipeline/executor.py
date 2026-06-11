@@ -15,6 +15,7 @@ from backend.app.services.pipeline.summarizer import SummarizerService
 from backend.app.services.pipeline.writer import WriterService
 from backend.app.services.revision import create_snapshot_candidate_for_chapter
 from backend.app.services.review_publish import ReviewPublishService
+from backend.app.services.writing_cards import normalize_generation_mode
 
 
 class PipelineTaskExecutor:
@@ -63,7 +64,9 @@ class PipelineTaskExecutor:
 
     def _run_generate_chapter_draft(self, job: Job) -> dict[str, Any]:
         chapter = self._chapter(job)
-        result = WriterService(self.session).generate_chapter_draft(chapter.id)
+        payload = job_payload(job)
+        generation_mode = normalize_generation_mode(payload.get("generation_mode"))
+        result = WriterService(self.session).generate_chapter_draft(chapter.id, generation_mode=generation_mode)
         self.machine.transition(
             job,
             PipelineState.DONE,
@@ -72,6 +75,7 @@ class PipelineTaskExecutor:
                 "artifact_path": result["artifact_path"],
                 "artifact_sha256": result["artifact_sha256"],
                 "model_call_id": result["model_call_id"],
+                "generation_mode": generation_mode,
             },
             payload_updates={"execution": "executed"},
             error=None,

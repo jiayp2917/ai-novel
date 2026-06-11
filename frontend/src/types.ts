@@ -457,6 +457,7 @@ export type PipelineRunCreatePayload = {
   chunk_size: number;
   max_fix_rounds: number;
   dry_run: boolean;
+  generation_mode: 'stable' | 'quality' | 'fast';
 };
 
 export type ContextPreview = {

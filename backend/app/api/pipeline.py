@@ -6,6 +6,7 @@ from backend.app.core.config import get_settings
 from backend.app.db.session import get_db
 from backend.app.services.pipeline.runs import PipelineRunError, PipelineRunService
 from backend.app.services.pipeline.state_machine import PipelineTransitionError
+from backend.app.services.writing_cards import normalize_generation_mode
 
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
@@ -18,6 +19,7 @@ class PipelineRunCreateRequest(BaseModel):
     chunk_size: int = Field(default=3, ge=1, le=20)
     max_fix_rounds: int = Field(default=2, ge=0, le=5)
     dry_run: bool = True
+    generation_mode: str = "stable"
 
 
 @router.post("/runs")
@@ -26,6 +28,7 @@ def create_pipeline_run(payload: PipelineRunCreateRequest, session: Session = De
     if not payload.dry_run and not (settings.enable_test_support or settings.allow_pipeline_direct_publish):
         raise HTTPException(status_code=400, detail="自动流水线当前只允许预演，不直接写回正文。请到 AI 工作台确认写回。")
     try:
+        generation_mode = normalize_generation_mode(payload.generation_mode)
         return PipelineRunService(session).create_run(
             start_chapter=payload.start_chapter,
             end_chapter=payload.end_chapter,
@@ -33,6 +36,7 @@ def create_pipeline_run(payload: PipelineRunCreateRequest, session: Session = De
             chunk_size=payload.chunk_size,
             max_fix_rounds=payload.max_fix_rounds,
             dry_run=payload.dry_run,
+            generation_mode=generation_mode,
         )
     except PipelineRunError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

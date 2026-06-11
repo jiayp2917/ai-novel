@@ -107,7 +107,24 @@ def test_writer_creates_candidate_artifact_without_writing_source(tmp_path: Path
     assert (content_root / "chapters" / "book.md").read_text(encoding="utf-8") == original
     metadata = json.loads(artifact.metadata_json)
     assert metadata["task_type"] == "generate_chapter_draft"
+    assert metadata["generation_mode"] == "stable"
     assert metadata["role"] == "writer"
+    get_settings.cache_clear()
+
+
+def test_writer_records_generation_mode_and_temperature(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session, _, _, _, chapter = setup_project(tmp_path, monkeypatch)
+    draft = "# 第001章 起步\n" + "许满握紧拳头，沿着章纲推进。" * 100
+    model = FakeModelClient(draft)
+
+    result = WriterService(session, model_client=model).generate_chapter_draft(chapter.id, generation_mode="quality")
+
+    artifact = session.get(Artifact, result["artifact_id"])
+    assert artifact is not None
+    metadata = json.loads(artifact.metadata_json)
+    assert metadata["generation_mode"] == "quality"
+    assert result["generation_mode"] == "quality"
+    assert model.calls[0]["kwargs"]["temperature"] == 0.45
     get_settings.cache_clear()
 
 

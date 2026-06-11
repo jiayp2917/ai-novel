@@ -56,6 +56,18 @@ const runOperationHelp: Record<string, string> = {
   delete: '只删除这条流水线的任务记录，不删除草稿、报告、模型日志或正文。',
 };
 
+const generationModeLabels: Record<PipelineRunCreatePayload['generation_mode'], string> = {
+  stable: '稳定省钱',
+  quality: '质量优先',
+  fast: '速度优先',
+};
+
+const generationModeDescriptions: Record<PipelineRunCreatePayload['generation_mode'], string> = {
+  stable: '短 skill、低随机性、单候选，优先减少漂移和 token 消耗。',
+  quality: '增加检查和复审成本，适合关键章节。',
+  fast: '更快生成草稿，主要由人工承担审核。',
+};
+
 export function PipelineView() {
   const chapters = useChapters();
   const runs = usePipelineRuns();
@@ -71,6 +83,7 @@ export function PipelineView() {
     chunk_size: 3,
     max_fix_rounds: 2,
     dry_run: true,
+    generation_mode: 'stable',
   });
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [showAllRuns, setShowAllRuns] = useState(false);
@@ -171,6 +184,7 @@ export function PipelineView() {
       chunk_size: numberFromPayload(run, 'chunk_size', 3),
       max_fix_rounds: numberFromPayload(run, 'max_fix_rounds', 2),
       dry_run: true,
+      generation_mode: generationModeFromPayload(run),
     });
     pushTask({ label: '自动流水线', status: 'succeeded', detail: `已套用流水线 #${run.id} 的设置，可调整后重新创建。` });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -239,7 +253,20 @@ export function PipelineView() {
             </select>
           </label>
           <label>
-            <strong>3. 分批和修订</strong>
+            <strong>3. 生成稳定性</strong>
+            <span>{generationModeDescriptions[form.generation_mode]}</span>
+            <select
+              aria-label="生成模式"
+              value={form.generation_mode}
+              onChange={(event) => setForm((current) => ({ ...current, generation_mode: event.target.value as PipelineRunCreatePayload['generation_mode'] }))}
+            >
+              {Object.entries(generationModeLabels).map(([mode, label]) => (
+                <option key={mode} value={mode}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <strong>4. 分批和修订</strong>
             <span>分片越小越稳，修订轮次越高越耗额度。</span>
             <div className="pipeline-range">
               <input aria-label="每批章节数" min={1} max={20} type="number" value={form.chunk_size} onChange={(event) => updateNumber('chunk_size', event.target.value)} />
@@ -247,7 +274,7 @@ export function PipelineView() {
             </div>
           </label>
           <label className="pipeline-mode-card">
-            <strong>4. 写回策略</strong>
+            <strong>5. 写回策略</strong>
             <span>自动流水线固定为预演：只生成草稿、检查结果、改动对比和运行报告，不覆盖正文。</span>
             <span className="checkbox-row">只预演流程，不写回正文</span>
           </label>
@@ -380,6 +407,7 @@ export function PipelineView() {
                 <span>需人工判断：{selectedSummary.manual}</span>
                 <span>失败/暂停：{selectedSummary.failed}</span>
                 <span>写回策略：{selectedRun.payload.dry_run ? '只生成草稿，不写回正文' : '允许写回正文'}</span>
+                <span>生成模式：{generationModeLabels[generationModeFromPayload(selectedRun)]}</span>
               </div>
               {selectedNextStep && (
                 <div className={`pipeline-next-step pipeline-next-step--${selectedNextStep.tone}`}>
@@ -411,6 +439,7 @@ export function PipelineView() {
                   <span>任务编号：#{selectedRun.id}</span>
                   <span>dry_run：{selectedRun.payload.dry_run ? 'true' : 'false'}</span>
                   <span>模式：{modeLabels[(selectedRun.payload.mode as PipelineRunCreatePayload['mode'])] ?? String(selectedRun.payload.mode ?? '未知')}</span>
+                  <span>生成模式：{generationModeLabels[generationModeFromPayload(selectedRun)]}</span>
                   <span>章节：第 {String(selectedRun.payload.start_chapter)}-{String(selectedRun.payload.end_chapter)} 章</span>
                   <span>报告：{selectedRun.report_summary.path ?? '暂无'}</span>
                 </div>
@@ -433,7 +462,7 @@ export function PipelineView() {
           <span>1 选择作品</span>
           <span>2 选择章节范围</span>
           <span>3 选择执行模式</span>
-          <span>4 设置预算和只生成草稿</span>
+          <span>4 选择生成稳定性</span>
           <span>5 生成草稿/候选</span>
           <span>6 证据约束检查</span>
           <span>7 只修复可修 writer 问题</span>
@@ -492,6 +521,11 @@ function numberFromPayload(run: PipelineRun, key: string, fallback: number): num
 function modeFromPayload(run: PipelineRun): PipelineRunCreatePayload['mode'] {
   const mode = run.payload.mode;
   return mode === 'review_only' || mode === 'generate_missing' || mode === 'review_fix' || mode === 'full_auto' ? mode : 'review_fix';
+}
+
+function generationModeFromPayload(run: PipelineRun): PipelineRunCreatePayload['generation_mode'] {
+  const mode = run.payload.generation_mode;
+  return mode === 'quality' || mode === 'fast' || mode === 'stable' ? mode : 'stable';
 }
 
 function canPause(run: PipelineRun): boolean {

@@ -20,6 +20,7 @@ from backend.app.services.pipeline.state_machine import (
     update_payload,
     update_result,
 )
+from backend.app.services.writing_cards import normalize_generation_mode
 
 
 PIPELINE_RUN_MODES = {
@@ -109,7 +110,9 @@ class PipelineRunService:
         chunk_size: int = 3,
         max_fix_rounds: int = 2,
         dry_run: bool = True,
+        generation_mode: str = "stable",
     ) -> dict[str, Any]:
+        generation_mode = normalize_generation_mode(generation_mode)
         if not dry_run and not _direct_publish_allowed():
             raise PipelineRunError(DIRECT_PUBLISH_ERROR)
         if mode not in PIPELINE_RUN_MODES:
@@ -130,6 +133,7 @@ class PipelineRunService:
             {
                 "max_fix_rounds": max_fix_rounds,
                 "dry_run": dry_run,
+                "generation_mode": generation_mode,
                 "chapters": list(range(start_chapter, end_chapter + 1)),
                 "child_task_ids": [],
             },
@@ -139,6 +143,7 @@ class PipelineRunService:
             end_chapter=end_chapter,
             mode=mode,
             dry_run=dry_run,
+            generation_mode=generation_mode,
             parent_run_id=job.id,
         )
         update_payload(job, {"child_task_ids": child_task_ids})
@@ -152,6 +157,7 @@ class PipelineRunService:
         end_chapter: int,
         mode: str,
         dry_run: bool,
+        generation_mode: str,
         parent_run_id: int,
     ) -> list[int]:
         child_task_ids: list[int] = []
@@ -163,6 +169,7 @@ class PipelineRunService:
                     PipelineTaskType.GENERATE_CHAPTER_DRAFT,
                     chapter_no=chapter_no,
                     dry_run=dry_run,
+                    generation_mode=generation_mode,
                     parent_run_id=parent_run_id,
                     depends_on_job_id=previous_task_id,
                 )
@@ -172,6 +179,7 @@ class PipelineRunService:
                     PipelineTaskType.REVIEW_CHAPTER_CANDIDATE,
                     chapter_no=chapter_no,
                     dry_run=dry_run,
+                    generation_mode=generation_mode,
                     parent_run_id=parent_run_id,
                     depends_on_job_id=previous_task_id,
                 )
@@ -181,6 +189,7 @@ class PipelineRunService:
                     PipelineTaskType.FIX_CHAPTER_CANDIDATE,
                     chapter_no=chapter_no,
                     dry_run=dry_run,
+                    generation_mode=generation_mode,
                     parent_run_id=parent_run_id,
                     depends_on_job_id=previous_task_id,
                 )
@@ -189,6 +198,7 @@ class PipelineRunService:
                     PipelineTaskType.REVIEW_CHAPTER_CANDIDATE,
                     chapter_no=chapter_no,
                     dry_run=dry_run,
+                    generation_mode=generation_mode,
                     parent_run_id=parent_run_id,
                     depends_on_job_id=previous_task_id,
                 )
@@ -198,6 +208,7 @@ class PipelineRunService:
                     PipelineTaskType.PUBLISH_CHAPTER_CANDIDATE,
                     chapter_no=chapter_no,
                     dry_run=dry_run,
+                    generation_mode=generation_mode,
                     parent_run_id=parent_run_id,
                     depends_on_job_id=previous_task_id,
                 )
@@ -206,6 +217,7 @@ class PipelineRunService:
                     PipelineTaskType.SUMMARIZE_PUBLISHED_CHAPTER,
                     chapter_no=chapter_no,
                     dry_run=dry_run,
+                    generation_mode=generation_mode,
                     parent_run_id=parent_run_id,
                     depends_on_job_id=previous_task_id,
                 )
@@ -218,6 +230,7 @@ class PipelineRunService:
         *,
         chapter_no: int,
         dry_run: bool,
+        generation_mode: str,
         parent_run_id: int,
         depends_on_job_id: int | None,
     ) -> int:
@@ -225,6 +238,7 @@ class PipelineRunService:
             task_type,
             chapter_no=chapter_no,
             dry_run=dry_run,
+            generation_mode=generation_mode,
             parent_run_id=parent_run_id,
             depends_on_job_id=depends_on_job_id,
         )
@@ -237,6 +251,7 @@ class PipelineRunService:
         *,
         chapter_no: int,
         dry_run: bool,
+        generation_mode: str,
         parent_run_id: int,
         depends_on_job_id: int | None,
     ) -> Job:
@@ -244,6 +259,7 @@ class PipelineRunService:
             "parent_run_id": parent_run_id,
             "chapter_no": chapter_no,
             "dry_run": dry_run,
+            "generation_mode": generation_mode,
             "execution": "queued",
         }
         if depends_on_job_id is not None:

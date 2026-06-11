@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from backend.app.services.library import LibraryScanner
 from backend.app.services.model_client import ChatMessage
 from backend.app.services.review_publish import ReviewPublishError, ReviewPublishService
 from backend.app.services.source_proposal import SourceProposalService
+from backend.app.services.writing_cards import WritingCardService
 
 
 def make_session() -> Session:
@@ -128,6 +130,64 @@ def test_generate_source_proposal_creates_artifact(tmp_path: Path, monkeypatch) 
     assert artifact.kind == "proposal"
     assert artifact.base_source_file_id == source.id
     assert (runtime_root / artifact.path).read_text(encoding="utf-8").startswith("# World")
+    metadata = json.loads(artifact.metadata_json)
+    assert metadata["purpose"] == "source_file_proposal"
+    assert metadata["task_type"] == "generate_source_proposal"
+    get_settings.cache_clear()
+
+
+def test_generate_writing_card_creates_proposal_without_writing_outline(tmp_path: Path, monkeypatch) -> None:
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    seed_sources(content_root)
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    get_settings.cache_clear()
+    session = make_session()
+    LibraryScanner(session, content_root).scan()
+    source = session.scalar(select(SourceFile).where(SourceFile.kind == "outlines"))
+    assert source is not None
+    original = (content_root / source.path).read_text(encoding="utf-8")
+
+    result = WritingCardService(
+        session,
+        model_client=FakeModelClient("# 第001章 First 写作卡\n\n- 本章目标：稳定生成。"),
+    ).generate_card(source.id, chapter_no=1, generation_mode="stable")
+
+    artifact = session.get(Artifact, result["artifact_id"])
+    assert artifact is not None
+    assert artifact.kind == "proposal"
+    assert artifact.base_source_file_id == source.id
+    assert (runtime_root / artifact.path).read_text(encoding="utf-8").startswith("# 第001章 First 写作卡")
+    assert (content_root / source.path).read_text(encoding="utf-8") == original
+    metadata = json.loads(artifact.metadata_json)
+    assert metadata["purpose"] == "chapter_writing_card"
+    assert metadata["task_type"] == "generate_chapter_writing_card"
+    assert metadata["generation_mode"] == "stable"
+    assert metadata["canonical"] is False
+    get_settings.cache_clear()
+
+
+def test_generate_writing_card_rejects_non_outline_source(tmp_path: Path, monkeypatch) -> None:
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    seed_sources(content_root)
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    get_settings.cache_clear()
+    session = make_session()
+    LibraryScanner(session, content_root).scan()
+    source = session.scalar(select(SourceFile).where(SourceFile.kind == "settings"))
+    assert source is not None
+
+    try:
+        WritingCardService(session, model_client=FakeModelClient("unused")).generate_card(source.id, chapter_no=1)
+    except Exception as exc:
+        assert "outline" in str(exc)
+    else:
+        raise AssertionError("writing cards must reject non-outline sources")
     get_settings.cache_clear()
 
 

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import httpx
@@ -111,6 +112,17 @@ def test_model_router_uses_explicit_role_priority_over_default_provider(tmp_path
     assert router.route("quick_fix").provider == "kimi"
     assert router.route("long_context").provider == "qwen"
     assert router.route("structural_fix").provider == "glm"
+
+
+def test_default_registry_routes_all_ai_roles_to_agnes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("WRITER_PROVIDER", raising=False)
+    router = ModelRouter(use_runtime_overrides=False)
+
+    for role in ["writer", "reviewer", "fixer", "quick_fix", "memory", "long_context", "outliner", "structural_fix", "arbiter"]:
+        route = router.route(role)
+        assert route.provider == "agnes"
+        assert route.model == "agnes-2.0-flash"
+        assert route.api_key_env == "AGNES_API_KEY"
 
 
 def test_model_router_role_provider_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -350,6 +362,20 @@ GLM_API_KEY:glm-key-value
     }
 
 
+def test_key_file_loader_accepts_agnes_url_and_key_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    key_file = tmp_path / "key.txt"
+    key_file.write_text("https://apihub.agnes-ai.com/v1 agnes-key-value\n", encoding="utf-8")
+    for name in ["AGNES_API_KEY", "AGENS_API_KEY", "AGNES_BASE_URL", "AGENS_BASE_URL"]:
+        monkeypatch.delenv(name, raising=False)
+
+    loaded = load_key_file(key_file)
+
+    assert loaded == {"AGNES_API_KEY": "agnes-key-value"}
+    assert os.environ["AGNES_API_KEY"] == "agnes-key-value"
+    assert os.environ["AGNES_BASE_URL"] == "https://apihub.agnes-ai.com/v1"
+    assert os.environ["AGENS_BASE_URL"] == "https://apihub.agnes-ai.com/v1"
+
+
 def setup_app_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "content"))
@@ -420,7 +446,7 @@ def test_model_config_secret_response_never_returns_plaintext(tmp_path: Path, mo
         self.secrets_path.write_text(json.dumps({provider: "encrypted-placeholder"}), encoding="utf-8")
 
     def fake_get_secret(self: ModelConfigService, provider: str) -> str | None:
-        return "stored-secret" if provider == "kimi" else None
+        return "stored-secret" if provider == "agnes" else None
 
     monkeypatch.setattr(ModelConfigService, "can_store_secret", lambda self: True)
     monkeypatch.setattr(ModelConfigService, "save_secret", fake_save_secret)

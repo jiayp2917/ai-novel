@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const sandboxPath = String.raw`D:\2917\numeric-monster\runtime\sandbox_workspace`;
+const sandboxPath = String.raw`D:\2917\ai-novel\runtime\sandbox_workspace`;
 const apiBaseUrl = 'http://127.0.0.1:18080';
 
 test('new user 10-minute path can add workspace, scan, read, save version, publish, and see history', async ({ page }) => {
@@ -442,7 +442,11 @@ test('catalog can create folders, chapters, and normalize unrecognized markdown 
   await expect(createDialog.locator('label[for]').filter({ hasText: '类型' })).toHaveCount(1);
   await page.getByLabel('类型').selectOption('chapter-folder');
   await expect(createDialog.locator('label[for]').filter({ hasText: '卷/文件夹' })).toHaveCount(1);
+  await page.getByLabel('卷/文件夹').fill('01?');
+  await page.getByRole('button', { name: '创建并扫描' }).click();
+  await expect(createDialog.locator('.inline-error')).toContainText('Path component contains characters that are not allowed on Windows');
   await page.getByLabel('卷/文件夹').fill('06卷');
+  await expect(createDialog.locator('.inline-error')).toBeHidden();
   await page.getByRole('button', { name: '创建并扫描' }).click();
   await expect(page.locator('.task-latest')).toContainText('素材已创建');
   await expect(page.locator('.catalog-empty-volume')).toContainText('06卷');
@@ -783,8 +787,8 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(callRecords.getByRole('button', { name: '清理 30 天前记录' })).toBeVisible();
   await page.getByText('查看 Skills').click();
   await expect(page.locator('.skill-card').first()).toContainText(/参与最近一次记录的上下文|最近一次记录的上下文未使用/);
-  await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(3);
-  await expect(page.locator('.skill-card').filter({ hasText: 'numeric_xianxia_review_checklist' })).toBeVisible();
+  await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(2);
+  await expect(page.locator('.skill-card').filter({ hasText: 'hallucination_guard' })).toBeVisible();
   await expect(callRecords.locator('.observability-row').first()).not.toContainText(/provider|token|base_url|JSON/);
 });
 

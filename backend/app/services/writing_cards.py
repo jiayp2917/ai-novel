@@ -13,6 +13,7 @@ from backend.app.services.workspace import WorkspaceResolver
 
 
 CHAPTER_HEADING_RE = re.compile(r"^\ufeff?[ \t]*#{0,6}[ \t]*第[ \t]*0*(\d+)[ \t]*章[^\n]*$", re.MULTILINE)
+CHAPTER_TABLE_ROW_RE = re.compile(r"^\ufeff?[ \t]*\|[ \t]*0*(\d+)[ \t]*\|[^\n]*$", re.MULTILINE)
 VALID_GENERATION_MODES = {"stable", "quality", "fast"}
 
 
@@ -123,6 +124,9 @@ class WritingCardService:
             start = match.start()
             end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
             return text[start:end].strip()
+        for match in CHAPTER_TABLE_ROW_RE.finditer(text):
+            if int(match.group(1)) == chapter_no:
+                return match.group(0).strip()
         raise InvalidRequestError("Outline source does not contain the requested chapter")
 
     def _temperature(self, generation_mode: str) -> float:

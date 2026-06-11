@@ -17,7 +17,7 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
   const rememberWorkspace = useWorkbenchStore((state) => state.rememberWorkspace);
   const renameWorkspaceBookmark = useWorkbenchStore((state) => state.renameWorkspaceBookmark);
   const removeWorkspaceBookmark = useWorkbenchStore((state) => state.removeWorkspaceBookmark);
-  const [path, setPath] = useState('D:\\2917\\novel-workspaces\\作品名');
+  const [path, setPath] = useState('D:\\chat\\novel-workspaces\\作品名');
   const [displayName, setDisplayName] = useState('');
   const [lastResult, setLastResult] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);

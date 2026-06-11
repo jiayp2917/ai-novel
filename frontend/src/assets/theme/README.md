@@ -1,6 +1,6 @@
 # 双皮肤视觉资产说明
 
-本目录保存前端皮肤使用的项目内视觉资产。当前生产界面只引用下面两张图片；其他试验图已归档到 `D:\2917\gd\archive\numeric-monster-unused-20260520-frontend-theme\`。
+本目录保存前端皮肤使用的项目内视觉资产。当前生产界面只引用下面两张图片；其他试验图已迁移到 `D:\chat\references\legacy-novel-editor-gd\archive\` 下的旧版前端主题归档目录。
 
 ## 当前资产
 

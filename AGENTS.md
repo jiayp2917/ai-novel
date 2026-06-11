@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file gives Codex project-level instructions for `D:\2917\numeric-monster`.
+This file gives Codex project-level instructions for `D:\2917\ai-novel`.
 
 ## Project Identity
 
@@ -16,7 +16,7 @@ Before substantial work, read the relevant parts of:
 - `docs/通用长篇小说编辑器产品方案.md`: current product direction.
 - `docs/开发手册.md`: backend/frontend boundaries and test matrix.
 
-Specific book context belongs in the active novel workspace or in `D:\2917\plan\...` planning files. Do not promote a specific book's setting, characters, chapter status, or style into repository-wide rules unless the user explicitly asks for a generic template.
+Specific book context belongs in the active novel workspace or in `D:\chat\plan\...` planning files. Do not promote a specific book's setting, characters, chapter status, or style into repository-wide rules unless the user explicitly asks for a generic template.
 
 ## Non-Negotiable Safety Rules
 
@@ -43,14 +43,17 @@ Repository-owned areas:
 - `docs/`
 - root project docs and dependency files
 
+Repository `skills/` must stay generic. Book-specific style rules, review checklists, and long-lived preferences belong in `D:\chat\novel-workspaces\作品名\skills\` and must not be committed to the system repository.
+
 Novel workspace-owned areas:
 
 - legacy structure: `00-系统/`, `01-设定/`, `02-正文/`, `03-章纲/`
 - current project structure: `00-设定/`, `01-大纲/`, `02-正文/`, `03-章纲/`
 - new content structure: `content/settings/`, `content/outlines/`, `content/chapters/`
+- workspace `skills/` for book-specific style/review/memory rules
 - workspace `runtime/`
 
-Prefer external novel workspaces under `D:\2917\novel-workspaces\作品名`. Avoid inspecting or quoting full real chapter prose unless the user asks for content review or writing work. Metadata checks, path checks, database state checks, and publish-gate verification are acceptable when needed.
+Prefer external novel workspaces under `D:\chat\novel-workspaces\作品名`. Avoid inspecting or quoting full real chapter prose unless the user asks for content review or writing work. Metadata checks, path checks, database state checks, and publish-gate verification are acceptable when needed.
 
 ## Product Direction
 
@@ -83,13 +86,9 @@ Review outputs must be evidence constrained. Issues without concrete evidence mu
 
 Known default role routes from the current docs and recent model-call records:
 
-- `writer` / `quick_fix`: Kimi `kimi-k2.6`
-- `reviewer`: DeepSeek `deepseek-v4-pro`
-- `memory` / `long_context`: Qwen `qwen3.6-plus`
-- `outliner` / `arbiter`: Qwen `qwen3.6-max-preview`
-- `structural_fix`: GLM `glm-5.1`
+- `writer` / `reviewer` / `fixer` / `quick_fix` / `memory` / `long_context` / `outliner` / `structural_fix` / `arbiter`: Agnes AI `agnes-2.0-flash`
 
-These routes can be overridden by runtime config. Confirm via settings, runtime config, or `model_calls` when the exact model matters.
+DeepSeek、Kimi、Qwen、GLM remain configurable fallback providers. These routes can be overridden by runtime config. Confirm via settings, runtime config, or `model_calls` when the exact model matters.
 
 ## Development Workflow
 

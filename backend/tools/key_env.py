@@ -9,6 +9,8 @@ KEY_PATTERN = re.compile(
     r"""^\s*(?:\$env:)?(?P<name>[A-Z][A-Z0-9_]*API_KEY)\s*=\s*(?P<quote>["']?)(?P<value>.+?)(?P=quote)\s*$"""
 )
 PROVIDER_KEY_ENV = {
+    "agnes": "AGNES_API_KEY",
+    "agens": "AGNES_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
     "kimi": "KIMI_API_KEY",
     "moonshot": "KIMI_API_KEY",
@@ -61,6 +63,10 @@ def _clean_value(value: str) -> str:
 
 
 def _parse_provider_line(line: str) -> tuple[str, str] | None:
+    agnes_url_key = _parse_agnes_url_key(line)
+    if agnes_url_key is not None:
+        return agnes_url_key
+
     for separator in ("=", ":", "\uff1a", "锛?"):
         if separator not in line:
             continue
@@ -88,6 +94,21 @@ def _parse_provider_line(line: str) -> tuple[str, str] | None:
         cleaned = _clean_value(" ".join(parts[:-1]))
         return (PROVIDER_KEY_ENV[last], cleaned) if cleaned else None
     return None
+
+
+def _parse_agnes_url_key(line: str) -> tuple[str, str] | None:
+    parts = line.split()
+    if len(parts) < 2:
+        return None
+    base_url = parts[0].strip()
+    if not base_url.lower().startswith(("http://", "https://")) or "agnes" not in base_url.lower():
+        return None
+    value = _clean_value(parts[1])
+    if not value:
+        return None
+    os.environ.setdefault("AGNES_BASE_URL", base_url)
+    os.environ.setdefault("AGENS_BASE_URL", base_url)
+    return "AGNES_API_KEY", value
 
 
 def _parse_unlabeled_key(line: str) -> str | None:

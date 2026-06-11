@@ -18,6 +18,17 @@ class SourceFileManagerError(ValueError):
     pass
 
 
+WINDOWS_FORBIDDEN_CHARS = set('<>:"|?*')
+WINDOWS_RESERVED_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{index}" for index in range(1, 10)),
+    *(f"LPT{index}" for index in range(1, 10)),
+}
+
+
 @dataclass(frozen=True)
 class CreatedSource:
     path: str
@@ -188,6 +199,7 @@ class SourceFileManager:
             raise SourceFileManagerError("Filename is required")
         if "/" in value or value in {".", ".."}:
             raise SourceFileManagerError("Filename must not contain folders")
+        self._validate_path_component(value)
         if self._is_protected_component(value):
             raise SourceFileManagerError("Protected filename is not allowed")
         if not value.lower().endswith(".md"):
@@ -206,6 +218,7 @@ class SourceFileManager:
                 return ""
             raise SourceFileManagerError("Folder name is required")
         for part in parts:
+            self._validate_path_component(part)
             if part in {".", ".."} or self._is_protected_component(part):
                 raise SourceFileManagerError("Folder path contains protected or unsafe parts")
         return "/".join(parts)
@@ -229,6 +242,18 @@ class SourceFileManager:
     def _is_protected_component(self, value: str) -> bool:
         lowered = value.strip().lower()
         return lowered in {"runtime", "key.txt", ".env"} or lowered.startswith(".")
+
+    def _validate_path_component(self, value: str) -> None:
+        name = value.strip()
+        if not name:
+            raise SourceFileManagerError("Path component is required")
+        if any(char in WINDOWS_FORBIDDEN_CHARS for char in name) or any(ord(char) < 32 for char in name):
+            raise SourceFileManagerError("Path component contains characters that are not allowed on Windows")
+        if name[-1] in {" ", "."}:
+            raise SourceFileManagerError("Path component must not end with a space or dot")
+        stem = name.split(".", 1)[0].upper()
+        if stem in WINDOWS_RESERVED_NAMES:
+            raise SourceFileManagerError("Reserved Windows device names are not allowed")
 
     def _chapter_template(self, chapter_no: int, title: str | None, content: str | None) -> str:
         body = (content or "").strip()

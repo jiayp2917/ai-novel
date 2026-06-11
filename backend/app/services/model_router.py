@@ -23,16 +23,16 @@ class ModelRouteNotFoundError(LookupError):
 
 
 ROLE_PROVIDER_PRIORITY: dict[str, tuple[str, ...]] = {
-    "reviewer": ("deepseek", "qwen", "glm"),
-    "writer": ("kimi", "glm", "qwen"),
-    "fixer": ("kimi", "glm", "deepseek"),
-    "quick_fix": ("kimi", "deepseek", "glm"),
-    "long_context": ("qwen", "deepseek", "glm"),
-    "memory": ("qwen", "deepseek", "glm"),
-    "outliner": ("qwen", "glm"),
-    "structural_fix": ("glm", "qwen", "kimi"),
+    "reviewer": ("agnes", "deepseek", "qwen", "glm"),
+    "writer": ("agnes", "kimi", "glm", "qwen"),
+    "fixer": ("agnes", "kimi", "glm", "deepseek"),
+    "quick_fix": ("agnes", "kimi", "deepseek", "glm"),
+    "long_context": ("agnes", "qwen", "deepseek", "glm"),
+    "memory": ("agnes", "qwen", "deepseek", "glm"),
+    "outliner": ("agnes", "qwen", "glm"),
+    "structural_fix": ("agnes", "glm", "qwen", "kimi"),
     # Arbiter is decision support only. It must not be wired to publish or source-write flows.
-    "arbiter": ("qwen", "deepseek", "glm"),
+    "arbiter": ("agnes", "qwen", "deepseek", "glm"),
 }
 
 

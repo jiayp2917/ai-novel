@@ -359,6 +359,13 @@ def test_source_file_create_rejects_unsafe_paths_and_duplicates(tmp_path: Path, 
     assert duplicate.status_code == 400
     assert duplicate.json()["detail"] == "Source file already exists"
 
+    invalid_folder = client.post(
+        "/api/source-files/create",
+        json={"root": "chapters", "folder": "01?", "filename": "safe.md", "template": "chapter", "chapter_no": 3, "title": "Safe"},
+    )
+    assert invalid_folder.status_code == 400
+    assert invalid_folder.json()["detail"] == "Path component contains characters that are not allowed on Windows"
+
     traversal = client.post(
         "/api/source-files/create",
         json={"root": "chapters", "folder": "../runtime", "filename": "bad.md", "template": "blank"},

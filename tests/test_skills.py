@@ -44,41 +44,6 @@ def test_skill_loader_filters_by_task_and_role(tmp_path: Path) -> None:
     assert all(skill.sha256 for skill in writer_skills + reviewer_skills)
 
 
-def test_skill_loader_includes_numeric_xianxia_style_when_present(tmp_path: Path) -> None:
-    write_skill(tmp_path, "writing/fanqie_style.md", role="writer", body="style")
-    write_skill(tmp_path, "writing/chapter_body_rules.md", role="writer", body="chapter rules")
-    write_skill(tmp_path, "writing/numeric_xianxia_style.md", role="writer", body="numeric style")
-
-    skills = SkillLoader(tmp_path).load_for_task("generate_chapter_draft")
-
-    assert [skill.path for skill in skills] == [
-        "writing/fanqie_style.md",
-        "writing/chapter_body_rules.md",
-        "writing/numeric_xianxia_style.md",
-    ]
-    assert skills[-1].name == "numeric_xianxia_style"
-    assert skills[-1].role == "writer"
-    assert skills[-1].scope == "test"
-    assert skills[-1].enabled is True
-
-
-def test_skill_loader_includes_numeric_xianxia_review_checklist_when_present(tmp_path: Path) -> None:
-    write_skill(tmp_path, "review/evidence_guard.md", role="reviewer", body="evidence")
-    write_skill(tmp_path, "review/hallucination_guard.md", role="reviewer", body="hallucination")
-    write_skill(tmp_path, "review/numeric_xianxia_review_checklist.md", role="reviewer", body="numeric review")
-
-    skills = SkillLoader(tmp_path).load_for_task("review_chapter_candidate")
-
-    assert [skill.path for skill in skills] == [
-        "review/evidence_guard.md",
-        "review/hallucination_guard.md",
-        "review/numeric_xianxia_review_checklist.md",
-    ]
-    assert skills[-1].name == "numeric_xianxia_review_checklist"
-    assert skills[-1].role == "reviewer"
-    assert skills[-1].enabled is True
-
-
 def test_skill_loader_respects_disabled_front_matter(tmp_path: Path) -> None:
     write_skill(tmp_path, "fix/no_new_setting.md", role="fixer", enabled="false")
     write_skill(tmp_path, "fix/patch_rules.md", role="fixer", enabled="true")
@@ -173,7 +138,5 @@ def test_admin_skills_endpoint_returns_enabled_project_skills() -> None:
     skills = response.json()["skills"]
     paths = {skill["path"] for skill in skills}
     assert "writing/fanqie_style.md" in paths
-    assert "writing/numeric_xianxia_style.md" in paths
     assert "review/evidence_guard.md" in paths
     assert "review/hallucination_guard.md" in paths
-    assert "review/numeric_xianxia_review_checklist.md" in paths

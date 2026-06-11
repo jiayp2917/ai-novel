@@ -519,6 +519,7 @@ function CreateSourceDialog({
       content,
     });
   };
+  const clearError = () => setError('');
 
   return (
     <div className="confirm-backdrop" role="presentation">
@@ -533,7 +534,14 @@ function CreateSourceDialog({
         <div className="source-create-form">
           <label htmlFor={modeId}>
             类型
-            <select id={modeId} value={mode} onChange={(event) => setMode(event.target.value as CreateMode)}>
+            <select
+              id={modeId}
+              value={mode}
+              onChange={(event) => {
+                clearError();
+                setMode(event.target.value as CreateMode);
+              }}
+            >
               {allowedModes.includes('system') && <option value="system">系统设定</option>}
               {allowedModes.includes('settings') && <option value="settings">小说设定</option>}
               {allowedModes.includes('outlines') && <option value="outlines">章纲</option>}
@@ -545,37 +553,85 @@ function CreateSourceDialog({
           {(mode === 'chapter-folder' || mode === 'chapter-file' || mode === 'chapter-markdown') && (
             <label htmlFor={folderId}>
               卷/文件夹
-              <input id={folderId} value={folder} onChange={(event) => setFolder(event.target.value)} placeholder="例如：06卷" />
+              <input
+                id={folderId}
+                value={folder}
+                onChange={(event) => {
+                  clearError();
+                  setFolder(event.target.value);
+                }}
+                placeholder="例如：06卷"
+              />
             </label>
           )}
           {mode !== 'chapter-folder' && (
             <label htmlFor={filenameId}>
               文件名
-              <input id={filenameId} value={filename} onChange={(event) => setFilename(event.target.value)} placeholder={defaultFilename(mode, parsedChapterNo, title)} />
+              <input
+                id={filenameId}
+                value={filename}
+                onChange={(event) => {
+                  clearError();
+                  setFilename(event.target.value);
+                }}
+                placeholder={defaultFilename(mode, parsedChapterNo, title)}
+              />
             </label>
           )}
           {mode === 'chapter-file' && (
             <div className="source-create-grid">
               <label htmlFor={chapterNoId}>
                 章号
-                <input id={chapterNoId} value={chapterNo} onChange={(event) => setChapterNo(event.target.value)} placeholder="146" />
+                <input
+                  id={chapterNoId}
+                  value={chapterNo}
+                  onChange={(event) => {
+                    clearError();
+                    setChapterNo(event.target.value);
+                  }}
+                  placeholder="146"
+                />
               </label>
               <label htmlFor={titleId}>
                 标题
-                <input id={titleId} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="新的章节标题" />
+                <input
+                  id={titleId}
+                  value={title}
+                  onChange={(event) => {
+                    clearError();
+                    setTitle(event.target.value);
+                  }}
+                  placeholder="新的章节标题"
+                />
               </label>
             </div>
           )}
           {mode !== 'chapter-file' && mode !== 'chapter-folder' && (
             <label htmlFor={titleId}>
               标题
-              <input id={titleId} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="可选" />
+              <input
+                id={titleId}
+                value={title}
+                onChange={(event) => {
+                  clearError();
+                  setTitle(event.target.value);
+                }}
+                placeholder="可选"
+              />
             </label>
           )}
           {mode !== 'chapter-folder' && (
             <label htmlFor={contentId}>
               初始内容
-              <textarea id={contentId} value={content} onChange={(event) => setContent(event.target.value)} placeholder="可留空，稍后再写。" />
+              <textarea
+                id={contentId}
+                value={content}
+                onChange={(event) => {
+                  clearError();
+                  setContent(event.target.value);
+                }}
+                placeholder="可留空，稍后再写。"
+              />
             </label>
           )}
           {mode === 'chapter-markdown' && <div className="notice warn">普通正文 Markdown 不会直接成为章节；需要补充章号和标题后，才能转为可发布的正文章节。</div>}
@@ -583,7 +639,15 @@ function CreateSourceDialog({
           {error && <div className="inline-error">{error}</div>}
         </div>
         <div className="confirm-dialog__actions">
-          <button className="secondary-button" type="button" onClick={onClose} disabled={busy}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => {
+              clearError();
+              onClose();
+            }}
+            disabled={busy}
+          >
             取消
           </button>
           <button className="primary-button" type="button" onClick={submit} disabled={!canSubmit || busy}>

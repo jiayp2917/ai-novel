@@ -1,4 +1,16 @@
 providers:
+  agnes:
+    enabled: true
+    base_url: https://apihub.agnes-ai.com/v1
+    api_key_env: AGNES_API_KEY
+    models:
+      - id: agnes-2.0-flash
+        enabled: true
+        cheap: false
+        supports_json: true
+        roles: [writer, reviewer, fixer, quick_fix, memory, long_context, outliner, structural_fix, arbiter]
+        default_max_tokens: 12000
+        low_cost_max_tokens: 4000
   deepseek:
     enabled: true
     base_url: https://api.deepseek.com

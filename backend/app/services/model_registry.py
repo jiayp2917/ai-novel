@@ -118,6 +118,7 @@ class ModelRegistry:
 
 def provider_config_base_url(provider: str) -> str:
     defaults = {
+        "agnes": "https://apihub.agnes-ai.com/v1",
         "deepseek": "https://api.deepseek.com",
         "kimi": "https://api.moonshot.cn/v1",
         "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -130,6 +131,7 @@ def provider_config_base_url(provider: str) -> str:
 
 def provider_config_api_key_env(provider: str) -> str:
     defaults = {
+        "agnes": "AGNES_API_KEY",
         "deepseek": "DEEPSEEK_API_KEY",
         "kimi": "KIMI_API_KEY",
         "qwen": "QWEN_API_KEY",

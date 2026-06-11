@@ -75,7 +75,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 后端启动
 ```powershell
-cd D:\2917\numeric-monster
+cd D:\2917\ai-novel
 pip install -r .\requirements.txt
 python -m alembic upgrade head
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
@@ -155,12 +155,9 @@ runtime/           # 运行时数据
 
 | 岗位 | 默认模型 |
 |------|----------|
-| reviewer | deepseek-v4-pro |
-| writer / fixer | kimi-k2.6 |
-| long_context / memory | qwen3.6-plus |
-| arbiter / outliner | qwen3.6-max-preview |
+| writer / reviewer / fixer / quick_fix / memory / long_context / outliner / structural_fix / arbiter | agnes-2.0-flash |
 
-覆盖示例：`FIXER_PROVIDER=glm` 或 `FIXER_MODEL=glm-5.1`
+覆盖示例：`FIXER_PROVIDER=glm` 或 `FIXER_MODEL=glm-5.1`。DeepSeek、Kimi、Qwen、GLM 保留为可配置后备供应商。
 
 ## 配置
 
@@ -168,6 +165,7 @@ runtime/           # 运行时数据
 - `CONTENT_ROOT`：小说内容目录
 - `RUNTIME_ROOT`：运行时目录
 - `LOW_COST_MODE`：低成本模式
+- `AGNES_API_KEY` / `AGNES_BASE_URL`：Agnes AI 默认路径
 - `KIMI_THINKING_MODE=disabled` / `GLM_THINKING_MODE=disabled`：禁用思考模式
 - `DAILY_MAX_MODEL_CALLS` / `DAILY_MAX_ESTIMATED_COST`：成本控制
 
@@ -180,7 +178,7 @@ python -m backend.tools.sandbox_publish_smoke
 
 模型探测：
 ```powershell
-python -m backend.tools.probe_roles --roles reviewer quick_fix --force
+python -m backend.tools.probe_roles --roles writer reviewer fixer quick_fix memory long_context outliner structural_fix arbiter --key-file key.txt --force
 ```
 
 模型使用报告：

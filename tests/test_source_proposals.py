@@ -169,6 +169,42 @@ def test_generate_writing_card_creates_proposal_without_writing_outline(tmp_path
     get_settings.cache_clear()
 
 
+def test_generate_writing_card_accepts_table_outline_rows(tmp_path: Path, monkeypatch) -> None:
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    write(
+        content_root / "outlines" / "table-outline.md",
+        "\n".join(
+            [
+                "# Volume outline",
+                "",
+                "| Chapter | Title | Goal |",
+                "|---:|---|---|",
+                "| 001 | Opening Test | Establish the opening trial |",
+                "| 002 | Second Test | Continue the sequence |",
+            ]
+        ),
+    )
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    get_settings.cache_clear()
+    session = make_session()
+    LibraryScanner(session, content_root).scan()
+    source = session.scalar(select(SourceFile).where(SourceFile.kind == "outlines"))
+    assert source is not None
+    model = FakeModelClient("# Writing card")
+
+    result = WritingCardService(session, model_client=model).generate_card(source.id, chapter_no=1)
+
+    artifact = session.get(Artifact, result["artifact_id"])
+    assert artifact is not None
+    assert artifact.kind == "proposal"
+    user_payload = json.loads(model.messages[-1].content)
+    assert user_payload["outline_block"] == "| 001 | Opening Test | Establish the opening trial |"
+    get_settings.cache_clear()
+
+
 def test_generate_writing_card_rejects_non_outline_source(tmp_path: Path, monkeypatch) -> None:
     content_root = tmp_path / "content"
     runtime_root = tmp_path / "runtime"

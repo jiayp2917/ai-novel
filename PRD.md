@@ -134,12 +134,14 @@
 **模型路由**
 | 岗位 | 模型 | 职责 |
 |------|------|------|
-| writer | Kimi K2.6 | 正文创作 |
-| reviewer | DeepSeek v4-pro | 内容审核 |
-| fixer | Kimi K2.6 | 快速修复 |
-| memory | Qwen 3.6-plus | 上下文记忆 |
-| outliner | Qwen 3.6-max | 章纲生成 |
-| structural_fix | GLM 5.1 | 结构调整 |
+| writer | Agnes AI `agnes-2.0-flash` | 正文创作 |
+| reviewer | Agnes AI `agnes-2.0-flash` | 内容审核 |
+| fixer / quick_fix | Agnes AI `agnes-2.0-flash` | 修复和小修 |
+| memory / long_context | Agnes AI `agnes-2.0-flash` | 上下文记忆 |
+| outliner / structural_fix | Agnes AI `agnes-2.0-flash` | 章纲和结构调整 |
+| arbiter | Agnes AI `agnes-2.0-flash` | 高风险判断辅助 |
+
+DeepSeek、Kimi、Qwen、GLM 保留为后备供应商，但当前默认全流程走 Agnes。
 
 ---
 
@@ -267,14 +269,15 @@
 **配置格式**
 ```yaml
 providers:
-  deepseek:
+  agnes:
     enabled: true
-    base_url: https://api.deepseek.com
-    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://apihub.agnes-ai.com/v1
+    api_key_env: AGNES_API_KEY
     models:
-      - id: deepseek-v4-pro
+      - id: agnes-2.0-flash
         enabled: true
-        roles: [reviewer, arbiter]
+        supports_json: true
+        roles: [writer, reviewer, fixer, quick_fix, memory, long_context, outliner, structural_fix, arbiter]
         default_max_tokens: 12000
 ```
 
@@ -403,7 +406,7 @@ Job (任务)
 
 ### 5.3 AI 集成
 - 多模型路由服务
-- 温度控制（Kimi K2.6 默认 0.6）
+- 温度控制（Agnes 默认按岗位和生成模式控制）
 - 思考模式控制（Kimi/GLM 默认关闭）
 - Token 估算和成本控制
 

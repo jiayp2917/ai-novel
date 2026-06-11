@@ -256,6 +256,7 @@ def role_purpose(role: str) -> str:
 
 def provider_label(provider: str) -> str:
     return {
+        "agnes": "Agnes AI",
         "kimi": "Moonshot / Kimi",
         "deepseek": "DeepSeek",
         "qwen": "通义千问",

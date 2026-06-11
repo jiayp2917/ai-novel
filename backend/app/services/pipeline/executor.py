@@ -33,6 +33,7 @@ class PipelineTaskExecutor:
             result = self._run_by_type(job)
         except Exception as exc:
             self._fail_job(job, exc)
+            self._refresh_parent(job)
             raise
         self._refresh_parent(job)
         return result
@@ -88,7 +89,7 @@ class PipelineTaskExecutor:
         if result["passed"]:
             target = PipelineState.APPROVED
             error = None
-        elif self._has_only_writer_issues(result["issues"]):
+        elif self._has_only_writer_issues(result["issues"]) and self._has_dependent_fixer(job):
             target = PipelineState.DONE
             error = "Review found writer issues; queued fixer may continue"
         else:
@@ -252,6 +253,22 @@ class PipelineTaskExecutor:
         if not issues:
             return False
         return all(isinstance(issue, dict) and issue.get("owner") == "writer" for issue in issues)
+
+    def _has_dependent_fixer(self, job: Job) -> bool:
+        parent_run_id = job_payload(job).get("parent_run_id")
+        if not isinstance(parent_run_id, int):
+            return False
+        parent = self.session.get(Job, parent_run_id)
+        if parent is None:
+            return False
+        child_ids = [int(item) for item in job_payload(parent).get("child_task_ids", []) if isinstance(item, int)]
+        for child_id in child_ids:
+            child = self.session.get(Job, child_id)
+            if child is None or child.type != PipelineTaskType.FIX_CHAPTER_CANDIDATE.value:
+                continue
+            if job_payload(child).get("depends_on_job_id") == job.id:
+                return True
+        return False
 
     def _chapter(self, job: Job) -> Chapter:
         payload = job_payload(job)

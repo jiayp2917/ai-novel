@@ -759,6 +759,128 @@ def test_pipeline_run_marks_downstream_manual_when_dependency_needs_manual(tmp_p
     reset_engine()
 
 
+def test_pipeline_executor_refreshes_parent_after_child_failure(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    with Session(get_engine()) as session:
+        run = PipelineRunService(session).create_run(
+            start_chapter=1,
+            end_chapter=1,
+            mode="full_auto",
+            dry_run=True,
+        )
+        generate_task = next(task for task in run["child_tasks"] if task["type"] == "generate_chapter_draft")
+        generate_job = session.get(Job, generate_task["id"])
+        assert generate_job is not None
+        PipelineStateMachine(session).transition(generate_job, PipelineState.QUEUED)
+        generate_job.status = "running"
+        session.commit()
+
+        with pytest.raises(Exception, match="Chapter not found"):
+            PipelineTaskExecutor(session).run_job(generate_job.id)
+
+        refreshed = PipelineRunService(session).get_run(run["id"])
+        assert refreshed["status"] == "manual_required"
+        statuses = {task["type"]: task["status"] for task in refreshed["child_tasks"]}
+        assert statuses["generate_chapter_draft"] == "manual_required"
+        assert all(
+            task["status"] == "manual_required"
+            for task in refreshed["child_tasks"]
+            if task["type"] != "generate_chapter_draft"
+        )
+        result = session.get(Job, run["id"])
+        assert result is not None
+        payload = json.loads(result.result_json or "{}")
+        assert payload["child_status_counts"]["manual_required"] == 6
+    get_settings.cache_clear()
+    reset_engine()
+
+
+def test_final_review_writer_issues_stop_before_publish(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    chapter_text = "# 第001章 First\nBody."
+    chapter_file = tmp_path / "content" / "chapters" / "book.md"
+    chapter_file.parent.mkdir(parents=True, exist_ok=True)
+    chapter_file.write_text(chapter_text, encoding="utf-8")
+
+    class WriterIssueReviewer:
+        def __init__(self, session):
+            self.session = session
+
+        def review_candidate(self, artifact_id):
+            return {
+                "artifact_id": artifact_id,
+                "review_id": 99,
+                "passed": False,
+                "manual_required": False,
+                "model_call_id": 100,
+                "issues": [
+                    {
+                        "owner": "writer",
+                        "severity": "medium",
+                        "evidence": "Body.",
+                        "fix_instruction": "expand",
+                    }
+                ],
+            }
+
+    monkeypatch.setattr("backend.app.services.pipeline.executor.ReviewerService", WriterIssueReviewer)
+
+    with Session(get_engine()) as session:
+        source = Repository(session, SourceFile).create(
+            {
+                "path": "chapters/book.md",
+                "kind": "chapters",
+                "sha256": "source-hash",
+                "mtime": 1.0,
+                "size": len(chapter_text),
+                "active": True,
+            }
+        )
+        chapter = Repository(session, Chapter).create(
+            {
+                "chapter_no": 1,
+                "title": "First",
+                "source_file_id": source.id,
+                "range_start": 0,
+                "range_end": len(chapter_text),
+                "active": True,
+            }
+        )
+        artifact = ArtifactStore(session).save_text(
+            kind="candidate",
+            text=chapter_text,
+            metadata={},
+            base_chapter=chapter,
+        )
+        run = PipelineRunService(session).create_run(
+            start_chapter=1,
+            end_chapter=1,
+            mode="full_auto",
+            dry_run=True,
+        )
+        final_review = run["child_tasks"][3]
+        review_job = session.get(Job, final_review["id"])
+        assert review_job is not None
+        review_job.status = "running"
+        review_job.payload_json = json.dumps(
+            {**json.loads(review_job.payload_json), "artifact_id": artifact.id},
+            ensure_ascii=False,
+        )
+        session.commit()
+
+        PipelineTaskExecutor(session).run_job(review_job.id)
+
+        refreshed = PipelineRunService(session).get_run(run["id"])
+        final_review_after = next(task for task in refreshed["child_tasks"] if task["id"] == review_job.id)
+        publish_after = next(task for task in refreshed["child_tasks"] if task["type"] == "publish_chapter_candidate")
+        assert final_review_after["status"] == "manual_required"
+        assert final_review_after["error"] == "Review did not pass"
+        assert publish_after["status"] == "manual_required"
+        assert publish_after["error"] == f"Dependency requires manual handling: {review_job.id}"
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_pipeline_run_pause_and_cancel_preserve_finished_child_tasks(tmp_path, monkeypatch) -> None:
     setup_app_db(tmp_path, monkeypatch)
     with Session(get_engine()) as session:

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.db.session import get_db
 from backend.app.services.annotations import InvalidRequestError, NotFoundError
 from backend.app.services.model_client import ModelClientError
@@ -30,6 +31,7 @@ class WorkProfileProposalRequest(BaseModel):
 def generate_source_proposal(
     source_file_id: int,
     payload: SourceProposalRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -47,6 +49,7 @@ def generate_source_proposal(
 def generate_writing_card(
     source_file_id: int,
     payload: WritingCardRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -66,6 +69,7 @@ def generate_writing_card(
 def generate_work_profile(
     source_file_id: int,
     payload: WorkProfileProposalRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -77,7 +81,11 @@ def generate_work_profile(
 
 
 @router.post("/writing-cards/{artifact_id}/confirm")
-def confirm_writing_card(artifact_id: int, session: Session = Depends(get_db)) -> dict:
+def confirm_writing_card(
+    artifact_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         return WritingCardService(session).confirm_card(artifact_id)
     except NotFoundError as exc:
@@ -87,7 +95,11 @@ def confirm_writing_card(artifact_id: int, session: Session = Depends(get_db)) -
 
 
 @router.post("/work-profiles/{artifact_id}/confirm")
-def confirm_work_profile(artifact_id: int, session: Session = Depends(get_db)) -> dict:
+def confirm_work_profile(
+    artifact_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         return SourceProposalService(session).confirm_work_profile(artifact_id)
     except NotFoundError as exc:

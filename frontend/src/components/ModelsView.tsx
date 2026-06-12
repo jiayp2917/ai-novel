@@ -8,6 +8,7 @@ import {
   useModelConfig,
   useModelConstraints,
   useModelUsageReport,
+  useJobs,
 
   usePublishDecisions,
   useSkills,
@@ -38,6 +39,7 @@ export function ModelsView() {
   const [modelCallFailedOnly, setModelCallFailedOnly] = useState(false);
   const modelCallSummary = useModelCalls(20, false);
   const modelCalls = useModelCalls(modelCallLimit, modelCallFailedOnly);
+  const jobs = useJobs();
   const usageReport = useModelUsageReport();
   const events = useEvents();
   const publishDecisions = usePublishDecisions();
@@ -104,7 +106,8 @@ export function ModelsView() {
     setCleanupConfirmOpen(true);
   };
 
-  const pausedCount = modelCallSummary.data?.filter((call) => call.status === 'paused_budget').length ?? 0;
+  const pausedCount = jobs.data?.filter((job) => job.status === 'paused_budget').length ?? 0;
+  const pausedCallCount = modelCallSummary.data?.filter((call) => call.status === 'paused_budget').length ?? 0;
   const lastCall = modelCallSummary.data?.[0];
   const recentFailedCount = modelCallSummary.data?.filter((call) => call.status === 'failed').length ?? 0;
   const displayedModelCalls = modelCallFailedOnly ? (modelCalls.data ?? []).filter((call) => call.status === 'failed') : (modelCalls.data ?? []);
@@ -130,7 +133,12 @@ export function ModelsView() {
         </div>
         <div className="models-summary-grid">
           <StatusCard label="今日任务" value={`${cost.data?.running_jobs ?? 0} 个运行中`} detail={`后台任务可在下方继续处理。`} />
-          <StatusCard label="预算状态" value={pausedCount ? '已暂停' : '正常'} detail={pausedCount ? `${pausedCount} 条调用因预算暂停。` : '未发现预算暂停。'} tone={pausedCount ? 'danger' : 'ok'} />
+          <StatusCard
+            label="预算状态"
+            value={pausedCount || pausedCallCount ? '已暂停' : '正常'}
+            detail={pausedCount ? `${pausedCount} 个任务因预算暂停。` : pausedCallCount ? `${pausedCallCount} 条调用因预算暂停。` : '未发现预算暂停。'}
+            tone={pausedCount || pausedCallCount ? 'danger' : 'ok'}
+          />
           <StatusCard label="最近调用" value={lastCall ? statusLabel(lastCall.status) : '暂无'} detail={lastCall ? `${roleLabel(lastCall.role)} · ${formatDate(lastCall.created_at ?? null)}` : '运行 AI 后会出现记录。'} />
         </div>
       </section>

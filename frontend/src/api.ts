@@ -40,7 +40,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 }
 
 function adminHeaders(path: string): Record<string, string> {
-  if (!adminApiToken || !path.startsWith('/api/admin/')) {
+  if (!adminApiToken || !path.startsWith('/api/')) {
     return {};
   }
   return { Authorization: `Bearer ${adminApiToken}` };

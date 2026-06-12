@@ -39,6 +39,8 @@ http://127.0.0.1:5173
 
 如果需要使用 Agnes AI，在本机环境中配置 `AGNES_BASE_URL` 和 `AGNES_API_KEY`。默认模型路径以 Agnes AI 为主，其他供应商保留为可配置后备。
 
+默认后端按本机工具设计，所有会改变状态、触发 AI 调用或写回正文的接口只允许本机访问。若要通过局域网、容器或反向代理访问，请同时配置 `ADMIN_API_TOKEN` 和前端构建环境变量 `VITE_ADMIN_API_TOKEN`。
+
 ## 工作区
 
 推荐把系统代码和小说工作区分开：`<repo-root>` 只放系统代码，`<workspace-root>\作品名` 放小说正文、设定、章纲、作品级 skill 和运行态。运行时使用 `content/settings`、`content/outlines`、`content/chapters` 结构；历史目录迁移说明见 [ai-novel 使用手册](docs/ai-novel使用手册.md)。

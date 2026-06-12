@@ -115,21 +115,16 @@ class ModelConfigService:
 
     def save_route(self, role: str, payload: dict[str, Any]) -> ModelRouteOverride:
         default_route = ModelRouter(use_runtime_overrides=False).route(role)
-        provider = str(payload.get("provider") or default_route.provider).strip()
-        model = str(payload.get("model") or default_route.model).strip()
-        base_url = str(payload.get("base_url") or default_route.base_url).strip()
-        api_key_env = str(payload.get("api_key_env") or _api_key_env_for_provider(provider, default_route.api_key_env)).strip()
+        provider = _payload_text(payload, "provider", default_route.provider)
+        model = _payload_text(payload, "model", default_route.model)
+        base_url = _payload_text(payload, "base_url", default_route.base_url)
+        api_key_env = _payload_text(payload, "api_key_env", _api_key_env_for_provider(provider, default_route.api_key_env))
         if not provider or not model or not base_url or not api_key_env:
             raise HTTPException(status_code=400, detail="模型、接口地址和密钥名称不能为空。")
         _validate_provider(provider)
         _validate_base_url(base_url)
         _validate_api_key_env(api_key_env)
-        try:
-            max_tokens = int(payload.get("max_tokens") or default_route.max_tokens)
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail="输出上限必须是正整数。") from exc
-        if max_tokens <= 0:
-            raise HTTPException(status_code=400, detail="输出上限必须是正整数。")
+        max_tokens = _payload_positive_int(payload, "max_tokens", default_route.max_tokens, "输出上限必须是正整数。")
 
         override = ModelRouteOverride(
             role=role,
@@ -185,11 +180,11 @@ class ModelConfigService:
         existing = profiles.get(profile_id or "")
         base = existing or self._profile_from_route(ModelRouter(use_runtime_overrides=False).route("writer"), built_in=False)
 
-        name = str(payload.get("name") or base.name).strip()
-        provider = str(payload.get("provider") or base.provider).strip()
-        model = str(payload.get("model") or base.model).strip()
-        base_url = str(payload.get("base_url") or base.base_url).strip()
-        api_key_env = str(payload.get("api_key_env") or _api_key_env_for_provider(provider, base.api_key_env)).strip()
+        name = _payload_text(payload, "name", base.name)
+        provider = _payload_text(payload, "provider", base.provider)
+        model = _payload_text(payload, "model", base.model)
+        base_url = _payload_text(payload, "base_url", base.base_url)
+        api_key_env = _payload_text(payload, "api_key_env", _api_key_env_for_provider(provider, base.api_key_env))
         if not name:
             raise HTTPException(status_code=400, detail="模型档案名称不能为空。")
         if not provider or not model or not base_url or not api_key_env:
@@ -197,12 +192,7 @@ class ModelConfigService:
         _validate_provider(provider)
         _validate_base_url(base_url)
         _validate_api_key_env(api_key_env)
-        try:
-            max_tokens = int(payload.get("max_tokens") or base.max_tokens)
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail="输出上限必须是正整数。") from exc
-        if max_tokens <= 0:
-            raise HTTPException(status_code=400, detail="输出上限必须是正整数。")
+        max_tokens = _payload_positive_int(payload, "max_tokens", base.max_tokens, "输出上限必须是正整数。")
 
         next_id = profile_id or _unique_profile_id(_slugify(name), profiles)
         if profile_id and profile_id not in profiles:
@@ -531,6 +521,22 @@ def _api_key_env_for_provider(provider: str, fallback: str) -> str:
         return provider_config_api_key_env(provider)
     except ModelRegistryError:
         return fallback
+
+
+def _payload_text(payload: dict[str, Any], key: str, fallback: str) -> str:
+    value = payload[key] if key in payload and payload[key] is not None else fallback
+    return str(value).strip()
+
+
+def _payload_positive_int(payload: dict[str, Any], key: str, fallback: int, error_message: str) -> int:
+    value = payload[key] if key in payload and payload[key] is not None else fallback
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=error_message) from exc
+    if parsed <= 0:
+        raise HTTPException(status_code=400, detail=error_message)
+    return parsed
 
 
 def _validate_provider(provider: str) -> None:

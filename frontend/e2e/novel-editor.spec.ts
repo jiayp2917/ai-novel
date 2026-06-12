@@ -701,6 +701,34 @@ test('unreviewed AI draft cannot be written back from the frontend', async ({ pa
   await expect(page.getByRole('button', { name: '确认写回正文' })).toBeEnabled();
 });
 
+test('destructive AI workbench switching keeps publish gates tied to the selected draft', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  await mainNav(page, 'AI 工作台').click();
+  await openChapter(page, '001');
+
+  const chapter = await chapterByNo(page, 1);
+  const content = await chapterContent(page, chapter.id);
+  const first = await seedAiCandidate(page, chapter.id, `${content.text}\n\n破坏性切换 A。`);
+  const second = await seedAiCandidate(page, chapter.id, `${content.text}\n\n破坏性切换 B。`);
+  await bindDraftById(page, first.artifact_id);
+  await expect(page.locator('.artifact-main-actions').getByRole('button', { name: '查看改动', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeDisabled();
+
+  await page.getByRole('button', { name: '检查完成' }).click();
+  await page.locator('.artifact-main-actions').getByRole('button', { name: '查看改动', exact: true }).click();
+  await expect(page.locator('.diff-preview')).toContainText('破坏性切换 A');
+  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeEnabled();
+
+  await bindDraftById(page, second.artifact_id);
+  await expect(page.locator('.diff-preview')).toHaveCount(0);
+  await expect(page.locator('.artifact-main-actions').getByRole('button', { name: '查看改动', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeDisabled();
+  await expect(page.locator('.artifact-preview-text')).toContainText('破坏性切换 B');
+});
+
 test('publish hash mismatch tells the writer to rescan and regenerate the draft', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
@@ -719,6 +747,59 @@ test('publish hash mismatch tells the writer to rescan and regenerate the draft'
   await mutateChapterSource(page, chapter.id, '\n\n外部改动：触发 hash mismatch。');
   await page.getByRole('button', { name: '确认写回正文' }).click();
   await expect(page.locator('.task-latest')).toContainText('源文件已变化，请重新扫描并重新生成候选。', { timeout: 10000 });
+});
+
+test('model configuration rejects invalid edits, blocks assigned deletion, and shows paused jobs', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await switchWorkspace(page);
+  const paused = await seedBudgetPausedJob(page);
+
+  await page.reload();
+  await openModelsView(page);
+  await expect(page.locator('.models-section--overview')).toContainText('1 个任务因预算暂停');
+  await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('AI 调用已暂停');
+
+  await page.getByRole('button', { name: '新增模型' }).click();
+  const createCard = page.locator('.model-profile-panel .model-profile-card').first();
+  await createCard.getByLabel('档案名称').fill('破坏性测试模型');
+  await createCard.getByLabel('接口地址').fill('not-a-url');
+  await createCard.getByText('高级设置').click();
+  await createCard.getByLabel('输出上限').fill('0');
+  await createCard.getByRole('button', { name: '保存新模型' }).click();
+  await expect(page.locator('.task-latest')).toContainText(/接口地址必须是有效|输出上限必须是正整数/);
+
+  await createCard.getByLabel('接口地址').fill('https://api.chaos.local/v1');
+  await createCard.getByLabel('输出上限').fill('2048');
+  await createCard.getByRole('button', { name: '保存新模型' }).click();
+  await expect(page.locator('.task-latest')).toContainText('破坏性测试模型 已保存');
+  const savedCard = page.locator('.model-profile-card').filter({ hasText: '破坏性测试模型' });
+  await expect(savedCard).toBeVisible();
+  const afterCreateConfig = await page.request.get(`${apiBaseUrl}/api/admin/model-config`).then((response) => response.json()) as {
+    profiles: Array<{ id: string; provider: string; built_in?: boolean; name: string }>;
+  };
+  const createdProfile = afterCreateConfig.profiles.find((profile) => profile.name === '破坏性测试模型');
+  expect(createdProfile).toBeTruthy();
+
+  const writerRole = page.locator('.role-assignment-row').filter({ hasText: 'AI 写作' });
+  await writerRole.getByLabel('使用模型').selectOption({ label: '破坏性测试模型' });
+  await writerRole.getByRole('button', { name: '保存分配' }).click();
+  await expect(page.locator('.task-latest')).toContainText('AI 写作 的模型已更新');
+  await savedCard.getByRole('button', { name: '删除档案' }).click();
+  await expect(page.locator('.task-latest')).toContainText('模型档案正在被角色使用');
+
+  const config = await page.request.get(`${apiBaseUrl}/api/admin/model-config`).then((response) => response.json()) as {
+    profiles: Array<{ id: string; provider: string; built_in?: boolean; name: string }>;
+  };
+  const defaultWriterProfile = config.profiles.find((profile) => profile.built_in && profile.provider === 'agnes') ?? config.profiles.find((profile) => profile.built_in);
+  expect(defaultWriterProfile).toBeTruthy();
+  const restore = await page.request.patch(`${apiBaseUrl}/api/admin/model-role-assignments/writer`, {
+    data: { profile_id: defaultWriterProfile!.id },
+  });
+  expect(restore.ok()).toBeTruthy();
+  const cleanup = await page.request.delete(`${apiBaseUrl}/api/admin/model-profiles/${encodeURIComponent(createdProfile!.id)}`);
+  expect([200, 404]).toContain(cleanup.status());
 });
 
 test('budget pause is visible in author language and can be resumed from AI task page', async ({ page }) => {

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.core.file_utils import safe_read_text
 from backend.app.db.models import Chapter, ChapterVersion, SourceFile
 from backend.app.db.session import get_db
@@ -43,17 +44,27 @@ class NormalizeChapterRequest(BaseModel):
 
 
 @router.post("/library/scan")
-def scan_library(session: Session = Depends(get_db)) -> dict:
+def scan_library(
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     return LibraryScanner(session).scan()
 
 
 @router.get("/library/catalog-status")
-def catalog_status(session: Session = Depends(get_db)) -> dict:
+def catalog_status(
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     return LibraryScanner(session).scan()
 
 
 @router.post("/source-files/create")
-def create_source_file(payload: CreateSourceFileRequest, session: Session = Depends(get_db)) -> dict:
+def create_source_file(
+    payload: CreateSourceFileRequest,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         created = SourceFileManager(session).create_file(
             root_key=payload.root,
@@ -75,7 +86,11 @@ def create_source_file(payload: CreateSourceFileRequest, session: Session = Depe
 
 
 @router.post("/source-folders/create")
-def create_source_folder(payload: CreateSourceFolderRequest, session: Session = Depends(get_db)) -> dict:
+def create_source_folder(
+    payload: CreateSourceFolderRequest,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         return SourceFileManager(session).create_folder(root_key=payload.root, folder=payload.folder)
     except (SourceFileManagerError, ValueError) as exc:
@@ -83,7 +98,12 @@ def create_source_folder(payload: CreateSourceFolderRequest, session: Session = 
 
 
 @router.post("/source-files/{source_file_id}/normalize-chapter")
-def normalize_chapter_source(source_file_id: int, payload: NormalizeChapterRequest, session: Session = Depends(get_db)) -> dict:
+def normalize_chapter_source(
+    source_file_id: int,
+    payload: NormalizeChapterRequest,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         normalized = SourceFileManager(session).normalize_chapter(
             source_file_id=source_file_id,
@@ -227,6 +247,7 @@ def publish_chapter_version(
     chapter_id: int,
     version_id: int,
     payload: PublishChapterVersionRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -242,7 +263,12 @@ def publish_chapter_version(
 
 
 @router.delete("/chapters/{chapter_id}/versions/{version_id}")
-def delete_chapter_version(chapter_id: int, version_id: int, session: Session = Depends(get_db)) -> dict:
+def delete_chapter_version(
+    chapter_id: int,
+    version_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         return ChapterVersionService(session).delete_version(chapter_id, version_id)
     except ChapterVersionError as exc:

@@ -297,33 +297,23 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
         <div className="chapter-tabs-bar">
           <div className="chapter-tabs" aria-label="已打开章节">
             {tabChapters.map((chapter) => (
-              <button
+              <div
                 className={chapter.id === selectedChapterId ? 'chapter-tab chapter-tab--active' : 'chapter-tab'}
                 key={chapter.id}
-                type="button"
-                onClick={() => selectChapter(chapter.id)}
               >
-                <span>{String(chapter.chapter_no).padStart(3, '0')}</span>
-                <strong>{chapter.title}</strong>
-                <em
-                  role="button"
-                  tabIndex={0}
+                <button className="chapter-tab__select" type="button" onClick={() => selectChapter(chapter.id)}>
+                  <span>{String(chapter.chapter_no).padStart(3, '0')}</span>
+                  <strong>{chapter.title}</strong>
+                </button>
+                <button
+                  className="chapter-tab__close"
+                  type="button"
                   aria-label={`关闭第${chapter.chapter_no}章`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    closeChapterTab(chapter.id);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      closeChapterTab(chapter.id);
-                    }
-                  }}
+                  onClick={() => closeChapterTab(chapter.id)}
                 >
                   ×
-                </em>
-              </button>
+                </button>
+              </div>
             ))}
           </div>
           <div className="chapter-tabs__actions" aria-label="章节标签操作">

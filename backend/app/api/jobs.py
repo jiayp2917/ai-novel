@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.db.models import Artifact, Chapter, Event, Job, ModelCall, PublishDecision, Review
 from backend.app.db.session import get_db
 from backend.app.core.config import get_settings
@@ -68,7 +69,10 @@ def list_jobs(session: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.post("/run-once")
-def run_jobs_once(session: Session = Depends(get_db)) -> dict:
+def run_jobs_once(
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     return JobWorker(session).run_once()
 
 
@@ -99,7 +103,11 @@ def list_model_calls(limit: int = 50, failed_only: bool = False, session: Sessio
 
 
 @router.post("/model-calls/cleanup")
-def cleanup_model_calls(payload: ModelCallCleanupRequest, session: Session = Depends(get_db)) -> dict:
+def cleanup_model_calls(
+    payload: ModelCallCleanupRequest,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     if not payload.confirm_cleanup:
         raise HTTPException(status_code=400, detail="清理 AI 调用记录前需要确认。")
 

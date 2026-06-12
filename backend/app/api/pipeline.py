@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.core.config import get_settings
 from backend.app.db.session import get_db
 from backend.app.services.pipeline.runs import PipelineRunError, PipelineRunService
@@ -23,7 +24,11 @@ class PipelineRunCreateRequest(BaseModel):
 
 
 @router.post("/runs")
-def create_pipeline_run(payload: PipelineRunCreateRequest, session: Session = Depends(get_db)) -> dict:
+def create_pipeline_run(
+    payload: PipelineRunCreateRequest,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     settings = get_settings()
     if not payload.dry_run and not (settings.enable_test_support or settings.allow_pipeline_direct_publish):
         raise HTTPException(status_code=400, detail="自动流水线当前只允许预演，不直接写回正文。请到 AI 工作台确认写回。")
@@ -56,27 +61,47 @@ def get_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/runs/{run_id}/pause")
-def pause_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict:
+def pause_pipeline_run(
+    run_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     return _mutate_run(session, run_id, "pause")
 
 
 @router.post("/runs/{run_id}/resume")
-def resume_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict:
+def resume_pipeline_run(
+    run_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     return _mutate_run(session, run_id, "resume")
 
 
 @router.post("/runs/{run_id}/retry")
-def retry_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict:
+def retry_pipeline_run(
+    run_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     return _mutate_run(session, run_id, "retry")
 
 
 @router.post("/runs/{run_id}/cancel")
-def cancel_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict:
+def cancel_pipeline_run(
+    run_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     return _mutate_run(session, run_id, "cancel")
 
 
 @router.delete("/runs/{run_id}")
-def delete_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict:
+def delete_pipeline_run(
+    run_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         return PipelineRunService(session).delete_run(run_id)
     except PipelineRunError as exc:
@@ -84,7 +109,11 @@ def delete_pipeline_run(run_id: int, session: Session = Depends(get_db)) -> dict
 
 
 @router.post("/runs/{run_id}/delete")
-def delete_pipeline_run_compat(run_id: int, session: Session = Depends(get_db)) -> dict:
+def delete_pipeline_run_compat(
+    run_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     """Compatibility delete endpoint; new clients should prefer DELETE."""
     try:
         return PipelineRunService(session).delete_run(run_id)

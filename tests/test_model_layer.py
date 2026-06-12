@@ -382,6 +382,7 @@ def setup_app_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
     monkeypatch.setenv("APP_RUNTIME_ROOT", str(tmp_path / "runtime"))
     monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
+    monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
     get_settings.cache_clear()
     reset_engine()
     Base.metadata.create_all(get_engine())
@@ -461,6 +462,42 @@ def test_model_profiles_can_be_assigned_to_roles(tmp_path: Path, monkeypatch: py
     assert "正在被角色使用" in blocked_delete.json()["detail"]
 
 
+def test_model_profiles_reject_blank_required_fields_and_zero_tokens(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    blank_name = client.post(
+        "/api/admin/model-profiles",
+        json={
+            "name": " ",
+            "provider": "agnes",
+            "model": "agnes-2.0-flash",
+            "base_url": "https://apihub.agnes-ai.com/v1",
+            "api_key_env": "AGNES_API_KEY",
+            "max_tokens": 4096,
+        },
+    )
+    zero_tokens = client.post(
+        "/api/admin/model-profiles",
+        json={
+            "name": "无效模型",
+            "provider": "agnes",
+            "model": "agnes-2.0-flash",
+            "base_url": "https://apihub.agnes-ai.com/v1",
+            "api_key_env": "AGNES_API_KEY",
+            "max_tokens": 0,
+        },
+    )
+    blank_route_model = client.patch("/api/admin/model-config/writer", json={"model": " "})
+
+    assert blank_name.status_code == 400
+    assert blank_name.json()["detail"] == "模型档案名称不能为空。"
+    assert zero_tokens.status_code == 400
+    assert zero_tokens.json()["detail"] == "输出上限必须是正整数。"
+    assert blank_route_model.status_code == 400
+    assert blank_route_model.json()["detail"] == "模型、接口地址和密钥名称不能为空。"
+
+
 def test_admin_api_is_local_only_without_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     setup_app_db(tmp_path, monkeypatch)
     monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
@@ -486,6 +523,38 @@ def test_admin_api_requires_matching_token_when_configured(tmp_path: Path, monke
     assert missing.status_code == 401
     assert wrong.status_code == 401
     assert ok.status_code == 200
+    monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
+    get_settings.cache_clear()
+
+
+def test_mutating_author_apis_share_local_or_token_access_guard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    local = TestClient(app, client=("127.0.0.1", 50000))
+    remote = TestClient(app, client=("203.0.113.10", 50000))
+
+    local_workspace = local.post("/api/workspace", json={"path": str(tmp_path / "content")})
+    remote_workspace = remote.post("/api/workspace", json={"path": str(tmp_path / "content")})
+    local_publish = local.post("/api/artifacts/1/publish", json={"approved_by_user": True})
+    remote_publish = remote.post("/api/artifacts/1/publish", json={"approved_by_user": True})
+
+    assert local_workspace.status_code in {200, 400}
+    assert remote_workspace.status_code == 403
+    assert local_publish.status_code in {400, 404}
+    assert remote_publish.status_code == 403
+
+    monkeypatch.setenv("ADMIN_API_TOKEN", "unit-admin-token")
+    get_settings.cache_clear()
+    token_client = TestClient(app, client=("203.0.113.10", 50000))
+
+    missing = token_client.post("/api/library/scan")
+    wrong = token_client.post("/api/library/scan", headers={"Authorization": "Bearer wrong"})
+    ok = token_client.post("/api/library/scan", headers={"Authorization": "Bearer unit-admin-token"})
+
+    assert missing.status_code == 401
+    assert wrong.status_code == 401
+    assert ok.status_code in {200, 400}
+    monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
+    get_settings.cache_clear()
 
 
 def test_model_config_rejects_invalid_advanced_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -531,7 +531,7 @@ function jobTypeLabel(type: string): string {
     publish_chapter_candidate: '确认写回正文',
     summarize_published_chapter: '整理章节记忆',
   };
-  return labels[type] ?? type;
+  return labels[type] ?? `未知任务：${type}`;
 }
 
 function jobTone(status: string): 'safe' | 'danger' | 'blue' | 'purple' {
@@ -593,5 +593,5 @@ function jobStatusLabel(status: string): string {
     failed_retryable: '可重试',
     paused_budget: 'AI 调用已暂停',
   };
-  return labels[status] ?? status;
+  return labels[status] ?? `未知状态：${status}`;
 }

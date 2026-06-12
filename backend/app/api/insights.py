@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.db.models import AnnotationInsight
 from backend.app.db.session import get_db
 from backend.app.schemas import AnnotationInsightRead, AnnotationInsightUpdate
@@ -17,7 +18,11 @@ class LearnAnnotationsRequest(BaseModel):
 
 
 @router.post("/annotations/learn")
-def learn_annotations(payload: LearnAnnotationsRequest, session: Session = Depends(get_db)) -> dict:
+def learn_annotations(
+    payload: LearnAnnotationsRequest,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         return AnnotationLearner(session).learn(payload.annotation_ids)
     except InvalidRequestError as exc:
@@ -33,6 +38,7 @@ def list_annotation_insights(session: Session = Depends(get_db)) -> list[Annotat
 def update_annotation_insight(
     insight_id: int,
     payload: AnnotationInsightUpdate,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> AnnotationInsight:
     try:

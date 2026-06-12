@@ -58,7 +58,7 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
   };
 
   const switchMutation = useMutation({
-    mutationFn: async (nextPath: string) => {
+    mutationFn: async ({ path: nextPath }: { path: string; displayName?: string }) => {
       const nextWorkspace = await apiRequest<WorkspaceStatus>('/api/workspace', {
         method: 'POST',
         body: JSON.stringify({ path: nextPath }),
@@ -66,11 +66,11 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
       const scan = await apiRequest<Record<string, number>>('/api/library/scan', { method: 'POST' });
       return { workspace: nextWorkspace, scan };
     },
-    onMutate: (nextPath) =>
+    onMutate: ({ path: nextPath }) =>
       pushTask({ label: '打开作品', status: 'running', detail: `正在打开 ${nextPath}` }),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       invalidateWorkspaceQueries();
-      rememberWorkspace(result.workspace, displayName);
+      rememberWorkspace(result.workspace, variables.displayName);
       setPath(result.workspace.root);
       setDisplayName('');
       setLastResult(`已打开作品：${result.workspace.root}。识别到 ${result.scan.source_files_seen ?? 0} 个素材文件、${result.scan.chapters_seen ?? 0} 章正文。`);
@@ -128,7 +128,7 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
   const openBookmark = (bookmark: WorkspaceBookmark) => {
     setPath(bookmark.path);
     setDisplayName(bookmark.name);
-    switchMutation.mutate(bookmark.path);
+    switchMutation.mutate({ path: bookmark.path, displayName: bookmark.name });
   };
 
   return (
@@ -244,7 +244,12 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
             <input aria-label="当前路径" value={path} onChange={(event) => setPath(event.target.value)} />
           </label>
           <div className="action-row">
-            <Button variant="secondary" onClick={() => switchMutation.mutate(path)} disabled={switchMutation.isPending} loading={switchMutation.isPending}>
+            <Button
+              variant="secondary"
+              onClick={() => switchMutation.mutate({ path, displayName: displayName.trim() || undefined })}
+              disabled={switchMutation.isPending}
+              loading={switchMutation.isPending}
+            >
               打开并扫描
             </Button>
             <Button variant="secondary" onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending} loading={scanMutation.isPending}>

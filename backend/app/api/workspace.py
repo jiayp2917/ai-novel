@@ -1,8 +1,9 @@
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.services.workspace import set_active_workspace, workspace_status
 
 
@@ -19,7 +20,7 @@ def get_workspace() -> dict:
 
 
 @router.post("")
-def update_workspace(payload: WorkspaceUpdateRequest) -> dict:
+def update_workspace(payload: WorkspaceUpdateRequest, _: None = Depends(require_admin_access)) -> dict:
     try:
         return workspace_status(set_active_workspace(Path(payload.path)))
     except ValueError as exc:

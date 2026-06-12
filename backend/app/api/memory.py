@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.db.models import MemoryItem
 from backend.app.db.session import get_db
 from backend.app.schemas import ContextPreview, MemoryItemRead
@@ -11,7 +12,10 @@ router = APIRouter(prefix="/api/memory", tags=["memory"])
 
 
 @router.post("/rebuild")
-def rebuild_memory(session: Session = Depends(get_db)) -> dict[str, int]:
+def rebuild_memory(
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict[str, int]:
     return MemoryService(session).rebuild()
 
 

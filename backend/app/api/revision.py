@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.db.models import Chapter
 from backend.app.db.session import get_db
 from backend.app.services.annotations import InvalidRequestError, NotFoundError
@@ -27,6 +28,7 @@ class DraftCandidateRequest(BaseModel):
 def revise_from_annotations(
     chapter_id: int,
     payload: ReviseFromAnnotationsRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -42,7 +44,11 @@ def revise_from_annotations(
 
 
 @router.post("/chapters/{chapter_id}/snapshot-candidate")
-def create_snapshot_candidate(chapter_id: int, session: Session = Depends(get_db)) -> dict:
+def create_snapshot_candidate(
+    chapter_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     """Create a chapter snapshot artifact for AI review/pipeline flows only.
 
     Daily manual writing saves chapter versions via draft-candidate; this route
@@ -68,6 +74,7 @@ def create_snapshot_candidate(chapter_id: int, session: Session = Depends(get_db
 def create_draft_candidate(
     chapter_id: int,
     payload: DraftCandidateRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     chapter = session.get(Chapter, chapter_id)
@@ -105,6 +112,7 @@ def create_draft_candidate(
 def create_source_draft_proposal(
     source_file_id: int,
     payload: DraftCandidateRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     """Save a manual settings/outline draft as a proposal artifact.

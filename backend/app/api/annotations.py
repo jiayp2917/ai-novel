@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.db.models import Annotation
 from backend.app.db.session import get_db
 from backend.app.schemas import AnnotationRead, AnnotationRequest, AnnotationUpdate
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/api", tags=["annotations"])
 def create_annotation(
     chapter_id: int,
     payload: AnnotationRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> Annotation:
     try:
@@ -36,6 +38,7 @@ def list_annotations(chapter_id: int, session: Session = Depends(get_db)) -> lis
 def create_source_file_annotation(
     source_file_id: int,
     payload: AnnotationRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> Annotation:
     try:
@@ -58,6 +61,7 @@ def list_source_file_annotations(source_file_id: int, session: Session = Depends
 def update_annotation(
     annotation_id: int,
     payload: AnnotationUpdate,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> Annotation:
     try:
@@ -69,7 +73,11 @@ def update_annotation(
 
 
 @router.delete("/annotations/{annotation_id}")
-def delete_annotation(annotation_id: int, session: Session = Depends(get_db)) -> dict[str, str]:
+def delete_annotation(
+    annotation_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict[str, str]:
     try:
         AnnotationService(session).delete(annotation_id)
     except NotFoundError as exc:
@@ -78,7 +86,11 @@ def delete_annotation(annotation_id: int, session: Session = Depends(get_db)) ->
 
 
 @router.post("/annotations/{annotation_id}/relocate", response_model=AnnotationRead)
-def relocate_annotation(annotation_id: int, session: Session = Depends(get_db)) -> Annotation:
+def relocate_annotation(
+    annotation_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> Annotation:
     try:
         return AnnotationService(session).relocate(annotation_id)
     except NotFoundError as exc:

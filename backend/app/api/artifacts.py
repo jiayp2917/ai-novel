@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.db.session import get_db
 from backend.app.db.models import Artifact, PublishDecision, Review
 from backend.app.core.file_utils import safe_read_text
@@ -163,6 +164,7 @@ def _latest_publishes(session: Session, artifact_ids: list[int]) -> dict[int, Pu
 def review_artifact(
     artifact_id: int,
     payload: ReviewArtifactRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -174,7 +176,11 @@ def review_artifact(
 
 
 @router.post("/{artifact_id}/manual-check")
-def manual_check_artifact(artifact_id: int, session: Session = Depends(get_db)) -> dict:
+def manual_check_artifact(
+    artifact_id: int,
+    _: None = Depends(require_admin_access),
+    session: Session = Depends(get_db),
+) -> dict:
     try:
         return ReviewPublishService(session).manual_check_artifact(artifact_id)
     except NotFoundError as exc:
@@ -197,6 +203,7 @@ def diff_artifact(artifact_id: int, session: Session = Depends(get_db)) -> dict:
 def publish_artifact(
     artifact_id: int,
     payload: PublishArtifactRequest,
+    _: None = Depends(require_admin_access),
     session: Session = Depends(get_db),
 ) -> dict:
     try:

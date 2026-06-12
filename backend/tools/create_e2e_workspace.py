@@ -11,14 +11,18 @@ E2E_RUNTIME = ROOT / "runtime" / "e2e_runtime"
 
 
 def main() -> int:
-    _safe_reset(SANDBOX)
     _safe_reset(E2E_RUNTIME)
+    reset_sandbox_content()
+    E2E_RUNTIME.mkdir(parents=True, exist_ok=True)
+    return 0
+
+
+def reset_sandbox_content() -> None:
+    _safe_reset(SANDBOX)
     _write(SANDBOX / "00-系统" / "系统规则.md", "# 系统规则\n\n所有正文写回必须通过发布门。")
     _write(SANDBOX / "01-设定" / "小说设定.md", "# 小说设定\n\n主角在第一章获得异常能力。")
     _write(SANDBOX / "03-章纲" / "第001-010章.md", _outline_text())
     _write(SANDBOX / "02-正文" / "第一卷" / "第001-010章.md", _chapter_text())
-    E2E_RUNTIME.mkdir(parents=True, exist_ok=True)
-    return 0
 
 
 def _safe_reset(path: Path) -> None:

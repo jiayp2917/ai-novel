@@ -8,5 +8,5 @@ export interface LoadingSpinnerProps {
 }
 
 export function LoadingSpinner({ size = 'md', className }: LoadingSpinnerProps) {
-  return <div className={`ui-spinner ui-spinner--${size} ${className ?? ''}`.trim()} />;
+  return <span className={`ui-spinner ui-spinner--${size} ${className ?? ''}`.trim()} aria-hidden="true" />;
 }

@@ -2601,6 +2601,35 @@ textarea {
   font-size: 13px;
 }
 
+.pipeline-failure-rollup {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.pipeline-failure-rollup b {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.pipeline-failure-rollup span,
+.pipeline-failure-details small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pipeline-failure-details {
+  margin-top: 2px;
+}
+
+.pipeline-failure-details small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
 .pipeline-advanced-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

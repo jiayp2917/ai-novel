@@ -67,9 +67,9 @@ export function App() {
               aria-label={`打开${item.label}`}
               onClick={() => setActiveView(item.id)}
             >
-              <span className="ico">{item.icon}</span>
+              <span className="ico" aria-hidden="true">{item.icon}</span>
               <span>{item.label}</span>
-              <small className="nav-short-label">{shortNavLabels[item.id]}</small>
+              <small className="nav-short-label" aria-hidden="true">{shortNavLabels[item.id]}</small>
             </button>
           ))}
         </nav>
@@ -80,9 +80,9 @@ export function App() {
           aria-label="打开模型配置"
           onClick={() => setActiveView('models')}
         >
-          <span className="ico">◈</span>
+          <span className="ico" aria-hidden="true">◈</span>
           <span>模型</span>
-          <small className="nav-short-label">模型</small>
+          <small className="nav-short-label" aria-hidden="true">模型</small>
         </button>
         <button
           className={activeView === 'settings' ? 'sidebar-settings active' : 'sidebar-settings'}
@@ -91,9 +91,9 @@ export function App() {
           aria-label="打开设置"
           onClick={() => setActiveView('settings')}
         >
-          <span className="ico">⚙</span>
+          <span className="ico" aria-hidden="true">⚙</span>
           <span>设置</span>
-          <small className="nav-short-label">设置</small>
+          <small className="nav-short-label" aria-hidden="true">设置</small>
         </button>
       </aside>
 

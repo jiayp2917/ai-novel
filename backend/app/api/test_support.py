@@ -2,19 +2,20 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
 from backend.app.db.models import Artifact, Chapter, Job, ModelCall, Review, SourceFile
-from backend.app.db.session import get_db, get_engine, reset_engine
+from backend.app.db.session import get_db, get_engine
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.pipeline.runs import PipelineRunService
 from backend.app.services.pipeline.state_machine import PipelineState, PipelineStateMachine, job_payload
 from backend.app.services.skills import SkillLoader, skill_summary
 from backend.app.services.workspace import WorkspaceResolver, get_active_workspace_info
-from backend.tools.create_e2e_workspace import main as reset_e2e_workspace
+from backend.tools.create_e2e_workspace import reset_sandbox_content
 
 
 router = APIRouter(prefix="/api/test", tags=["test-support"])
@@ -92,8 +93,8 @@ def seed_ai_candidate(payload: SeedAiCandidateRequest, session: Session = Depend
 @router.post("/reset-sandbox-workspace")
 def reset_sandbox_workspace() -> dict:
     _assert_test_environment()
-    reset_engine()
-    reset_e2e_workspace()
+    _reset_database_tables()
+    reset_sandbox_content()
     Base.metadata.create_all(get_engine())
     return {"status": "ok"}
 
@@ -332,3 +333,13 @@ def _assert_test_environment() -> None:
         raise HTTPException(status_code=403, detail="Test support requires an e2e/test runtime")
     if "sandbox_workspace" not in workspace_parts:
         raise HTTPException(status_code=403, detail="Test support requires sandbox workspace")
+
+
+def _reset_database_tables() -> None:
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("PRAGMA foreign_keys=OFF"))
+        for table in reversed(list(Base.metadata.tables.values())):
+            connection.execute(table.delete())
+        connection.execute(text("PRAGMA foreign_keys=ON"))

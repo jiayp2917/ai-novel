@@ -10,7 +10,7 @@ from backend.app.repositories import Repository
 from backend.app.services.annotations import InvalidRequestError, NotFoundError
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.context_builder import ContextBuilder
-from backend.app.services.model_client import ChatMessage, ModelClient
+from backend.app.services.model_client import ChatMessage, ModelBudgetPausedError, ModelClient
 
 
 class ChatRunner(Protocol):
@@ -135,7 +135,7 @@ class RevisionService:
             self.session.commit()
             return self._result(job, artifact)
         except Exception as exc:
-            job.status = "paused_budget" if "budget" in str(exc).lower() else "manual_required"
+            job.status = "paused_budget" if isinstance(exc, ModelBudgetPausedError) else "manual_required"
             job.error = str(exc)
             self.session.commit()
             raise

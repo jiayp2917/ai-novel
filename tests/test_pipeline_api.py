@@ -345,6 +345,71 @@ def test_pipeline_run_delete_requires_terminal_state_and_removes_task_records(tm
     reset_engine()
 
 
+def test_review_task_prepares_snapshot_without_exception_control_flow(tmp_path, monkeypatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    chapter_text = "# 第001章 First\nBody."
+    chapter_file = tmp_path / "content" / "chapters" / "book.md"
+    chapter_file.parent.mkdir(parents=True, exist_ok=True)
+    chapter_file.write_text(chapter_text, encoding="utf-8")
+
+    with Session(get_engine()) as session:
+        source = Repository(session, SourceFile).create(
+            {
+                "path": "chapters/book.md",
+                "kind": "chapters",
+                "sha256": "source-hash",
+                "mtime": 1.0,
+                "size": len(chapter_text),
+                "active": True,
+            }
+        )
+        chapter = Repository(session, Chapter).create(
+            {
+                "chapter_no": 1,
+                "title": "First",
+                "source_file_id": source.id,
+                "range_start": 0,
+                "range_end": len(chapter_text),
+                "active": True,
+            }
+        )
+        version = ChapterVersion(
+            chapter_id=chapter.id,
+            source_file_id=source.id,
+            body_hash="b" * 64,
+            source_file_hash=source.sha256,
+            title=chapter.title,
+            range_start=chapter.range_start,
+            range_end=chapter.range_end,
+        )
+        session.add(version)
+        session.flush()
+        chapter.current_version_id = version.id
+        job = Repository(session, Job).create(
+            {
+                "type": "review_chapter_candidate",
+                "status": "running",
+                "payload_json": json.dumps({"chapter_no": 1}, ensure_ascii=False),
+                "locked_chapter_id": chapter.id,
+                "locked_source_file_id": source.id,
+            }
+        )
+        session.commit()
+
+        result = PipelineTaskExecutor(session).run_job(job.id)
+
+        stored = session.get(Job, job.id)
+        assert result["status"] == "artifact_prepared"
+        assert isinstance(result["artifact_id"], int)
+        assert stored is not None
+        assert stored.status == "queued"
+        assert json.loads(stored.payload_json)["artifact_id"] == result["artifact_id"]
+        assert json.loads(stored.result_json)["artifact_id"] == result["artifact_id"]
+
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_pipeline_run_delete_method_remains_supported(tmp_path, monkeypatch) -> None:
     setup_app_db(tmp_path, monkeypatch)
     client = TestClient(app)

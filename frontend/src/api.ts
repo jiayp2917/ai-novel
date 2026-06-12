@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 
 export const queryClient = new QueryClient();
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
+const adminApiToken = import.meta.env.VITE_ADMIN_API_TOKEN ?? '';
 
 export class ApiRequestError extends Error {
   status: number;
@@ -16,11 +17,13 @@ export class ApiRequestError extends Error {
 }
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...adminHeaders(path),
+    ...(init?.headers ?? {}),
+  };
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers,
     ...init,
   });
   if (!response.ok) {
@@ -34,6 +37,13 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     throw new ApiRequestError(localizeApiError(detail), response.status, detail);
   }
   return response.json() as Promise<T>;
+}
+
+function adminHeaders(path: string): Record<string, string> {
+  if (!adminApiToken || !path.startsWith('/api/admin/')) {
+    return {};
+  }
+  return { Authorization: `Bearer ${adminApiToken}` };
 }
 
 function localizeApiError(detail: string): string {

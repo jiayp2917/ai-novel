@@ -9,6 +9,7 @@ from backend.app.core.config import get_settings
 from backend.app.core.file_utils import safe_write_text
 from backend.app.db.models import Chapter, Job
 from backend.app.services.workspace import ensure_workspace_runtime_subdir, workspace_runtime_root
+from backend.app.services.pipeline.payloads import child_task_ids
 from backend.app.services.pipeline.planner import PipelinePlanError, PipelinePlanner
 from backend.app.services.pipeline.planner import PipelineTaskType
 from backend.app.services.pipeline.state_machine import (
@@ -281,7 +282,7 @@ class PipelineRunService:
         if run.status not in {PipelineState.QUEUED.value, "running"}:
             raise PipelineRunError(f"Run is not queueable: {run.status}")
         payload = job_payload(run)
-        child_ids = [int(item) for item in payload.get("child_task_ids", []) if isinstance(item, int)]
+        child_ids = child_task_ids(payload)
         queued = 0
         for child_id in child_ids:
             child = self.session.get(Job, child_id)
@@ -297,24 +298,26 @@ class PipelineRunService:
     def refresh_run_status(self, run_id: int) -> Job:
         run = self._run(run_id)
         payload = job_payload(run)
-        child_ids = [int(item) for item in payload.get("child_task_ids", []) if isinstance(item, int)]
+        child_ids = child_task_ids(payload)
         if not child_ids or run.status in {"done", "manual_required", "failed_terminal"}:
             return run
         for child in self.session.scalars(select(Job).where(Job.id.in_(child_ids)).order_by(Job.id)):
             self._propagate_terminal_dependency(child)
             self._queue_child_if_ready(child)
-        if self._children_finished(child_ids):
-            if self._children_need_manual(child_ids):
-                self.machine.transition(run, PipelineState.MANUAL_REQUIRED, result_updates=self._run_result(child_ids))
-            elif self._children_failed(child_ids):
-                self.machine.transition(run, PipelineState.FAILED_RETRYABLE, result_updates=self._run_result(child_ids), error="Some child tasks failed")
+        children = self._children_by_ids(child_ids)
+        if self._children_finished(child_ids, children=children):
+            result = self._run_result(child_ids, children=children)
+            if self._children_need_manual(child_ids, children=children):
+                self.machine.transition(run, PipelineState.MANUAL_REQUIRED, result_updates=result)
+            elif self._children_failed(child_ids, children=children):
+                self.machine.transition(run, PipelineState.FAILED_RETRYABLE, result_updates=result, error="Some child tasks failed")
             else:
-                self.machine.transition(run, PipelineState.DONE, result_updates=self._run_result(child_ids))
+                self.machine.transition(run, PipelineState.DONE, result_updates=result)
             self._ensure_report(run)
         return run
 
-    def _children_finished(self, child_ids: list[int]) -> bool:
-        children = list(self.session.scalars(select(Job).where(Job.id.in_(child_ids))))
+    def _children_finished(self, child_ids: list[int], *, children: list[Job] | None = None) -> bool:
+        children = children if children is not None else self._children_by_ids(child_ids)
         return len(children) == len(child_ids) and all(
             child.status
             in {
@@ -330,24 +333,25 @@ class PipelineRunService:
             for child in children
         )
 
-    def _children_need_manual(self, child_ids: list[int]) -> bool:
-        return any(
-            child.status == "manual_required"
-            for child in self.session.scalars(select(Job).where(Job.id.in_(child_ids)))
-        )
+    def _children_need_manual(self, child_ids: list[int], *, children: list[Job] | None = None) -> bool:
+        children = children if children is not None else self._children_by_ids(child_ids)
+        return any(child.status == "manual_required" for child in children)
 
-    def _children_failed(self, child_ids: list[int]) -> bool:
-        return any(
-            child.status in {"failed_terminal", "failed_retryable", "paused_budget"}
-            for child in self.session.scalars(select(Job).where(Job.id.in_(child_ids)))
-        )
+    def _children_failed(self, child_ids: list[int], *, children: list[Job] | None = None) -> bool:
+        children = children if children is not None else self._children_by_ids(child_ids)
+        return any(child.status in {"failed_terminal", "failed_retryable", "paused_budget"} for child in children)
 
-    def _run_result(self, child_ids: list[int]) -> dict[str, Any]:
-        children = list(self.session.scalars(select(Job).where(Job.id.in_(child_ids))))
+    def _run_result(self, child_ids: list[int], *, children: list[Job] | None = None) -> dict[str, Any]:
+        children = children if children is not None else self._children_by_ids(child_ids)
         counts: dict[str, int] = {}
         for child in children:
             counts[child.status] = counts.get(child.status, 0) + 1
         return {"child_status_counts": counts}
+
+    def _children_by_ids(self, child_ids: list[int]) -> list[Job]:
+        if not child_ids:
+            return []
+        return list(self.session.scalars(select(Job).where(Job.id.in_(child_ids)).order_by(Job.id)))
 
     def _ensure_child_lock(self, child: Job) -> None:
         if child.locked_chapter_id is not None:
@@ -490,7 +494,7 @@ class PipelineRunService:
 
     def _child_jobs(self, run: Job) -> list[Job]:
         payload = job_payload(run)
-        child_ids = [int(item) for item in payload.get("child_task_ids", []) if isinstance(item, int)]
+        child_ids = child_task_ids(payload)
         if not child_ids:
             return []
         return list(self.session.scalars(select(Job).where(Job.id.in_(child_ids)).order_by(Job.id)))
@@ -509,7 +513,7 @@ class PipelineRunService:
     def serialize(self, job: Job) -> dict[str, Any]:
         payload = job_payload(job)
         result = job_result(job)
-        child_ids = [int(item) for item in payload.get("child_task_ids", []) if isinstance(item, int)]
+        child_ids = child_task_ids(payload)
         child_tasks = []
         if child_ids:
             tasks = self.session.scalars(select(Job).where(Job.id.in_(child_ids)).order_by(Job.id))

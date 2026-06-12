@@ -205,6 +205,9 @@ class SmokePipelineTaskExecutor(PipelineTaskExecutor):
         return result
 
     def _run_review_chapter_candidate(self, job: Job) -> dict[str, Any]:
+        prepared = self._ensure_candidate_artifact(job)
+        if prepared is not None:
+            return prepared
         artifact_id = self._candidate_artifact_id(job)
         result = ReviewerService(self.session, model_client=self.model_client).review_candidate(artifact_id)
         if result["passed"]:
@@ -232,6 +235,9 @@ class SmokePipelineTaskExecutor(PipelineTaskExecutor):
         return result
 
     def _run_fix_chapter_candidate(self, job: Job) -> dict[str, Any]:
+        prepared = self._ensure_candidate_artifact(job)
+        if prepared is not None:
+            return prepared
         artifact_id = self._candidate_artifact_id(job)
         review_id = self._latest_review_id(artifact_id)
         result = FixerService(self.session, model_client=self.model_client).fix_candidate(artifact_id, review_id=review_id)
@@ -245,6 +251,9 @@ class SmokePipelineTaskExecutor(PipelineTaskExecutor):
         return result
 
     def _run_publish_chapter_candidate(self, job: Job) -> dict[str, Any]:
+        prepared = self._ensure_candidate_artifact(job)
+        if prepared is not None:
+            return prepared
         artifact_id = self._candidate_artifact_id(job)
         service = ReviewPublishService(self.session, model_client=self.model_client)
         if bool(job_payload(job).get("dry_run", True)):

@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -23,6 +22,10 @@ from backend.app.utils.hashing import sha256_text
 
 
 class ModelClientError(RuntimeError):
+    pass
+
+
+class ModelBudgetPausedError(ModelClientError):
     pass
 
 
@@ -110,7 +113,7 @@ class ModelClient:
                 error=str(exc),
             )
             self.session.commit()
-            raise ModelClientError(f"{exc}; call_id={call.id}") from exc
+            raise ModelBudgetPausedError(f"{exc}; call_id={call.id}") from exc
 
         api_key = (
             self.secret_overrides.get(route.provider)
@@ -250,7 +253,7 @@ class ModelClient:
             return None
         try:
             data = json.loads(safe_read_text(path, encoding="utf-8"))
-        except (HTTPException, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError):
             return None
         content = data.get("content")
         return content if isinstance(content, str) else None

@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     max_input_chars_per_call: int = Field(default=60000, alias="MAX_INPUT_CHARS_PER_CALL")
     max_output_tokens_per_call: int = Field(default=12000, alias="MAX_OUTPUT_TOKENS_PER_CALL")
     default_model_provider: str = Field(default="agnes", alias="DEFAULT_MODEL_PROVIDER")
+    admin_api_token: str | None = Field(default=None, alias="ADMIN_API_TOKEN")
     enable_test_support: bool = Field(default=False, alias="ENABLE_TEST_SUPPORT")
     allow_pipeline_direct_publish: bool = Field(default=False, alias="ALLOW_PIPELINE_DIRECT_PUBLISH")
     kimi_thinking_mode: str = Field(default="disabled", alias="KIMI_THINKING_MODE")

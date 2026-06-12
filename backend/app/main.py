@@ -14,10 +14,12 @@ from backend.app.api.source_proposals import router as source_proposals_router
 from backend.app.api.test_support import router as test_support_router
 from backend.app.api.workspace import router as workspace_router
 from backend.app.core.config import get_settings
+from backend.app.core.http_errors import os_error_handler
 from backend.app.services.workspace import app_runtime_root, workspace_status
 
 
 app = FastAPI(title="小说编辑器", version="0.1.0")
+app.add_exception_handler(OSError, os_error_handler)
 
 app.add_middleware(
     CORSMiddleware,

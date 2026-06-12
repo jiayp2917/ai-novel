@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.models import Artifact, Chapter, Job, Review
 from backend.app.services.annotations import NotFoundError
+from backend.app.services.model_client import ModelBudgetPausedError
 from backend.app.services.pipeline.fixer import FixerService
+from backend.app.services.pipeline.payloads import child_task_ids
 from backend.app.services.pipeline.planner import PipelineTaskType
 from backend.app.services.pipeline.reviewer import ReviewerService
 from backend.app.services.pipeline.runs import DIRECT_PUBLISH_ERROR, PipelineRunService, _direct_publish_allowed
@@ -84,6 +86,9 @@ class PipelineTaskExecutor:
         return result
 
     def _run_review_chapter_candidate(self, job: Job) -> dict[str, Any]:
+        prepared = self._ensure_candidate_artifact(job)
+        if prepared is not None:
+            return prepared
         artifact_id = self._candidate_artifact_id(job)
         result = ReviewerService(self.session).review_candidate(artifact_id)
         if result["passed"]:
@@ -111,6 +116,9 @@ class PipelineTaskExecutor:
         return result
 
     def _run_fix_chapter_candidate(self, job: Job) -> dict[str, Any]:
+        prepared = self._ensure_candidate_artifact(job)
+        if prepared is not None:
+            return prepared
         artifact_id = self._candidate_artifact_id(job)
         review_id = self._latest_review_id(artifact_id)
         result = FixerService(self.session).fix_candidate(artifact_id, review_id=review_id)
@@ -146,6 +154,9 @@ class PipelineTaskExecutor:
         return result
 
     def _run_publish_chapter_candidate(self, job: Job) -> dict[str, Any]:
+        prepared = self._ensure_candidate_artifact(job)
+        if prepared is not None:
+            return prepared
         artifact_id = self._candidate_artifact_id(job)
         if bool(job_payload(job).get("dry_run", True)):
             diff = ReviewPublishService(self.session).diff_artifact(artifact_id)
@@ -205,6 +216,12 @@ class PipelineTaskExecutor:
         raw = combined.get("artifact_id")
         if isinstance(raw, int):
             return raw
+        raise ValueError("Pipeline task missing artifact_id")
+
+    def _ensure_candidate_artifact(self, job: Job) -> dict[str, Any] | None:
+        combined = {**job_payload(job), **job_result(job)}
+        if isinstance(combined.get("artifact_id"), int):
+            return None
         dependency_artifact_id = self._dependency_artifact_id(job)
         if dependency_artifact_id is not None:
             self.machine.transition(
@@ -214,7 +231,7 @@ class PipelineTaskExecutor:
                 result_updates={"artifact_id": dependency_artifact_id},
                 error=None,
             )
-            raise RuntimeError("Candidate artifact prepared; rerun task to continue review")
+            return {"status": "artifact_prepared", "artifact_id": dependency_artifact_id}
         artifact = self._latest_chapter_artifact(job)
         if artifact is None:
             artifact = create_snapshot_candidate_for_chapter(self.session, self._chapter(job))
@@ -225,7 +242,7 @@ class PipelineTaskExecutor:
             result_updates={"artifact_id": artifact.id, "artifact_sha256": artifact.sha256},
             error=None,
         )
-        raise RuntimeError("Candidate artifact prepared; rerun task to continue review")
+        return {"status": "artifact_prepared", "artifact_id": artifact.id}
 
     def _dependency_artifact_id(self, job: Job) -> int | None:
         dependency_id = job_payload(job).get("depends_on_job_id")
@@ -261,7 +278,7 @@ class PipelineTaskExecutor:
         parent = self.session.get(Job, parent_run_id)
         if parent is None:
             return False
-        child_ids = [int(item) for item in job_payload(parent).get("child_task_ids", []) if isinstance(item, int)]
+        child_ids = child_task_ids(job_payload(parent))
         for child_id in child_ids:
             child = self.session.get(Job, child_id)
             if child is None or child.type != PipelineTaskType.FIX_CHAPTER_CANDIDATE.value:
@@ -282,10 +299,8 @@ class PipelineTaskExecutor:
 
     def _fail_job(self, job: Job, exc: Exception) -> None:
         message = str(exc)
-        if "budget" in message.lower():
+        if isinstance(exc, ModelBudgetPausedError):
             self.machine.transition(job, PipelineState.PAUSED_BUDGET, error=message)
-            return
-        if "Candidate artifact prepared" in message:
             return
         self.machine.transition(job, PipelineState.MANUAL_REQUIRED, error=message)
 

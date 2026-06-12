@@ -417,6 +417,33 @@ def test_model_config_api_hides_secret_and_keeps_yaml_unchanged(tmp_path: Path, 
     assert config_path.read_text(encoding="utf-8") == before
 
 
+def test_admin_api_is_local_only_without_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
+    get_settings.cache_clear()
+
+    local_response = TestClient(app, client=("127.0.0.1", 50000)).get("/api/admin/model-config")
+    remote_response = TestClient(app, client=("203.0.113.10", 50000)).get("/api/admin/model-config")
+
+    assert local_response.status_code == 200
+    assert remote_response.status_code == 403
+
+
+def test_admin_api_requires_matching_token_when_configured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    monkeypatch.setenv("ADMIN_API_TOKEN", "unit-admin-token")
+    get_settings.cache_clear()
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    missing = client.get("/api/admin/model-config")
+    wrong = client.get("/api/admin/model-config", headers={"Authorization": "Bearer wrong"})
+    ok = client.get("/api/admin/model-config", headers={"Authorization": "Bearer unit-admin-token"})
+
+    assert missing.status_code == 401
+    assert wrong.status_code == 401
+    assert ok.status_code == 200
+
+
 def test_model_config_rejects_invalid_advanced_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     setup_app_db(tmp_path, monkeypatch)
     client = TestClient(app)

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from backend.app.core.admin_auth import require_admin_access
 from backend.app.db.models import Artifact
 from backend.app.db.session import get_db
 from backend.app.services.model_client import ChatMessage, ModelClient, ModelClientError
@@ -13,7 +14,7 @@ from backend.app.services.skills import SkillLoader
 from backend.app.services.workspace import workspace_runtime_root
 
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin_access)])
 
 
 class ProbeModelRequest(BaseModel):

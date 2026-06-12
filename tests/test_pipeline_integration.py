@@ -133,12 +133,7 @@ def _run_pipeline_task_until_stable(session: Session, job_id: int) -> None:
         assert job is not None
         if job.status != "queued":
             return
-        try:
-            PipelineTaskExecutor(session).run_job(_mark_running(session, job_id))
-        except RuntimeError as exc:
-            if "Candidate artifact prepared" not in str(exc):
-                raise
-            session.commit()
+        PipelineTaskExecutor(session).run_job(_mark_running(session, job_id))
     job = session.get(Job, job_id)
     assert job is not None
     assert job.status != "queued"

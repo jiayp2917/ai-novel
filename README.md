@@ -68,6 +68,17 @@ python -m backend.tools.run_backend_with_keys
 
 `key.txt` 已被 `.gitignore` 忽略。不要把真实 key 写入文档、报告或提交。
 
+Admin API 默认只允许本机请求；如果要把后端暴露给局域网、容器或反向代理，必须设置本地管理 token，并让前端带同一个 token：
+
+```powershell
+$env:ADMIN_API_TOKEN='<local-admin-token>'
+cd .\frontend
+$env:VITE_ADMIN_API_TOKEN='<local-admin-token>'
+npm run dev
+```
+
+`ADMIN_API_TOKEN` 只用于保护 `/api/admin/*` 下的模型配置、连接探测和 skills 状态接口，不应提交到 Git。
+
 健康检查：
 
 ```text
@@ -174,6 +185,8 @@ cd .\frontend
 npm run build
 npm run e2e
 ```
+
+仓库已包含 GitHub Actions：push 或 pull request 到 `main` 时会运行后端编译、pytest、前端构建和 Playwright E2E。CI 不包含本机小说工作区、runtime、`.env` 或 `key.txt`。
 
 当前 Agnes 全流程验收数据：
 

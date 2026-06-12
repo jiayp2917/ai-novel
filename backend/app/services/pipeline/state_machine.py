@@ -33,14 +33,11 @@ class PipelineState(str, Enum):
 
 TERMINAL_STATES = {
     PipelineState.DONE.value,
-    PipelineState.APPROVED.value,
-    PipelineState.PUBLISHED.value,
-    PipelineState.SUMMARIZED.value,
     PipelineState.MANUAL_REQUIRED.value,
     PipelineState.FAILED_TERMINAL.value,
 }
 
-ACTIVE_STATES = {
+IN_PROGRESS_STATES = {
     "running",
     PipelineState.PLANNED.value,
     PipelineState.QUEUED.value,
@@ -52,6 +49,10 @@ ACTIVE_STATES = {
     PipelineState.APPROVED.value,
     PipelineState.PUBLISHED.value,
     PipelineState.SUMMARIZED.value,
+}
+
+ACTIVE_STATES = {
+    *IN_PROGRESS_STATES,
     PipelineState.PAUSED.value,
     PipelineState.PAUSED_BUDGET.value,
     PipelineState.FAILED_RETRYABLE.value,

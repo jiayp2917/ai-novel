@@ -473,6 +473,36 @@ def test_worker_claim_is_atomic_across_sessions(tmp_path: Path, monkeypatch: pyt
     reset_engine()
 
 
+def test_worker_records_unhandled_failure_without_overwriting_business_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = make_session()
+    failed_job = Job(type="revise_from_annotations", status="running", payload_json="{broken-json")
+    manual_job = Job(type="revise_from_annotations", status="running", payload_json='{"chapter_id": 1}')
+    session.add_all([failed_job, manual_job])
+    session.commit()
+
+    JobWorker(session)._run_job(failed_job.id)
+
+    session.refresh(failed_job)
+    assert failed_job.status == "failed"
+    assert failed_job.error is not None
+
+    def business_failure(self, job_id: int) -> None:
+        job = self.session.get(Job, job_id)
+        assert job is not None
+        job.status = "manual_required"
+        job.error = "needs human"
+        self.session.commit()
+        raise RuntimeError("needs human")
+
+    monkeypatch.setattr("backend.app.services.worker.RevisionService.run_revision_job", business_failure)
+
+    JobWorker(session)._run_job(manual_job.id)
+
+    session.refresh(manual_job)
+    assert manual_job.status == "manual_required"
+    assert manual_job.error == "needs human"
+
+
 def test_jobs_api_lists_jobs_and_cost_dashboard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "content"))

@@ -1,5 +1,6 @@
 import difflib
 import json
+import logging
 import shutil
 import threading
 from datetime import UTC, datetime
@@ -21,6 +22,9 @@ from backend.app.services.model_client import ChatMessage, ModelClient
 from backend.app.services.pipeline.findings import has_blocking_finding, normalize_review_findings
 from backend.app.services.workspace import WorkspaceResolver, workspace_runtime_root
 from backend.app.utils.hashing import sha256_file
+
+
+logger = logging.getLogger(__name__)
 
 
 class ReviewPublishError(ValueError):
@@ -170,8 +174,15 @@ class ReviewPublishService:
             try:
                 LibraryScanner(self.session).scan()
                 MemoryService(self.session).rebuild()
-            except Exception:
-                self._atomic_write(source_file, safe_read_text(backup_path, encoding="utf-8-sig"))
+            except Exception as exc:
+                rollback_error: str | None = None
+                try:
+                    self._atomic_write(source_file, safe_read_text(backup_path, encoding="utf-8-sig"))
+                except Exception as rollback_exc:
+                    rollback_error = str(rollback_exc)
+                    logger.exception("Artifact publish rollback failed for artifact_id=%s", artifact.id)
+                else:
+                    logger.exception("Artifact publish rolled back for artifact_id=%s", artifact.id)
                 self.session.rollback()
                 self.session.add(
                     Event(
@@ -182,12 +193,18 @@ class ReviewPublishService:
                             {
                                 "source_file_id": artifact.base_source_file_id,
                                 "backup_path": backup_path.relative_to(self.runtime_root).as_posix(),
+                                "rollback_failed": rollback_error is not None,
+                                "rollback_error": rollback_error,
                             },
                             ensure_ascii=False,
                         ),
                     )
                 )
                 self.session.commit()
+                if rollback_error is not None:
+                    raise ReviewPublishError(
+                        f"Publish post-write refresh failed and rollback failed: {exc}; rollback_error={rollback_error}"
+                    ) from exc
                 raise
 
             decision = PublishDecision(
@@ -250,47 +267,6 @@ class ReviewPublishService:
             },
             ensure_ascii=False,
         )
-
-    def _normalize_issues(self, issues: Any) -> list[dict[str, Any]]:
-        if not isinstance(issues, list):
-            return [
-                {
-                    "chapter": None,
-                    "severity": "blocking",
-                    "type": "invalid_review",
-                    "description": "Review issues field is not a list.",
-                    "evidence": "",
-                    "owner": "admin",
-                    "fix_instruction": "Review output must be regenerated.",
-                }
-            ]
-        normalized: list[dict[str, Any]] = []
-        for issue in issues:
-            if not isinstance(issue, dict):
-                continue
-            item = {
-                "chapter": issue.get("chapter"),
-                "severity": self._severity(str(issue.get("severity", "medium"))),
-                "type": str(issue.get("type", "unknown")),
-                "description": str(issue.get("description", "")),
-                "evidence": str(issue.get("evidence", "")).strip(),
-                "owner": self._owner(str(issue.get("owner", "writer"))),
-                "fix_instruction": str(issue.get("fix_instruction", "")),
-            }
-            if not item["evidence"]:
-                item["owner"] = "admin"
-                item["severity"] = "blocking"
-            normalized.append(item)
-        return normalized
-
-    def _severity(self, value: str) -> str:
-        return value if value in {"blocking", "high", "medium", "low"} else "medium"
-
-    def _owner(self, value: str) -> str:
-        return value if value in {"writer", "outliner", "state", "admin"} else "admin"
-
-    def _has_blocking_issue(self, issues: list[dict[str, Any]]) -> bool:
-        return any(issue.get("severity") in {"blocking", "high", "medium"} for issue in issues)
 
     def _save_raw_review(self, content: str, artifact: Artifact) -> Artifact:
         from backend.app.services.artifacts import ArtifactStore

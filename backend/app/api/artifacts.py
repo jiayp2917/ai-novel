@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -42,7 +42,17 @@ def list_artifacts(
     if kind is not None:
         query = query.where(Artifact.kind == kind)
     artifacts = session.scalars(query).all()
-    return [_artifact_payload(session, artifact) for artifact in artifacts]
+    artifact_ids = [artifact.id for artifact in artifacts]
+    reviews = _latest_reviews(session, artifact_ids)
+    publishes = _latest_publishes(session, artifact_ids)
+    return [
+        _artifact_payload(
+            artifact,
+            review=reviews.get(artifact.id),
+            published=publishes.get(artifact.id),
+        )
+        for artifact in artifacts
+    ]
 
 
 @router.get("/{artifact_id}")
@@ -50,16 +60,19 @@ def get_artifact(artifact_id: int, session: Session = Depends(get_db)) -> dict:
     artifact = session.get(Artifact, artifact_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
-    return _artifact_payload(session, artifact)
+    return _artifact_payload(
+        artifact,
+        review=_latest_review(session, artifact.id),
+        published=_latest_publish(session, artifact.id),
+    )
 
 
-def _artifact_payload(session: Session, artifact: Artifact) -> dict:
-    review = session.scalar(
-        select(Review).where(Review.artifact_id == artifact.id).order_by(Review.id.desc())
-    )
-    published = session.scalar(
-        select(PublishDecision).where(PublishDecision.artifact_id == artifact.id).order_by(PublishDecision.id.desc())
-    )
+def _artifact_payload(
+    artifact: Artifact,
+    *,
+    review: Review | None = None,
+    published: PublishDecision | None = None,
+) -> dict:
     return {
         "id": artifact.id,
         "kind": artifact.kind,
@@ -92,6 +105,42 @@ def _artifact_payload(session: Session, artifact: Artifact) -> dict:
             "published_at": published.published_at,
         },
     }
+
+
+def _latest_review(session: Session, artifact_id: int) -> Review | None:
+    return session.scalar(select(Review).where(Review.artifact_id == artifact_id).order_by(Review.id.desc()))
+
+
+def _latest_publish(session: Session, artifact_id: int) -> PublishDecision | None:
+    return session.scalar(
+        select(PublishDecision).where(PublishDecision.artifact_id == artifact_id).order_by(PublishDecision.id.desc())
+    )
+
+
+def _latest_reviews(session: Session, artifact_ids: list[int]) -> dict[int, Review]:
+    if not artifact_ids:
+        return {}
+    latest = (
+        select(Review.artifact_id, func.max(Review.id).label("review_id"))
+        .where(Review.artifact_id.in_(artifact_ids))
+        .group_by(Review.artifact_id)
+        .subquery()
+    )
+    rows = session.scalars(select(Review).join(latest, Review.id == latest.c.review_id)).all()
+    return {review.artifact_id: review for review in rows}
+
+
+def _latest_publishes(session: Session, artifact_ids: list[int]) -> dict[int, PublishDecision]:
+    if not artifact_ids:
+        return {}
+    latest = (
+        select(PublishDecision.artifact_id, func.max(PublishDecision.id).label("publish_id"))
+        .where(PublishDecision.artifact_id.in_(artifact_ids))
+        .group_by(PublishDecision.artifact_id)
+        .subquery()
+    )
+    rows = session.scalars(select(PublishDecision).join(latest, PublishDecision.id == latest.c.publish_id)).all()
+    return {published.artifact_id: published for published in rows}
 
 
 @router.post("/{artifact_id}/review")

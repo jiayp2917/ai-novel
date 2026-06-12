@@ -9,9 +9,12 @@ from backend.app.db.models import Event, Job
 from backend.app.services.pipeline.planner import PipelinePlanError, PipelinePlanner, PipelineTaskType
 from backend.app.services.pipeline.runner import PipelineRunner
 from backend.app.services.pipeline.state_machine import (
+    ACTIVE_STATES,
+    IN_PROGRESS_STATES,
     PipelineState,
     PipelineStateMachine,
     PipelineTransitionError,
+    TERMINAL_STATES,
     job_payload,
     job_result,
     tracking_complete,
@@ -22,6 +25,22 @@ def make_session() -> Session:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     return Session(engine)
+
+
+def test_pipeline_state_sets_distinguish_in_progress_and_terminal() -> None:
+    assert "running" in IN_PROGRESS_STATES
+    assert PipelineState.APPROVED.value in IN_PROGRESS_STATES
+    assert PipelineState.PUBLISHED.value in IN_PROGRESS_STATES
+    assert PipelineState.SUMMARIZED.value in IN_PROGRESS_STATES
+    assert PipelineState.APPROVED.value not in TERMINAL_STATES
+    assert PipelineState.PUBLISHED.value not in TERMINAL_STATES
+    assert PipelineState.SUMMARIZED.value not in TERMINAL_STATES
+    assert TERMINAL_STATES == {
+        PipelineState.DONE.value,
+        PipelineState.MANUAL_REQUIRED.value,
+        PipelineState.FAILED_TERMINAL.value,
+    }
+    assert IN_PROGRESS_STATES.issubset(ACTIVE_STATES)
 
 
 def test_pipeline_state_machine_allows_legal_transition_and_records_event() -> None:
@@ -176,4 +195,3 @@ def test_pipeline_retry_rejects_terminal_failure() -> None:
 
     with pytest.raises(PipelineTransitionError, match="not retryable"):
         machine.retry(job)
-

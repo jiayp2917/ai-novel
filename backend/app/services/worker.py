@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -33,6 +34,8 @@ SUCCESSFUL_RUN_STATUSES = {
     "done",
     "succeeded",
 }
+
+logger = logging.getLogger(__name__)
 
 
 class JobWorker:
@@ -124,14 +127,24 @@ class JobWorker:
                 RevisionService(self.session).run_revision_job(job_id)
             else:
                 PipelineTaskExecutor(self.session).run_job(job_id)
-        except Exception:
+        except Exception as exc:
+            logger.exception("Job execution failed unexpectedly: job_id=%s", job_id)
             self.session.rollback()
+            self._record_unhandled_failure(job_id, str(exc))
         job = self.session.get(Job, job_id)
         return {
             "id": job_id,
             "status": job.status if job is not None else "missing",
             "error": job.error if job is not None else "Job missing",
         }
+
+    def _record_unhandled_failure(self, job_id: int, error: str) -> None:
+        job = self.session.get(Job, job_id)
+        if job is None or job.status != "running":
+            return
+        job.status = "failed"
+        job.error = error
+        self.session.commit()
 
 
 def run_job_in_new_session(job_id: int) -> dict:
@@ -149,11 +162,22 @@ def run_job_in_new_session(job_id: int) -> dict:
                 RevisionService(session).run_revision_job(job_id)
             else:
                 PipelineTaskExecutor(session).run_job(job_id)
-        except Exception:
+        except Exception as exc:
+            logger.exception("Job execution failed unexpectedly: job_id=%s", job_id)
             session.rollback()
+            _record_unhandled_failure(session, job_id, str(exc))
         job = session.get(Job, job_id)
         return {
             "id": job_id,
             "status": job.status if job is not None else "missing",
             "error": job.error if job is not None else "Job missing",
         }
+
+
+def _record_unhandled_failure(session: Session, job_id: int, error: str) -> None:
+    job = session.get(Job, job_id)
+    if job is None or job.status != "running":
+        return
+    job.status = "failed"
+    job.error = error
+    session.commit()

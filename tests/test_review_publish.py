@@ -440,6 +440,91 @@ def test_artifact_list_api_filters_by_chapter(tmp_path: Path, monkeypatch: pytes
     reset_engine()
 
 
+def test_artifact_list_api_returns_latest_review_and_publish_records(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi.testclient import TestClient
+
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    get_settings.cache_clear()
+    from backend.app.db.session import get_engine, reset_engine
+    from backend.app.main import app
+
+    reset_engine()
+    seed_project(content_root)
+    Base.metadata.create_all(get_engine())
+    client = TestClient(app)
+    assert client.post("/api/library/scan").status_code == 200
+
+    with Session(get_engine()) as session:
+        chapter = session.scalar(select(Chapter).where(Chapter.chapter_no == 1))
+        assert chapter is not None
+        artifact = ArtifactStore(session).save_text(
+            kind="candidate",
+            text="# 第001章 First\nCandidate.",
+            metadata={},
+            base_chapter=chapter,
+        )
+        session.add_all(
+            [
+                Review(
+                    artifact_id=artifact.id,
+                    passed=False,
+                    issues_json='[{"severity": "high"}]',
+                    evidence_count=0,
+                    manual_required=True,
+                    candidate_hash=artifact.sha256,
+                    base_source_file_hash=artifact.base_source_file_hash,
+                    base_chapter_version_id=artifact.base_chapter_version_id,
+                ),
+                Review(
+                    artifact_id=artifact.id,
+                    passed=True,
+                    issues_json="[]",
+                    evidence_count=2,
+                    manual_required=False,
+                    candidate_hash=artifact.sha256,
+                    base_source_file_hash=artifact.base_source_file_hash,
+                    base_chapter_version_id=artifact.base_chapter_version_id,
+                ),
+                PublishDecision(
+                    artifact_id=artifact.id,
+                    approved_by_user=True,
+                    force=False,
+                    source_hash_before=artifact.base_source_file_hash or "a" * 64,
+                    candidate_hash=artifact.sha256,
+                    diff_path="diffs/old.diff",
+                    backup_path="backups/old.md",
+                ),
+                PublishDecision(
+                    artifact_id=artifact.id,
+                    approved_by_user=True,
+                    force=True,
+                    force_reason="test",
+                    source_hash_before=artifact.base_source_file_hash or "a" * 64,
+                    candidate_hash=artifact.sha256,
+                    diff_path="diffs/new.diff",
+                    backup_path="backups/new.md",
+                ),
+            ]
+        )
+        session.commit()
+        artifact_id = artifact.id
+
+    payload = client.get("/api/artifacts?kind=candidate").json()
+    current = next(item for item in payload if item["id"] == artifact_id)
+
+    assert current["latest_review"]["passed"] is True
+    assert current["latest_review"]["evidence_count"] == 2
+    assert current["latest_publish"]["force"] is True
+    assert current["latest_publish"]["diff_path"] == "diffs/new.diff"
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def test_publish_rechecks_source_hash_inside_source_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     session, artifact, content_root, _ = setup_candidate(tmp_path, monkeypatch)
     service = ReviewPublishService(session, model_client=FakeReviewer('{"passed": true, "issues": []}'))
@@ -475,4 +560,39 @@ def test_publish_rolls_back_file_and_records_event_when_memory_rebuild_fails(
 
     assert (content_root / "chapters" / "book.md").read_text(encoding="utf-8") == original
     assert session.scalar(select(Event).where(Event.event_type == "artifact_publish_rolled_back")) is not None
+    get_settings.cache_clear()
+
+
+def test_publish_records_rollback_failure_without_losing_original_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, artifact, _, _ = setup_candidate(tmp_path, monkeypatch)
+    service = ReviewPublishService(session, model_client=FakeReviewer('{"passed": true, "issues": []}'))
+    service.review_artifact(artifact.id)
+
+    def fail_rebuild(self) -> dict:
+        raise RuntimeError("memory failed")
+
+    original_backup_source = service._backup_source
+
+    def remove_backup_after_copy(source_file: Path) -> Path:
+        backup_path = original_backup_source(source_file)
+        backup_path.unlink()
+        return backup_path
+
+    monkeypatch.setattr("backend.app.services.review_publish.MemoryService.rebuild", fail_rebuild)
+    service._backup_source = remove_backup_after_copy  # type: ignore[method-assign]
+
+    with pytest.raises(ReviewPublishError) as exc_info:
+        service.publish_artifact(artifact.id, approved_by_user=True)
+
+    message = str(exc_info.value)
+    assert "memory failed" in message
+    assert "rollback_error" in message
+    event = session.scalar(select(Event).where(Event.event_type == "artifact_publish_rolled_back"))
+    assert event is not None
+    payload = json.loads(event.payload_json)
+    assert payload["rollback_failed"] is True
+    assert payload["rollback_error"]
     get_settings.cache_clear()

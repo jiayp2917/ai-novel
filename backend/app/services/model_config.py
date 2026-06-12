@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import ctypes
+import hashlib
 import json
 import os
 import platform
@@ -21,6 +22,7 @@ from backend.app.services.workspace import app_runtime_root
 
 CONFIG_FILENAME = "model_config_overrides.json"
 SECRETS_FILENAME = "model_secrets.dpapi.json"
+ALL_MODEL_ROLES = ["writer", "reviewer", "fixer", "quick_fix", "outliner", "structural_fix", "memory", "long_context", "arbiter"]
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,20 @@ class ModelRouteOverride:
     max_tokens: int
     cheap: bool
     supports_json: bool
+
+
+@dataclass(frozen=True)
+class ModelProfile:
+    id: str
+    name: str
+    provider: str
+    model: str
+    base_url: str
+    api_key_env: str
+    max_tokens: int
+    cheap: bool
+    supports_json: bool
+    built_in: bool = False
 
 
 class SecretStoreUnavailable(RuntimeError):
@@ -70,6 +86,19 @@ class ModelConfigService:
         return parsed
 
     def route_for_role(self, role: str) -> ModelRoute | None:
+        assignment = self.role_assignments().get(role)
+        profile = self.profile_by_id(assignment) if assignment else None
+        if profile is not None:
+            return ModelRoute(
+                role=role,
+                provider=profile.provider,
+                model=profile.model,
+                base_url=profile.base_url,
+                api_key_env=profile.api_key_env,
+                max_tokens=profile.max_tokens,
+                cheap=profile.cheap,
+                supports_json=profile.supports_json,
+            )
         override = self.routes().get(role)
         if override is None:
             return None
@@ -121,15 +150,129 @@ class ModelConfigService:
         self._write_config(raw)
         return override
 
+    def profiles(self, roles: list[str] | None = None) -> dict[str, ModelProfile]:
+        raw = self._read_config()
+        parsed = self._stored_profiles(raw)
+        router = ModelRouter(use_runtime_overrides=False)
+        for role in roles or []:
+            try:
+                route = router.route(role)
+            except Exception:
+                continue
+            profile = self._profile_from_route(route, built_in=True)
+            parsed.setdefault(profile.id, profile)
+        for route in self.routes().values():
+            profile = self._profile_from_override(route, built_in=False)
+            parsed.setdefault(profile.id, profile)
+        return parsed
+
+    def profile_by_id(self, profile_id: str | None) -> ModelProfile | None:
+        if not profile_id:
+            return None
+        profiles = self.profiles(ALL_MODEL_ROLES)
+        return profiles.get(profile_id)
+
+    def role_assignments(self) -> dict[str, str]:
+        raw = self._read_config()
+        assignments = raw.get("role_assignments", {})
+        if not isinstance(assignments, dict):
+            return {}
+        return {str(role): str(profile_id) for role, profile_id in assignments.items() if isinstance(profile_id, str)}
+
+    def save_profile(self, payload: dict[str, Any], profile_id: str | None = None) -> ModelProfile:
+        raw = self._read_config()
+        profiles = self._stored_profiles(raw)
+        existing = profiles.get(profile_id or "")
+        base = existing or self._profile_from_route(ModelRouter(use_runtime_overrides=False).route("writer"), built_in=False)
+
+        name = str(payload.get("name") or base.name).strip()
+        provider = str(payload.get("provider") or base.provider).strip()
+        model = str(payload.get("model") or base.model).strip()
+        base_url = str(payload.get("base_url") or base.base_url).strip()
+        api_key_env = str(payload.get("api_key_env") or _api_key_env_for_provider(provider, base.api_key_env)).strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="模型档案名称不能为空。")
+        if not provider or not model or not base_url or not api_key_env:
+            raise HTTPException(status_code=400, detail="模型、接口地址和密钥名称不能为空。")
+        _validate_provider(provider)
+        _validate_base_url(base_url)
+        _validate_api_key_env(api_key_env)
+        try:
+            max_tokens = int(payload.get("max_tokens") or base.max_tokens)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="输出上限必须是正整数。") from exc
+        if max_tokens <= 0:
+            raise HTTPException(status_code=400, detail="输出上限必须是正整数。")
+
+        next_id = profile_id or _unique_profile_id(_slugify(name), profiles)
+        if profile_id and profile_id not in profiles:
+            raise HTTPException(status_code=404, detail="模型档案不存在。")
+        profile = ModelProfile(
+            id=next_id,
+            name=name,
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            max_tokens=max_tokens,
+            cheap=bool(payload.get("cheap", base.cheap)),
+            supports_json=bool(payload.get("supports_json", base.supports_json)),
+            built_in=False,
+        )
+        profiles[next_id] = profile
+        raw["profiles"] = {key: _profile_payload(value, include_runtime=False) for key, value in profiles.items() if not value.built_in}
+        self._write_config(raw)
+        return profile
+
+    def delete_profile(self, profile_id: str) -> None:
+        raw = self._read_config()
+        profiles = self._stored_profiles(raw)
+        if profile_id not in profiles:
+            raise HTTPException(status_code=404, detail="模型档案不存在。")
+        assignments = self.role_assignments()
+        used_by = [role_label(role) for role, assigned in assignments.items() if assigned == profile_id]
+        if used_by:
+            raise HTTPException(status_code=400, detail=f"模型档案正在被角色使用：{'、'.join(used_by)}。")
+        profiles.pop(profile_id)
+        raw["profiles"] = {key: _profile_payload(value, include_runtime=False) for key, value in profiles.items() if not value.built_in}
+        self._write_config(raw)
+
+    def assign_profile(self, role: str, profile_id: str) -> ModelRoute:
+        if role not in ALL_MODEL_ROLES:
+            raise HTTPException(status_code=400, detail="不支持的模型角色。")
+        profile = self.profile_by_id(profile_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="模型档案不存在。")
+        raw = self._read_config()
+        assignments = self.role_assignments()
+        assignments[role] = profile_id
+        raw["role_assignments"] = assignments
+        self._write_config(raw)
+        return ModelRoute(
+            role=role,
+            provider=profile.provider,
+            model=profile.model,
+            base_url=profile.base_url,
+            api_key_env=profile.api_key_env,
+            max_tokens=profile.max_tokens,
+            cheap=profile.cheap,
+            supports_json=profile.supports_json,
+        )
+
     def config_payload(self, roles: list[str]) -> dict[str, Any]:
         router = ModelRouter(use_runtime_overrides=False)
         overrides = self.routes()
+        profiles = self.profiles(roles)
+        assignments = self.role_assignments()
         items = []
         for role in roles:
             try:
                 default_route = router.route(role)
                 active = self.route_for_role(role) or default_route
                 override = overrides.get(role)
+                assigned_profile = profiles.get(assignments.get(role, ""))
+                override_profile = self._profile_from_override(override, built_in=False) if override is not None else None
+                active_profile = assigned_profile or override_profile or self._profile_from_route(default_route, built_in=True)
                 items.append(
                     {
                         "role": role,
@@ -143,7 +286,9 @@ class ModelConfigService:
                         "max_tokens": active.max_tokens,
                         "cheap": active.cheap,
                         "supports_json": active.supports_json,
-                        "overridden": override is not None,
+                        "overridden": override is not None or assigned_profile is not None,
+                        "profile_id": active_profile.id,
+                        "profile_name": active_profile.name,
                         "default": {
                             "provider": default_route.provider,
                             "provider_label": provider_label(default_route.provider),
@@ -159,7 +304,83 @@ class ModelConfigService:
                 )
             except Exception as exc:
                 items.append({"role": role, "label": role_label(role), "purpose": role_purpose(role), "error": str(exc)})
-        return {"roles": items, "secret_store": self.secret_store_status()}
+        return {
+            "profiles": [
+                {
+                    **_profile_payload(profile, include_runtime=True),
+                    "provider_label": provider_label(profile.provider),
+                    "secret": self.secret_status(
+                        ModelRoute(
+                            role="profile",
+                            provider=profile.provider,
+                            model=profile.model,
+                            base_url=profile.base_url,
+                            api_key_env=profile.api_key_env,
+                            max_tokens=profile.max_tokens,
+                            cheap=profile.cheap,
+                            supports_json=profile.supports_json,
+                        )
+                    ),
+                }
+                for profile in sorted(profiles.values(), key=lambda item: (item.built_in, item.name, item.id))
+            ],
+            "roles": items,
+            "secret_store": self.secret_store_status(),
+        }
+
+    def _stored_profiles(self, raw: dict[str, Any]) -> dict[str, ModelProfile]:
+        values = raw.get("profiles", {})
+        if not isinstance(values, dict):
+            return {}
+        parsed: dict[str, ModelProfile] = {}
+        for profile_id, value in values.items():
+            if not isinstance(value, dict):
+                continue
+            try:
+                parsed[str(profile_id)] = ModelProfile(
+                    id=str(profile_id),
+                    name=str(value["name"]),
+                    provider=str(value["provider"]),
+                    model=str(value["model"]),
+                    base_url=str(value["base_url"]),
+                    api_key_env=str(value["api_key_env"]),
+                    max_tokens=int(value["max_tokens"]),
+                    cheap=bool(value.get("cheap", False)),
+                    supports_json=bool(value.get("supports_json", False)),
+                    built_in=False,
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        return parsed
+
+    def _profile_from_route(self, route: ModelRoute, *, built_in: bool) -> ModelProfile:
+        profile_id = _profile_id_for_route(route)
+        return ModelProfile(
+            id=profile_id,
+            name=f"{provider_label(route.provider)} / {route.model}",
+            provider=route.provider,
+            model=route.model,
+            base_url=route.base_url,
+            api_key_env=route.api_key_env,
+            max_tokens=route.max_tokens,
+            cheap=route.cheap,
+            supports_json=route.supports_json,
+            built_in=built_in,
+        )
+
+    def _profile_from_override(self, route: ModelRouteOverride, *, built_in: bool) -> ModelProfile:
+        return ModelProfile(
+            id=_profile_id_for_values(route.provider, route.model, route.base_url, route.api_key_env, route.max_tokens),
+            name=f"{provider_label(route.provider)} / {route.model}",
+            provider=route.provider,
+            model=route.model,
+            base_url=route.base_url,
+            api_key_env=route.api_key_env,
+            max_tokens=route.max_tokens,
+            cheap=route.cheap,
+            supports_json=route.supports_json,
+            built_in=built_in,
+        )
 
     def secret_status(self, route: ModelRoute) -> dict[str, Any]:
         if self.get_secret(route.provider) is not None:
@@ -262,6 +483,47 @@ def provider_label(provider: str) -> str:
         "qwen": "通义千问",
         "glm": "智谱 GLM",
     }.get(provider, provider)
+
+
+def _profile_payload(profile: ModelProfile, *, include_runtime: bool) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "id": profile.id,
+        "name": profile.name,
+        "provider": profile.provider,
+        "model": profile.model,
+        "base_url": profile.base_url,
+        "api_key_env": profile.api_key_env,
+        "max_tokens": profile.max_tokens,
+        "cheap": profile.cheap,
+        "supports_json": profile.supports_json,
+    }
+    if include_runtime:
+        payload["built_in"] = profile.built_in
+    return payload
+
+
+def _profile_id_for_route(route: ModelRoute) -> str:
+    return _profile_id_for_values(route.provider, route.model, route.base_url, route.api_key_env, route.max_tokens)
+
+
+def _profile_id_for_values(provider: str, model: str, base_url: str, api_key_env: str, max_tokens: int) -> str:
+    digest = hashlib.sha1(f"{provider}|{model}|{base_url}|{api_key_env}|{max_tokens}".encode("utf-8")).hexdigest()[:10]
+    return f"{_slugify(provider)}-{_slugify(model)}-{digest}"
+
+
+def _slugify(value: str) -> str:
+    slug = "".join(char.lower() if char.isascii() and char.isalnum() else "-" for char in value.strip())
+    slug = "-".join(part for part in slug.split("-") if part)
+    return slug[:48] or "model"
+
+
+def _unique_profile_id(base: str, profiles: dict[str, ModelProfile]) -> str:
+    candidate = base
+    index = 2
+    while candidate in profiles:
+        candidate = f"{base}-{index}"
+        index += 1
+    return candidate
 
 
 def _api_key_env_for_provider(provider: str, fallback: str) -> str:

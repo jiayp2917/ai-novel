@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.db.models import Artifact, PublishDecision, Review
+from backend.app.core.file_utils import safe_read_text
 from backend.app.services.annotations import NotFoundError
 from backend.app.services.model_client import ModelClientError
 from backend.app.services.review_publish import ReviewPublishError, ReviewPublishService
+from backend.app.services.workspace import workspace_runtime_root
 
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
@@ -65,6 +67,20 @@ def get_artifact(artifact_id: int, session: Session = Depends(get_db)) -> dict:
         review=_latest_review(session, artifact.id),
         published=_latest_publish(session, artifact.id),
     )
+
+
+@router.get("/{artifact_id}/text")
+def get_artifact_text(artifact_id: int, session: Session = Depends(get_db)) -> dict:
+    artifact = session.get(Artifact, artifact_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    root = workspace_runtime_root().resolve()
+    path = (root / artifact.path).resolve()
+    if root not in path.parents and path != root:
+        raise HTTPException(status_code=400, detail="Artifact path escapes runtime root")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Artifact file is missing")
+    return {"artifact_id": artifact.id, "text": safe_read_text(path, encoding="utf-8")}
 
 
 def _artifact_payload(
@@ -154,6 +170,16 @@ def review_artifact(
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (ReviewPublishError, ModelClientError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{artifact_id}/manual-check")
+def manual_check_artifact(artifact_id: int, session: Session = Depends(get_db)) -> dict:
+    try:
+        return ReviewPublishService(session).manual_check_artifact(artifact_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ReviewPublishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

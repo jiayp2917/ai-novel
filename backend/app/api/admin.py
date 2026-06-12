@@ -9,7 +9,7 @@ from backend.app.db.models import Artifact
 from backend.app.db.session import get_db
 from backend.app.services.model_client import ChatMessage, ModelClient, ModelClientError
 from backend.app.services.model_config import ModelConfigService
-from backend.app.services.model_router import ModelRouteNotFoundError, ModelRouter
+from backend.app.services.model_router import ModelRoute, ModelRouteNotFoundError, ModelRouter
 from backend.app.services.skills import SkillLoader
 from backend.app.services.workspace import workspace_runtime_root
 
@@ -36,6 +36,21 @@ class SaveModelConfigRequest(BaseModel):
     max_tokens: int | None = None
     cheap: bool | None = None
     supports_json: bool | None = None
+
+
+class SaveModelProfileRequest(BaseModel):
+    name: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    base_url: str | None = None
+    api_key_env: str | None = None
+    max_tokens: int | None = None
+    cheap: bool | None = None
+    supports_json: bool | None = None
+
+
+class AssignModelProfileRequest(BaseModel):
+    profile_id: str
 
 
 class SaveModelSecretRequest(BaseModel):
@@ -80,7 +95,7 @@ def probe_model(payload: ProbeModelRequest, session: Session = Depends(get_db)) 
 
 @router.get("/model-config")
 def model_config() -> dict:
-    roles = ["writer", "reviewer", "quick_fix", "structural_fix", "long_context", "arbiter"]
+    roles = ["writer", "reviewer", "fixer", "quick_fix", "outliner", "structural_fix", "memory", "long_context", "arbiter"]
     return ModelConfigService().config_payload(roles)
 
 
@@ -88,6 +103,50 @@ def model_config() -> dict:
 def save_model_config(role: str, payload: SaveModelConfigRequest) -> dict:
     saved = ModelConfigService().save_route(role, payload.model_dump(exclude_unset=True))
     return {"saved": True, "role": role, "config": saved.__dict__}
+
+
+@router.post("/model-profiles")
+def create_model_profile(payload: SaveModelProfileRequest) -> dict:
+    profile = ModelConfigService().save_profile(payload.model_dump(exclude_unset=True))
+    return {"saved": True, "profile": profile.__dict__}
+
+
+@router.patch("/model-profiles/{profile_id}")
+def update_model_profile(profile_id: str, payload: SaveModelProfileRequest) -> dict:
+    profile = ModelConfigService().save_profile(payload.model_dump(exclude_unset=True), profile_id=profile_id)
+    return {"saved": True, "profile": profile.__dict__}
+
+
+@router.delete("/model-profiles/{profile_id}")
+def delete_model_profile(profile_id: str) -> dict:
+    ModelConfigService().delete_profile(profile_id)
+    return {"deleted": True, "profile_id": profile_id}
+
+
+@router.post("/model-profiles/{profile_id}/secret")
+def save_model_profile_secret(profile_id: str, payload: SaveModelSecretRequest) -> dict:
+    service = ModelConfigService()
+    profile = service.profile_by_id(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="模型档案不存在。")
+    service.save_secret(profile.provider, payload.key)
+    route = ModelRoute(
+        role="profile",
+        provider=profile.provider,
+        model=profile.model,
+        base_url=profile.base_url,
+        api_key_env=profile.api_key_env,
+        max_tokens=profile.max_tokens,
+        cheap=profile.cheap,
+        supports_json=profile.supports_json,
+    )
+    return {"saved": True, "profile_id": profile_id, "secret": service.secret_status(route)}
+
+
+@router.patch("/model-role-assignments/{role}")
+def assign_model_profile(role: str, payload: AssignModelProfileRequest) -> dict:
+    route = ModelConfigService().assign_profile(role, payload.profile_id)
+    return {"saved": True, "role": role, "route": route.__dict__}
 
 
 @router.post("/model-config/{role}/secret")

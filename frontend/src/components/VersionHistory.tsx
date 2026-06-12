@@ -20,6 +20,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
   const queryClient = useQueryClient();
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [viewedDiffs, setViewedDiffs] = useState<Record<number, string>>({});
+  const sequenceById = versionSequenceMap(versions.data ?? []);
 
   const publishMutation = useMutation({
     mutationFn: (versionId: number) =>
@@ -133,6 +134,8 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
                 key={version.id}
                 version={version}
                 versions={versions.data ?? []}
+                sequenceLabel={version.is_current ? 'V当前' : `V${sequenceById.get(version.id) ?? '-'}`}
+                previousLabel={previousVersionLabel(version, versions.data ?? [], sequenceById)}
                 active={selectedVersionId === version.id}
                 publishing={publishMutation.isPending && publishMutation.variables === version.id}
                 deleting={deleteMutation.isPending && deleteMutation.variables === version.id}
@@ -175,6 +178,8 @@ function HistoryGroup({ title, children }: { title: string; children: ReactNode 
 function VersionCard({
   version,
   versions,
+  sequenceLabel,
+  previousLabel,
   active,
   publishing,
   deleting,
@@ -187,6 +192,8 @@ function VersionCard({
 }: {
   version: ChapterVersion;
   versions: ChapterVersion[];
+  sequenceLabel: string;
+  previousLabel: string;
   active: boolean;
   publishing: boolean;
   deleting: boolean;
@@ -214,7 +221,6 @@ function VersionCard({
     : version.is_current
       ? '不可删除：当前正文必须保留。'
       : '不可删除：该版本仍受保护。';
-  const previousVersion = previousByCreatedAt(version, versions);
   const publishNeedsDiff = version.can_publish && !diffText;
 
   return (
@@ -235,11 +241,11 @@ function VersionCard({
       role="button"
       tabIndex={version.can_preview ? 0 : -1}
       aria-disabled={!version.can_preview}
-      aria-label={version.is_current ? '查看当前正文' : active ? '正在查看此版本' : `切换到版本 ${version.id}`}
+      aria-label={version.is_current ? '查看当前正文' : active ? `正在查看${sequenceLabel}` : `切换到${sequenceLabel}`}
     >
       <div className="history-card__head">
         <div>
-          <strong>{version.is_current ? '当前正文' : '历史版本'}</strong>
+          <strong>{sequenceLabel} · {version.is_current ? '当前正文' : '历史版本'}</strong>
           <span>{version.title}</span>
         </div>
         <small>{formatDate(version.created_at)}</small>
@@ -252,8 +258,8 @@ function VersionCard({
       </div>
       <details className="version-advanced" onClick={(event) => event.stopPropagation()}>
         <summary>排错信息</summary>
-        <code>正文校验 {shortHash(version.body_hash)} · 文件校验 {shortHash(version.source_file_hash)}</code>
-        <small>上一版本：{previousVersion ? `#${previousVersion.id} / ${formatDate(previousVersion.created_at)}` : '无'}</small>
+        <code>版本记录 #{version.id} · 正文校验 {shortHash(version.body_hash)} · 文件校验 {shortHash(version.source_file_hash)}</code>
+        <small>上一版本：{previousLabel}</small>
       </details>
       {!version.can_preview && <small className="form-hint form-hint--error">该历史版本缺少可查看的正文内容，不能切换，只能保留记录或删除。</small>}
       {diffText && (
@@ -284,7 +290,7 @@ function VersionCard({
           disabled={!version.can_publish || publishNeedsDiff || publishing}
           title={publishNeedsDiff ? '请先查看改动，再确认发布。' : undefined}
         >
-          {version.is_current ? '已是当前正文' : publishing ? '发布中...' : publishNeedsDiff ? '先查看改动' : '确认发布'}
+          {version.is_current ? '已是当前正文' : publishing ? '发布中...' : publishNeedsDiff ? '先查看改动' : '发布为当前正文'}
         </button>
         <button
           className="secondary-button danger-button"
@@ -353,10 +359,24 @@ function shortHash(value: string | null): string {
   return value ? `${value.slice(0, 8)}...` : '无';
 }
 
+function versionSequenceMap(versions: ChapterVersion[]): Map<number, number> {
+  const sorted = [...versions].sort((a, b) => timestamp(a.created_at) - timestamp(b.created_at) || a.id - b.id);
+  return new Map(sorted.map((version, index) => [version.id, index + 1]));
+}
+
+function previousVersionLabel(version: ChapterVersion, versions: ChapterVersion[], sequenceById: Map<number, number>): string {
+  const previous = previousByCreatedAt(version, versions);
+  if (!previous) {
+    return '无';
+  }
+  const sequence = previous.is_current ? 'V当前' : `V${sequenceById.get(previous.id) ?? '-'}`;
+  return `${sequence} / ${formatDate(previous.created_at)}`;
+}
+
 function previousByCreatedAt(version: ChapterVersion, versions: ChapterVersion[]): ChapterVersion | undefined {
-  const sorted = [...versions].sort((a, b) => timestamp(b.created_at) - timestamp(a.created_at));
+  const sorted = [...versions].sort((a, b) => timestamp(a.created_at) - timestamp(b.created_at) || a.id - b.id);
   const index = sorted.findIndex((item) => item.id === version.id);
-  return index >= 0 ? sorted[index + 1] : undefined;
+  return index > 0 ? sorted[index - 1] : undefined;
 }
 
 function timestamp(value: string | null): number {

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { apiRequest } from '../api';
-import { useArtifact, useArtifacts, useJobs, usePublishDecisions } from '../hooks';
+import { useArtifact, useArtifactText, useArtifacts, useJobs, usePublishDecisions } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import { ArtifactTrace, CandidateSelector, PublishGateChecklist } from './ArtifactGatePanels';
 import { operationBlockReason, publishBlockReason, validateArtifactContext } from './artifactGateUtils';
@@ -35,6 +35,7 @@ export function ArtifactGate({
   const jobs = useJobs();
   const artifacts = useArtifacts({ baseChapterId, baseSourceFileId, kind: artifactKind });
   const selectedArtifact = useArtifact(artifactId);
+  const artifactText = useArtifactText(artifactId);
   const publishDecisions = usePublishDecisions();
   const selectedPublishDecision = (publishDecisions.data ?? []).find((decision) => decision.artifact_id === artifactId);
   const validation = validateArtifactContext(selectedArtifact.data, { baseChapterId, baseSourceFileId, artifactKind });
@@ -49,6 +50,7 @@ export function ArtifactGate({
     ? publishBlockReason({ artifact: selectedArtifact.data, allowPublish, diffReady: Boolean(diffText) })
     : null;
   const canPublish = canOperate && !publishBlockedReason;
+  const manualChecked = Boolean(selectedArtifact.data?.latest_review?.passed);
 
   useEffect(() => {
     if (artifactId !== null || baseChapterId === undefined) {
@@ -64,6 +66,10 @@ export function ArtifactGate({
       setArtifactId(latest.result.artifact_id as number);
     }
   }, [artifactId, baseChapterId, jobs.data, setArtifactId]);
+
+  useEffect(() => {
+    setDiffText('');
+  }, [artifactId, setDiffText]);
 
   const reviewMutation = useMutation({
     mutationFn: () =>
@@ -82,6 +88,20 @@ export function ArtifactGate({
       });
     },
     onError: (error: Error) => pushTask({ label: '检查草稿', status: 'failed', detail: error.message }),
+  });
+
+  const manualCheckMutation = useMutation({
+    mutationFn: () =>
+      apiRequest<{ passed: boolean; review_id: number }>(`/api/artifacts/${artifactId}/manual-check`, {
+        method: 'POST',
+      }),
+    onMutate: () => pushTask({ label: '检查完成', status: 'running', detail: `正在记录草稿 #${artifactId} 的人工检查结果。` }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
+      void queryClient.invalidateQueries({ queryKey: ['artifact', artifactId] });
+      pushTask({ label: '检查完成', status: 'succeeded', detail: `人工检查 #${result.review_id} 已记录。` });
+    },
+    onError: (error: Error) => pushTask({ label: '检查完成', status: 'failed', detail: error.message }),
   });
 
   const diffMutation = useMutation({
@@ -118,11 +138,24 @@ export function ArtifactGate({
 
   return (
     <div className="artifact-gate">
-      <p className="form-hint">
-        {artifactKind === 'candidate'
-          ? '草稿会先保存在草稿箱。人工编辑草稿可直接查看改动并确认写回；AI 草稿需要先检查。'
-          : '设定和章纲只保存为提案，可检查和查看改动，但不会在这里直接覆盖源文件。'}
-      </p>
+      <div className="manual-publish-flow" aria-label={allowPublish ? '人工写回流程' : '提案检查流程'}>
+        <div className={artifactId ? 'manual-step manual-step--done' : 'manual-step'}>
+          <strong>1 选择草稿</strong>
+          <span>{artifactId ? `已选择 #${artifactId}` : '先从下方草稿列表选择一份。'}</span>
+        </div>
+        <div className={artifactText.data ? 'manual-step manual-step--done' : 'manual-step'}>
+          <strong>2 查看内容</strong>
+          <span>{artifactText.data ? '草稿内容已显示，可人工检查。' : '选择后会显示草稿正文。'}</span>
+        </div>
+        <div className={manualChecked ? 'manual-step manual-step--done' : 'manual-step'}>
+          <strong>3 检查完成</strong>
+          <span>{manualChecked ? '已由人工确认可进入写回。' : '确认内容无误后点击检查完成。'}</span>
+        </div>
+        <div className={selectedPublishDecision ? 'manual-step manual-step--done' : 'manual-step'}>
+          <strong>{allowPublish ? '4 正式写回' : '4 人工采纳'}</strong>
+          <span>{allowPublish ? '查看改动后确认写回正文。' : '提案只供人工采纳，不直接覆盖。'}</span>
+        </div>
+      </div>
       <CandidateSelector
         artifactId={artifactId}
         setArtifactId={setArtifactId}
@@ -131,6 +164,27 @@ export function ArtifactGate({
         allowPublish={allowPublish}
         baseChapterId={baseChapterId}
       />
+      {artifactId && (
+        <section className="artifact-preview-panel">
+          <div className="compact-title">
+            <div>
+              <p className="eyebrow">草稿内容</p>
+              <h3>{artifactText.isLoading ? '正在读取草稿' : '人工检查这份草稿'}</h3>
+            </div>
+            <Button
+              variant={manualChecked ? 'primary' : 'secondary'}
+              onClick={() => manualCheckMutation.mutate()}
+              disabled={!artifactText.data || manualChecked || manualCheckMutation.isPending || !canOperate}
+              loading={manualCheckMutation.isPending}
+            >
+              {manualChecked ? '检查已完成' : '检查完成'}
+            </Button>
+          </div>
+          {artifactText.isLoading && <p className="muted">正在读取草稿内容...</p>}
+          {artifactText.isError && <p className="form-hint form-hint--error">草稿内容读取失败，请确认草稿文件仍存在。</p>}
+          {artifactText.data && <pre className="document-preview artifact-preview-text">{artifactText.data.text}</pre>}
+        </section>
+      )}
       <PublishGateChecklist
         artifact={selectedArtifact.data}
         allowPublish={allowPublish}
@@ -138,21 +192,12 @@ export function ArtifactGate({
         contextValid={validation.valid}
         artifactSelected={Boolean(artifactId)}
       />
-      <div className="action-row">
-        <Button
-          variant="secondary"
-          onClick={() => reviewMutation.mutate()}
-          disabled={!canOperate || reviewMutation.isPending}
-          title={operationBlockedReason ?? undefined}
-          loading={reviewMutation.isPending}
-        >
-          检查草稿
-        </Button>
+      <div className="action-row artifact-main-actions">
         <Button
           variant="secondary"
           onClick={() => diffMutation.mutate()}
-          disabled={!canOperate || diffMutation.isPending}
-          title={operationBlockedReason ?? undefined}
+          disabled={!canOperate || !manualChecked || diffMutation.isPending}
+          title={!manualChecked ? '请先查看草稿并点击“检查完成”。' : operationBlockedReason ?? undefined}
           loading={diffMutation.isPending}
         >
           查看改动
@@ -173,6 +218,21 @@ export function ArtifactGate({
           </Button>
         )}
       </div>
+      {allowPublish && (
+        <details className="advanced-details">
+          <summary>AI 辅助检查</summary>
+          <p className="form-hint">人工写回不强制 AI 检查；如果这是 AI 草稿或你不确定内容质量，可先让 AI 检查。</p>
+          <Button
+            variant="secondary"
+            onClick={() => reviewMutation.mutate()}
+            disabled={!canOperate || reviewMutation.isPending}
+            title={operationBlockedReason ?? undefined}
+            loading={reviewMutation.isPending}
+          >
+            AI 检查草稿
+          </Button>
+        </details>
+      )}
       {artifactId && selectedArtifact.isLoading && <p className="form-hint">正在校验草稿归属...</p>}
       {artifactId && selectedArtifact.isError && <p className="form-hint form-hint--error">草稿不存在，不能继续操作。</p>}
       {!artifactId && <p className="form-hint form-hint--error">请先选择草稿；如果没有草稿，请先在写作页保存正文版本，或在 AI 工作台生成修订草稿。</p>}

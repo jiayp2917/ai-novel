@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiRequest, queryClient } from '../api';
 import {
   useCostDashboard,
@@ -18,6 +18,7 @@ import type {
   ModelCallCleanupResult,
   ModelCallRecord,
   ModelConfigRole,
+  ModelProfile,
   ProbeModelPayload,
   PublishDecisionRecord,
   SkillInfo,
@@ -138,21 +139,24 @@ export function ModelsView() {
         <div className="section-title">
           <div>
             <p className="eyebrow">AI 助手配置</p>
-            <h2>按用途配置模型、接口和密钥</h2>
-            <p className="form-hint">测试连接会发送一次很短的真实 AI 请求，可能产生少量费用。</p>
+            <h2>模型档案与角色分配</h2>
+            <p className="form-hint">先维护可用模型，再把写作、检查、修订等角色分配到对应模型。测试连接会发送一次很短的真实 AI 请求。</p>
           </div>
         </div>
         {modelConfig.data && <p className="form-hint">密钥状态：{modelConfig.data.secret_store.label}。</p>}
-        <div className="route-list route-list--config">
-          {modelConfig.data?.roles.map((config) => (
-            <ModelConfigCard
-              config={config}
-              key={config.role}
-              onProbe={(role, temporaryKey) => probeMutation.mutate({ role, temporaryKey })}
-              probePending={probeMutation.isPending}
-              pushTask={pushTask}
-            />
-          ))}
+        <div className="model-config-workspace">
+          {modelConfig.data && (
+            <>
+              <ModelProfilePanel profiles={modelConfig.data.profiles} pushTask={pushTask} />
+              <RoleAssignmentPanel
+                profiles={modelConfig.data.profiles}
+                roles={modelConfig.data.roles}
+                onProbe={(role, temporaryKey) => probeMutation.mutate({ role, temporaryKey })}
+                probePending={probeMutation.isPending}
+                pushTask={pushTask}
+              />
+            </>
+          )}
           {modelConfig.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载 AI 助手配置...</p>}
         </div>
         {probeResult && (
@@ -320,88 +324,146 @@ function StatusCard({ label, value, detail, tone = 'neutral' }: { label: string;
 
 type TaskPush = (task: { label: string; status: 'running' | 'succeeded' | 'failed'; detail: string }) => void;
 
-function ModelConfigCard({
-  config,
-  onProbe,
-  probePending,
+function ModelProfilePanel({ profiles, pushTask }: { profiles: ModelProfile[]; pushTask: TaskPush }) {
+  const [creating, setCreating] = useState(false);
+  const defaultProfile = profiles[0];
+
+  return (
+    <section className="model-profile-panel">
+      <div className="compact-title">
+        <div>
+          <p className="eyebrow">第一步</p>
+          <h3>模型档案</h3>
+        </div>
+        <Button variant="secondary" onClick={() => setCreating((value) => !value)}>
+          {creating ? '收起新增' : '新增模型'}
+        </Button>
+      </div>
+      {creating && (
+        <ModelProfileCard
+          profile={profileDraft(defaultProfile)}
+          mode="create"
+          pushTask={pushTask}
+          onDone={() => setCreating(false)}
+        />
+      )}
+      <div className="model-profile-list">
+        {profiles.map((profile) => (
+          <ModelProfileCard profile={profile} key={profile.id} mode="edit" pushTask={pushTask} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ModelProfileCard({
+  profile,
+  mode,
   pushTask,
+  onDone,
 }: {
-  config: ModelConfigRole;
-  onProbe: (role: string, temporaryKey?: string) => void;
-  probePending: boolean;
+  profile: ModelProfile;
+  mode: 'create' | 'edit';
   pushTask: TaskPush;
+  onDone?: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [provider, setProvider] = useState(config.provider ?? '');
-  const [model, setModel] = useState(config.model ?? '');
-  const [baseUrl, setBaseUrl] = useState(config.base_url ?? '');
-  const [maxTokens, setMaxTokens] = useState(String(config.max_tokens ?? ''));
+  const [editing, setEditing] = useState(mode === 'create');
+  const [name, setName] = useState(profile.name);
+  const [provider, setProvider] = useState(profile.provider);
+  const [model, setModel] = useState(profile.model);
+  const [baseUrl, setBaseUrl] = useState(profile.base_url);
+  const [apiKeyEnv, setApiKeyEnv] = useState(profile.api_key_env);
+  const [maxTokens, setMaxTokens] = useState(String(profile.max_tokens));
   const [secret, setSecret] = useState('');
+  const canEdit = mode === 'create' || !profile.built_in;
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest<{ saved: boolean }>(`/api/admin/model-config/${config.role}`, {
-        method: 'PATCH',
+      if (!canEdit) {
+        throw new Error('内置模型档案不能直接修改，请先新增自定义模型。');
+      }
+      const path = mode === 'create' ? '/api/admin/model-profiles' : `/api/admin/model-profiles/${profile.id}`;
+      const method = mode === 'create' ? 'POST' : 'PATCH';
+      const result = await apiRequest<{ saved: boolean; profile: ModelProfile }>(path, {
+        method,
         body: JSON.stringify({
+          name,
           provider,
           model,
           base_url: baseUrl,
+          api_key_env: apiKeyEnv,
           max_tokens: Number(maxTokens),
-          cheap: config.cheap,
-          supports_json: config.supports_json,
+          cheap: profile.cheap,
+          supports_json: profile.supports_json,
         }),
       });
       if (secret.trim()) {
-        await apiRequest<{ saved: boolean }>(`/api/admin/model-config/${config.role}/secret`, {
+        await apiRequest<{ saved: boolean }>(`/api/admin/model-profiles/${result.profile.id}/secret`, {
           method: 'POST',
           body: JSON.stringify({ key: secret }),
         });
       }
-      return { saved: true };
+      return result.profile;
     },
-    onMutate: () => pushTask({ label: '保存模型配置', status: 'running', detail: `正在保存 ${config.label}` }),
-    onSuccess: () => {
+    onMutate: () => pushTask({ label: '保存模型档案', status: 'running', detail: `正在保存 ${name || '模型档案'}。` }),
+    onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ['model-config'] });
       void queryClient.invalidateQueries({ queryKey: ['model-routes'] });
-      pushTask({ label: '保存模型配置', status: 'succeeded', detail: `${config.label} 已保存。` });
+      pushTask({ label: '保存模型档案', status: 'succeeded', detail: `${saved.name} 已保存。` });
       setEditing(false);
       setSecret('');
+      onDone?.();
     },
-    onError: (error: Error) => pushTask({ label: '保存模型配置', status: 'failed', detail: error.message }),
+    onError: (error: Error) => pushTask({ label: '保存模型档案', status: 'failed', detail: error.message }),
   });
 
-  const hasError = Boolean(config.error);
-  const secretLabel = config.secret?.label ?? '未知';
-  const statusText = hasError ? config.error : config.secret?.status === 'missing' ? '缺少密钥，配置后再测试' : '可测试连接';
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest<{ deleted: boolean }>(`/api/admin/model-profiles/${profile.id}`, { method: 'DELETE' }),
+    onMutate: () => pushTask({ label: '删除模型档案', status: 'running', detail: `正在删除 ${profile.name}。` }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['model-config'] });
+      pushTask({ label: '删除模型档案', status: 'succeeded', detail: `${profile.name} 已删除。` });
+    },
+    onError: (error: Error) => pushTask({ label: '删除模型档案', status: 'failed', detail: error.message }),
+  });
+
+  const secretLabel = profile.secret?.label ?? '未知';
+  const canDelete = mode === 'edit' && !profile.built_in;
 
   return (
-    <article className={`route-card model-config-card ${hasError ? 'model-config-card--error' : ''}`}>
+    <article className="route-card model-profile-card">
       <div className="model-config-card__head">
         <div>
-          <strong>{config.label}</strong>
-          <span>{config.purpose}</span>
+          <strong>{profile.name}</strong>
+          <span>{profile.provider_label ?? profile.provider} · {profile.model}</span>
         </div>
-        <span className={`chip ${config.secret?.status === 'missing' || hasError ? 'danger' : 'ok'}`}>{statusText}</span>
+        <span className={`chip ${profile.secret?.status === 'missing' ? 'danger' : 'ok'}`}>{profile.built_in ? '内置模板' : profile.secret?.status === 'missing' ? '缺少密钥' : '可使用'}</span>
       </div>
-
       <div className="model-config-summary">
-        <div><span>模型</span><strong>{config.model ?? '未配置'}</strong></div>
-        <div><span>接口地址</span><strong>{friendlyUrl(config.base_url)}</strong></div>
+        <div><span>模型</span><strong>{profile.model || '未配置'}</strong></div>
+        <div><span>接口地址</span><strong>{friendlyUrl(profile.base_url)}</strong></div>
         <div><span>密钥</span><strong>{secretLabel}</strong></div>
       </div>
-
-      {editing && (
+      {editing && canEdit && (
         <div className="model-config-form">
           <label>
+            档案名称
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：Agnes 主力写作" />
+          </label>
+          <label>
             模型
-            <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="例如 kimi-k2.6" />
+            <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="例如 agnes-2.0-flash" />
           </label>
           <label>
             接口地址
-            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="例如 https://api.moonshot.cn/v1" />
+            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="例如 https://apihub.agnes-ai.com/v1" />
+          </label>
+          <label>
+            密钥环境变量
+            <input value={apiKeyEnv} onChange={(event) => setApiKeyEnv(event.target.value)} placeholder="例如 AGNES_API_KEY" />
           </label>
           <label className="model-config-form__secret">
-            key：加密信息
+            加密保存密钥
             <input
               type="password"
               value={secret}
@@ -412,14 +474,13 @@ function ModelConfigCard({
           </label>
         </div>
       )}
-
       <details className="advanced-details">
         <summary>高级设置</summary>
-        {editing && (
+        {editing && canEdit && (
           <div className="model-config-advanced-form">
             <label>
               供应商
-              <input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 kimi" />
+              <input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 agnes" />
             </label>
             <label>
               输出上限
@@ -427,36 +488,151 @@ function ModelConfigCard({
             </label>
           </div>
         )}
-        <small>role：{config.role}</small>
-        <small>provider/model：{config.provider ?? '未识别'} / {config.model ?? '未识别'}</small>
-        <small>base_url：{config.base_url ?? '暂无地址'}</small>
-        <small>api_key_env：{config.api_key_env ?? '未识别'}</small>
-        <small>max_tokens：{config.max_tokens ?? '-'}</small>
-        <small>JSON 输出：{config.supports_json ? '支持' : '不支持'}</small>
+        <small>provider/model：{profile.provider} / {profile.model}</small>
+        <small>base_url：{profile.base_url}</small>
+        <small>api_key_env：{profile.api_key_env}</small>
+        <small>max_tokens：{profile.max_tokens}</small>
+        <small>JSON 输出：{profile.supports_json ? '支持' : '不支持'}</small>
       </details>
-
       <div className="model-config-actions">
-        <Button variant="secondary" onClick={() => setEditing((current) => !current)}>
-          {editing ? '收起编辑' : '编辑配置'}
+        <Button variant="secondary" onClick={() => setEditing((value) => !value)} disabled={!canEdit || (mode === 'create' && saveMutation.isPending)}>
+          {profile.built_in ? '内置只读' : editing ? '收起编辑' : '编辑档案'}
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => onProbe(config.role, editing && secret ? secret : undefined)}
-          disabled={probePending || hasError}
-        >
-          测试连接
+        <Button variant="primary" onClick={() => saveMutation.mutate()} disabled={!editing || saveMutation.isPending} loading={saveMutation.isPending}>
+          {mode === 'create' ? '保存新模型' : '保存档案'}
         </Button>
-        <Button
-          variant="primary"
-          onClick={() => saveMutation.mutate()}
-          disabled={!editing || saveMutation.isPending || hasError}
-          loading={saveMutation.isPending}
-        >
-          {saveMutation.isPending ? '保存中...' : '保存配置'}
+        {canDelete && (
+          <Button variant="danger" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} loading={deleteMutation.isPending}>
+            删除档案
+          </Button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function RoleAssignmentPanel({
+  profiles,
+  roles,
+  onProbe,
+  probePending,
+  pushTask,
+}: {
+  profiles: ModelProfile[];
+  roles: ModelConfigRole[];
+  onProbe: (role: string, temporaryKey?: string) => void;
+  probePending: boolean;
+  pushTask: TaskPush;
+}) {
+  return (
+    <section className="role-assignment-panel">
+      <div className="compact-title">
+        <div>
+          <p className="eyebrow">第二步</p>
+          <h3>角色分配</h3>
+        </div>
+      </div>
+      <div className="role-assignment-list">
+        {roles.map((role) => (
+          <RoleAssignmentRow
+            key={role.role}
+            role={role}
+            profiles={profiles}
+            onProbe={onProbe}
+            probePending={probePending}
+            pushTask={pushTask}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RoleAssignmentRow({
+  role,
+  profiles,
+  onProbe,
+  probePending,
+  pushTask,
+}: {
+  role: ModelConfigRole;
+  profiles: ModelProfile[];
+  onProbe: (role: string, temporaryKey?: string) => void;
+  probePending: boolean;
+  pushTask: TaskPush;
+}) {
+  const [profileId, setProfileId] = useState(role.profile_id ?? profiles[0]?.id ?? '');
+
+  useEffect(() => {
+    setProfileId(role.profile_id ?? profiles[0]?.id ?? '');
+  }, [profiles, role.profile_id]);
+
+  const assignMutation = useMutation({
+    mutationFn: () =>
+      apiRequest<{ saved: boolean }>(`/api/admin/model-role-assignments/${role.role}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ profile_id: profileId }),
+      }),
+    onMutate: () => pushTask({ label: '分配模型角色', status: 'running', detail: `正在为 ${role.label} 分配模型。` }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['model-config'] });
+      void queryClient.invalidateQueries({ queryKey: ['model-routes'] });
+      pushTask({ label: '分配模型角色', status: 'succeeded', detail: `${role.label} 的模型已更新。` });
+    },
+    onError: (error: Error) => pushTask({ label: '分配模型角色', status: 'failed', detail: error.message }),
+  });
+
+  const assigned = profiles.find((profile) => profile.id === profileId);
+  const hasError = Boolean(role.error);
+  const changed = profileId !== role.profile_id;
+
+  return (
+    <article className={`role-assignment-row ${hasError ? 'model-config-card--error' : ''}`}>
+      <div>
+        <strong>{role.label}</strong>
+        <span>{role.purpose}</span>
+      </div>
+      <label>
+        使用模型
+        <select value={profileId} onChange={(event) => setProfileId(event.target.value)} disabled={hasError}>
+          {profiles.map((profile) => (
+            <option value={profile.id} key={profile.id}>
+              {profile.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="role-assignment-row__meta">
+        <span>{assigned ? `${assigned.provider_label ?? assigned.provider} · ${assigned.model}` : role.error ?? '未分配模型'}</span>
+        <span>{assigned?.secret?.label ?? role.secret?.label ?? '密钥状态未知'}</span>
+      </div>
+      <div className="model-config-actions">
+        <Button variant="primary" onClick={() => assignMutation.mutate()} disabled={!changed || assignMutation.isPending || hasError} loading={assignMutation.isPending}>
+          保存分配
+        </Button>
+        <Button variant="secondary" onClick={() => onProbe(role.role)} disabled={probePending || hasError}>
+          测试此角色
         </Button>
       </div>
     </article>
   );
+}
+
+function profileDraft(base?: ModelProfile): ModelProfile {
+  return {
+    id: 'new-profile',
+    name: '',
+    provider: base?.provider ?? 'agnes',
+    provider_label: base?.provider_label ?? 'Agnes AI',
+    model: base?.model ?? 'agnes-2.0-flash',
+    base_url: base?.base_url ?? 'https://apihub.agnes-ai.com/v1',
+    api_key_env: base?.api_key_env ?? 'AGNES_API_KEY',
+    max_tokens: base?.max_tokens ?? 4096,
+    cheap: base?.cheap ?? false,
+    supports_json: base?.supports_json ?? true,
+    built_in: false,
+    secret: base?.secret,
+  };
 }
 
 function ModelCallRow({ call }: { call: ModelCallRecord }) {

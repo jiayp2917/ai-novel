@@ -43,6 +43,8 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const setWritingNavigationGuard = useWorkbenchStore((state) => state.setWritingNavigationGuard);
   const recentChapterIds = useWorkbenchStore((state) => state.recentChapterIds);
   const closeChapterTab = useWorkbenchStore((state) => state.closeChapterTab);
+  const closeOtherChapterTabs = useWorkbenchStore((state) => state.closeOtherChapterTabs);
+  const closeAllChapterTabs = useWorkbenchStore((state) => state.closeAllChapterTabs);
   const setDraftAnnotationSelection = useWorkbenchStore((state) => state.setDraftAnnotationSelection);
   const setInspectorTab = useWorkbenchStore((state) => state.setInspectorTab);
   const pushTask = useWorkbenchStore((state) => state.pushTask);
@@ -292,36 +294,50 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   return (
     <main className={readerClasses}>
       {variant === 'writing' && tabChapters.length > 0 && (
-        <div className="chapter-tabs" aria-label="已打开章节">
-          {tabChapters.map((chapter) => (
-            <button
-              className={chapter.id === selectedChapterId ? 'chapter-tab chapter-tab--active' : 'chapter-tab'}
-              key={chapter.id}
-              type="button"
-              onClick={() => selectChapter(chapter.id)}
-            >
-              <span>{String(chapter.chapter_no).padStart(3, '0')}</span>
-              <strong>{chapter.title}</strong>
-              <em
-                role="button"
-                tabIndex={0}
-                aria-label={`关闭第${chapter.chapter_no}章`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  closeChapterTab(chapter.id);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
+        <div className="chapter-tabs-bar">
+          <div className="chapter-tabs" aria-label="已打开章节">
+            {tabChapters.map((chapter) => (
+              <button
+                className={chapter.id === selectedChapterId ? 'chapter-tab chapter-tab--active' : 'chapter-tab'}
+                key={chapter.id}
+                type="button"
+                onClick={() => selectChapter(chapter.id)}
+              >
+                <span>{String(chapter.chapter_no).padStart(3, '0')}</span>
+                <strong>{chapter.title}</strong>
+                <em
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`关闭第${chapter.chapter_no}章`}
+                  onClick={(event) => {
                     event.stopPropagation();
                     closeChapterTab(chapter.id);
-                  }
-                }}
-              >
-                ×
-              </em>
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      closeChapterTab(chapter.id);
+                    }
+                  }}
+                >
+                  ×
+                </em>
+              </button>
+            ))}
+          </div>
+          <div className="chapter-tabs__actions" aria-label="章节标签操作">
+            <span>{tabChapters.length} 个标签</span>
+            <button type="button" className="secondary-button" onClick={() => selectedChapterId !== null && closeChapterTab(selectedChapterId)}>
+              关闭当前
             </button>
-          ))}
+            <button type="button" className="secondary-button" onClick={() => selectedChapterId !== null && closeOtherChapterTabs(selectedChapterId)} disabled={selectedChapterId === null || tabChapters.length <= 1}>
+              关闭其他
+            </button>
+            <button type="button" className="secondary-button" onClick={() => closeAllChapterTabs()}>
+              关闭全部
+            </button>
+          </div>
         </div>
       )}
       <ReaderToolbar

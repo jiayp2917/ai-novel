@@ -145,7 +145,8 @@ Prioritize:
 - Clear catalog tree.
 - Hideable side panels.
 - Separate writing UI from model/task UI.
-- Chinese UI text with explicit success/failure/progress feedback.
+- Chinese-first visible UI copy（中文优先）. All ordinary user-facing frontend text must be Chinese by default, with explicit success/failure/progress feedback.
+- English is allowed only for product/package names, providers/models, technical terms, code identifiers, env vars, commands, paths, API/JSON/debug fields, user-imported text, raw model/error output, and third-party browser/system text.
 - Safe defaults: AI records, raw model details, provider/token fields, task IDs, and JSON should stay in advanced/debug areas.
 
 Avoid decorative UI or engineering-heavy controls that slow daily writing.

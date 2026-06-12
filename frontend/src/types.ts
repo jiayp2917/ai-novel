@@ -180,6 +180,11 @@ export type Artifact = {
   latest_publish: PublishSummary | null;
 };
 
+export type ArtifactText = {
+  artifact_id: number;
+  text: string;
+};
+
 export type AnnotationPayload = {
   range_start: number;
   range_end: number;
@@ -504,6 +509,8 @@ export type ModelConfigRole = {
   role: string;
   label: string;
   purpose: string;
+  profile_id?: string;
+  profile_name?: string;
   provider?: string;
   provider_label?: string;
   model?: string;
@@ -518,7 +525,23 @@ export type ModelConfigRole = {
   error?: string;
 };
 
+export type ModelProfile = {
+  id: string;
+  name: string;
+  provider: string;
+  provider_label?: string;
+  model: string;
+  base_url: string;
+  api_key_env: string;
+  max_tokens: number;
+  cheap: boolean;
+  supports_json: boolean;
+  built_in?: boolean;
+  secret?: ModelSecretStatus;
+};
+
 export type ModelConfigPayload = {
+  profiles: ModelProfile[];
   roles: ModelConfigRole[];
   secret_store: {
     available: boolean;

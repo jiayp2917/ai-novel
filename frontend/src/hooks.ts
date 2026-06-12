@@ -4,6 +4,7 @@ import type {
   Annotation,
   AnnotationInsight,
   Artifact,
+  ArtifactText,
   CatalogStatus,
   Chapter,
   ChapterContent,
@@ -236,6 +237,15 @@ export function useArtifact(artifactId: number | null) {
   return useQuery({
     queryKey: ['artifact', artifactId],
     queryFn: () => apiRequest<Artifact>(`/api/artifacts/${artifactId}`),
+    enabled: artifactId !== null,
+    retry: false,
+  });
+}
+
+export function useArtifactText(artifactId: number | null) {
+  return useQuery({
+    queryKey: ['artifact-text', artifactId],
+    queryFn: () => apiRequest<ArtifactText>(`/api/artifacts/${artifactId}/text`),
     enabled: artifactId !== null,
     retry: false,
   });

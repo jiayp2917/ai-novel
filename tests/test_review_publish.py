@@ -170,6 +170,25 @@ def test_ai_candidate_still_requires_review(tmp_path: Path, monkeypatch: pytest.
     get_settings.cache_clear()
 
 
+def test_manual_check_allows_ai_candidate_publish_with_audit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session, artifact, content_root, _ = setup_candidate(tmp_path, monkeypatch)
+    service = ReviewPublishService(session, model_client=FakeReviewer("{}"))
+
+    review_result = service.manual_check_artifact(artifact.id)
+    result = service.publish_artifact(artifact.id, approved_by_user=True)
+    published = (content_root / "chapters" / "book.md").read_text(encoding="utf-8")
+    review = session.get(Review, review_result["review_id"])
+
+    assert review_result["passed"] is True
+    assert review is not None
+    assert review.evidence_count == 1
+    assert "manual_confirmation" in review.issues_json
+    assert "Alpha revised target text." in published
+    assert (get_settings().runtime_root / result["backup_path"]).exists()
+    assert session.scalar(select(PublishDecision).where(PublishDecision.artifact_id == artifact.id)) is not None
+    get_settings.cache_clear()
+
+
 def test_manual_source_flag_without_requires_false_still_requires_review(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

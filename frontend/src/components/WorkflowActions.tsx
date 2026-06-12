@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
 import { useArtifacts, useJobs } from '../hooks';
 import { useWorkbenchStore } from '../store';
-import type { Artifact, ContextPreview, SourceFile } from '../types';
+import type { Artifact, ContextPreview, Job, SourceFile } from '../types';
 import { ArtifactGate } from './ArtifactGate';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 
@@ -467,20 +467,7 @@ export function JobList({ compact = false }: { compact?: boolean }) {
           <p className="muted">暂无任务。</p>
         )}
         <div className="job-list job-list--compact">
-          {visibleJobs.map((job) => (
-            <article className={`job-card job-card--${job.status}`} key={job.id}>
-              <div>
-                <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
-                <span>{jobStatusLabel(job.status)}</span>
-              </div>
-              {job.status === 'paused_budget' && <p>AI 调用已暂停。查看原因后，可在模型页点击"继续执行任务"。</p>}
-              <details className="advanced-details">
-                <summary>高级详情</summary>
-                {job.error && <p>{job.error}</p>}
-                {job.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
-              </details>
-            </article>
-          ))}
+          {visibleJobs.map((job) => <JobTimelineCard job={job} key={job.id} />)}
         </div>
         {allJobs.length > visibleJobs.length && (
           <p className="muted">仅显示最近 {visibleJobs.length} 条任务，完整队列请到模型页查看。</p>
@@ -500,20 +487,36 @@ export function JobList({ compact = false }: { compact?: boolean }) {
       </div>
       <div className="job-list">
         {jobs.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载任务...</p>}
-        {visibleJobs.map((job) => (
-          <article className={`job-card job-card--${job.status}`} key={job.id}>
-            <div>
-              <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
-              <span>{jobStatusLabel(job.status)}</span>
-            </div>
-            {job.status === 'paused_budget' && <p>AI 调用已暂停。查看原因后，可在模型页点击"继续执行任务"。</p>}
-            {job.error && <p>{job.error}</p>}
-            {job.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
-          </article>
-        ))}
+        {visibleJobs.map((job) => <JobTimelineCard job={job} key={job.id} />)}
         {!jobs.isLoading && allJobs.length === 0 && <p className="muted">暂无任务。</p>}
       </div>
     </section>
+  );
+}
+
+function JobTimelineCard({ job }: { job: Job }) {
+  const failure = job.error ? summarizeJobError(job.error) : null;
+  return (
+    <article className={`job-card job-card--${job.status}`}>
+      <div className="job-card__head">
+        <div>
+          <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
+          <span>{job.locked_chapter_id ? `章节 #${job.locked_chapter_id}` : job.locked_source_file_id ? `素材 #${job.locked_source_file_id}` : '全局任务'}</span>
+        </div>
+        <span className={`chip ${jobTone(job.status)}`}>{jobStatusLabel(job.status)}</span>
+      </div>
+      <div className="job-card__timeline">
+        <span><strong>当前状态</strong>{jobStatusLabel(job.status)}</span>
+        <span><strong>下一步</strong>{jobNextStep(job.status)}</span>
+        <span><strong>失败原因</strong>{failure ?? '暂无'}</span>
+      </div>
+      {job.status === 'paused_budget' && <p className="form-hint form-hint--error">AI 调用已暂停。检查预算或密钥后，可在模型页点击“继续执行任务”。</p>}
+      <details className="advanced-details">
+        <summary>高级详情</summary>
+        {job.error && <p>{job.error}</p>}
+        {job.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
+      </details>
+    </article>
   );
 }
 
@@ -529,6 +532,52 @@ function jobTypeLabel(type: string): string {
     summarize_published_chapter: '整理章节记忆',
   };
   return labels[type] ?? type;
+}
+
+function jobTone(status: string): 'safe' | 'danger' | 'blue' | 'purple' {
+  if (['succeeded', 'done', 'approved'].includes(status)) {
+    return 'safe';
+  }
+  if (['failed', 'failed_terminal', 'failed_retryable', 'paused_budget'].includes(status)) {
+    return 'danger';
+  }
+  if (status === 'running') {
+    return 'blue';
+  }
+  return 'purple';
+}
+
+function jobNextStep(status: string): string {
+  const labels: Record<string, string> = {
+    queued: '点击“继续执行任务”推进队列。',
+    running: '等待当前任务完成。',
+    succeeded: '查看生成草稿、评审或写回记录。',
+    done: '查看结果或进入下一步。',
+    approved: '已通过，可继续后续流程。',
+    manual_required: '需要人工检查草稿或处理提示。',
+    failed: '查看失败原因后重试或调整配置。',
+    failed_terminal: '需要修复配置或输入后重新创建任务。',
+    failed_retryable: '可以在模型页继续执行或重试。',
+    paused_budget: '检查预算和模型配置后继续执行。',
+  };
+  return labels[status] ?? '查看高级详情确认下一步。';
+}
+
+function summarizeJobError(error: string): string {
+  const normalized = error.toLowerCase();
+  if (normalized.includes('api key') || normalized.includes('api_key')) {
+    return '缺少或无法读取密钥配置';
+  }
+  if (normalized.includes('timeout')) {
+    return 'AI 请求超时';
+  }
+  if (normalized.includes('budget')) {
+    return '预算限制暂停';
+  }
+  if (normalized.includes('json')) {
+    return 'AI 返回格式异常';
+  }
+  return error.length > 80 ? `${error.slice(0, 80)}...` : error;
 }
 
 function jobStatusLabel(status: string): string {

@@ -141,23 +141,29 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
         <span className="count-badge">{bookmarks.length} 个作品</span>
       </div>
 
-      {currentBookmark && (
-        <article className="workspace-current">
-          <div>
-            <p className="eyebrow">当前作品</p>
-            <h3>{currentBookmark.name}</h3>
-            <span title={currentBookmark.path}>{currentBookmark.path}</span>
-          </div>
-          <div className="workspace-stats workspace-stats--inline">
-            <span>{workspaceLocationLabel(current?.workspace_location)}</span>
-            <span>{layoutLabel(current?.layout)}</span>
-            <span>素材 {sourceCount}</span>
-            <span>正文 {chapterCount}</span>
-          </div>
-        </article>
-      )}
-
-      <div className="workspace-layout">
+      <div className="workspace-layout workspace-layout--settings">
+        <section className="workspace-current-block">
+          {currentBookmark ? (
+            <article className="workspace-current">
+              <div>
+                <p className="eyebrow">当前作品</p>
+                <h3>{currentBookmark.name}</h3>
+                <span title={currentBookmark.path}>{currentBookmark.path}</span>
+              </div>
+              <div className="workspace-stats workspace-stats--inline">
+                <span>{workspaceLocationLabel(current?.workspace_location)}</span>
+                <span>{layoutLabel(current?.layout)}</span>
+                <span>素材 {sourceCount}</span>
+                <span>正文 {chapterCount}</span>
+              </div>
+            </article>
+          ) : (
+            <div className="empty-state">
+              <strong>尚未打开作品。</strong>
+              <span>请在“添加作品”中填写作品文件夹路径并扫描。</span>
+            </div>
+          )}
+        </section>
         <section className="workspace-list">
           <div className="compact-title">
             <div>
@@ -255,10 +261,6 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
               <span key={name}>{name}：{count}</span>
             ))}
           </div>
-          <div className="workspace-meta">
-            <span>作品运行目录：{current?.runtime_root ?? '未识别'}</span>
-            <span>系统运行目录：{current?.app_runtime_root ?? health.data?.runtime_root ?? '未识别'}</span>
-          </div>
           {lastResult && <div className="workspace-feedback" role="status">{lastResult}</div>}
           {sourceCount === 0 && chapterCount === 0 && (
             <div className="empty-state">
@@ -267,6 +269,19 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
               <span>请确认目录内存在 00-系统/01-设定/02-正文/03-章纲，或 00-设定/01-大纲/02-正文/03-章纲，或 content/settings/content/outlines/content/chapters。</span>
             </div>
           )}
+        </section>
+
+        <section className="workspace-runtime">
+          <div className="compact-title">
+            <div>
+              <p className="eyebrow">运行目录</p>
+              <h3>缓存、草稿和备份写入位置</h3>
+            </div>
+          </div>
+          <div className="workspace-meta">
+            <span>作品运行目录：{current?.runtime_root ?? '未识别'}</span>
+            <span>系统运行目录：{current?.app_runtime_root ?? health.data?.runtime_root ?? '未识别'}</span>
+          </div>
         </section>
       </div>
     </section>

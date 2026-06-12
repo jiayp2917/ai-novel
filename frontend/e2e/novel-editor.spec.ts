@@ -59,7 +59,7 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   await savedVersionCard.getByRole('button', { name: '查看改动', exact: true }).click();
   await expect(savedVersionCard).toContainText('已查看改动');
   await expect(savedVersionCard.locator('.diff-preview')).toContainText('新手路径正文版本保存验证');
-  await savedVersionCard.getByRole('button', { name: '确认发布' }).click();
+  await savedVersionCard.getByRole('button', { name: '发布为当前正文' }).click();
   const publishDialog = page.getByRole('dialog', { name: '确认发布正文版本' });
   await expect(publishDialog).toBeVisible();
   await expect(publishDialog).toContainText('已经查看过改动');
@@ -92,7 +92,7 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   await expect(page.getByRole('button', { name: '查看改动' })).toBeDisabled();
 
   await mainNav(page, 'AI 素材库').click();
-  await expect(page.locator('.page.active')).toContainText('整理设定和章纲，供 AI 理解作品背景');
+  await expect(page.locator('.page.active')).toContainText('生成提案 → 查看改动 → 人工采纳');
   await expect(page.locator('.page.active')).toContainText('仅提案');
   await expect(page.locator('.page.active')).not.toContainText('确认写回正文');
   await expect(page.locator('.page.active .catalog-section--chapters')).toHaveCount(0);
@@ -115,7 +115,7 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   const publishMarker = '\n\n发布门沙盒验证：正文只通过候选写回。';
   const publishSeed = await seedReviewedCandidate(page, chapterTwo.id, `${beforePublish.text}${publishMarker}`);
   await bindDraftById(page, publishSeed.artifact_id);
-  await page.getByRole('button', { name: '查看改动' }).click();
+  await page.locator('.artifact-main-actions').getByRole('button', { name: '查看改动', exact: true }).click();
   await expect(page.locator('.diff-preview')).toContainText('发布门沙盒验证');
   await page.getByRole('button', { name: '确认写回正文' }).click();
   await expect(page.locator('.task-latest')).toContainText('已写回正文');
@@ -559,12 +559,12 @@ test('AI workbench selects a draft card without manual id and shows readable dra
   await expect(draftCard).toContainText('保存：');
   await expect(draftCard).toContainText('检查：未检查');
   await expect(draftCard).toContainText('未写回');
-  await expect(primary).not.toContainText('手动输入草稿编号');
+  await expect(primary.locator('.candidate-list')).not.toContainText('手动输入草稿编号');
 
   await draftCard.click();
   await expect(draftCard).toHaveClass(/candidate-row--active/);
-  await page.getByRole('button', { name: '检查草稿' }).click();
-  await expect(page.locator('.task-latest')).toContainText('检查 #991：通过');
+  await page.getByRole('button', { name: '检查完成' }).click();
+  await expect(page.locator('.task-latest')).toContainText('人工检查');
   await page.getByRole('button', { name: '查看改动' }).click();
   await expect(page.locator('.diff-preview')).toContainText('草稿卡片选择验证');
 });
@@ -660,7 +660,7 @@ test('AI workbench keeps advanced actions and engineering fields out of the main
 
   const workbench = page.locator('.ai-workbench-page');
   const primary = page.locator('.ai-primary-card');
-  await expect(primary).toContainText('草稿检查与写回');
+  await expect(primary).toContainText('人工检查与写回');
   await expect(primary.getByRole('button', { name: '按批注创建修订', exact: true })).toBeVisible();
   await expect(primary.getByRole('button', { name: '上下文预览', exact: true })).toHaveCount(0);
   await expect(primary.getByRole('button', { name: '推进待处理任务', exact: true })).toHaveCount(0);
@@ -668,9 +668,9 @@ test('AI workbench keeps advanced actions and engineering fields out of the main
   await expect(primary).not.toContainText('运行任务一次');
   await expect(primary).not.toContainText('snapshot-candidate');
   await expect(primary.locator('details.advanced-details').filter({ hasText: '高级选择草稿' })).toBeVisible();
-  await expect(primary).not.toContainText(/artifact_id|raw JSON|provider|token|手动输入草稿编号/);
+  await expect(primary.locator('.candidate-list')).not.toContainText(/artifact_id|raw JSON|provider|token|手动输入草稿编号/);
   await expect(primary.locator('details.advanced-details').filter({ hasText: '排错操作：创建待检查副本' })).toBeVisible();
-  await expect(primary.getByRole('button', { name: '创建待检查副本', exact: true })).toHaveCount(0);
+  await expect(primary.getByRole('button', { name: '创建待检查副本', exact: true })).toBeHidden();
 
   await primary.getByText('辅助操作').click();
   await expect(primary.getByRole('button', { name: '上下文预览', exact: true })).toBeVisible();
@@ -695,9 +695,10 @@ test('unreviewed AI draft cannot be written back from the frontend', async ({ pa
   await expect(page.locator('.artifact-trace')).toContainText('未检查');
   await expect(page.locator('.artifact-trace')).toContainText('草稿还没有检查记录');
   await expect(page.getByRole('button', { name: '确认写回正文' })).toBeDisabled();
-  await page.getByRole('button', { name: '查看改动' }).click();
+  await page.getByRole('button', { name: '检查完成' }).click();
+  await page.locator('.artifact-main-actions').getByRole('button', { name: '查看改动', exact: true }).click();
   await expect(page.locator('.diff-preview')).toContainText('未审核 AI 草稿写回拦截');
-  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '确认写回正文' })).toBeEnabled();
 });
 
 test('publish hash mismatch tells the writer to rescan and regenerate the draft', async ({ page }) => {
@@ -712,7 +713,7 @@ test('publish hash mismatch tells the writer to rescan and regenerate the draft'
   const content = await chapterContent(page, chapter.id);
   const seeded = await seedReviewedCandidate(page, chapter.id, `${content.text}\n\nhash mismatch 验证。`);
   await bindDraftById(page, seeded.artifact_id);
-  await page.getByRole('button', { name: '查看改动' }).click();
+  await page.locator('.artifact-main-actions').getByRole('button', { name: '查看改动', exact: true }).click();
   await expect(page.locator('.diff-preview')).toContainText('hash mismatch 验证');
 
   await mutateChapterSource(page, chapter.id, '\n\n外部改动：触发 hash mismatch。');
@@ -752,7 +753,7 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(page.locator('.models-section--overview')).toContainText('AI 助手当前是否可用');
   await expect(page.locator('.models-section--overview')).toContainText('AI 输出去向与安全边界');
   await expect(page.locator('.models-section--connectivity')).toContainText('AI 助手配置');
-  await expect(page.locator('.models-section--connectivity')).toContainText('按用途配置模型、接口和密钥');
+  await expect(page.locator('.models-section--connectivity')).toContainText('模型档案与角色分配');
   const callRecords = page.locator('.models-section--calls');
   await expect(callRecords).toContainText('AI 请求排错记录');
   await expect(callRecords).toContainText('平时不用展开');
@@ -766,21 +767,19 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(page.locator('.context-budget-list')).toBeVisible();
   await expect(page.locator('.context-budget-card')).toContainText('timeline');
   await expect(page.locator('.context-budget-card')).toContainText('500');
-  const writerConfigCard = page.locator('.model-config-card').filter({ hasText: 'AI 写作' });
-  await expect(writerConfigCard).toContainText('模型');
-  await expect(writerConfigCard).toContainText('接口地址');
-  await expect(writerConfigCard).toContainText('密钥');
-  await expect(writerConfigCard.locator('.model-config-summary')).not.toContainText('配置来源');
-  await expect(writerConfigCard).toContainText(/可测试连接|缺少密钥/);
-  await expect(writerConfigCard.locator('.model-config-summary')).not.toContainText(/provider|api_key_env|raw JSON|token/);
-  await writerConfigCard.getByText('高级设置').click();
-  await expect(writerConfigCard).toContainText('provider/model');
-  await writerConfigCard.getByRole('button', { name: '编辑配置' }).click();
-  await expect(writerConfigCard.getByLabel('模型')).toBeVisible();
-  await expect(writerConfigCard.getByLabel('接口地址')).toBeVisible();
-  await expect(writerConfigCard.getByPlaceholder('留空则不修改已保存密钥')).toBeVisible();
-  await expect(writerConfigCard.getByRole('button', { name: '保存配置' })).toBeEnabled();
-  await expect(writerConfigCard.getByRole('button', { name: '测试连接' })).toBeVisible();
+  const profileCard = page.locator('.model-profile-card').first();
+  await expect(profileCard).toContainText('模型');
+  await expect(profileCard).toContainText('接口地址');
+  await expect(profileCard).toContainText('密钥');
+  await expect(profileCard.locator('.model-config-summary')).not.toContainText('配置来源');
+  await expect(profileCard).toContainText(/可使用|缺少密钥|内置模板/);
+  await expect(profileCard.locator('.model-config-summary')).not.toContainText(/provider|api_key_env|raw JSON|token/);
+  await profileCard.getByText('高级设置').click();
+  await expect(profileCard).toContainText('provider/model');
+  const writerRoleRow = page.locator('.role-assignment-row').filter({ hasText: 'AI 写作' });
+  await expect(writerRoleRow).toContainText('使用模型');
+  await expect(writerRoleRow.getByRole('button', { name: '保存分配' })).toBeVisible();
+  await expect(writerRoleRow.getByRole('button', { name: '测试此角色' })).toBeVisible();
   await expect(callRecords).toContainText('连接失败、费用异常或 AI 无响应时再查看');
   await callRecords.getByRole('heading', { name: 'AI 请求排错记录' }).click();
   await expect(callRecords.locator('.observability-table--calls')).toBeVisible();

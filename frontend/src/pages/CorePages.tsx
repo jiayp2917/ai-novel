@@ -58,7 +58,7 @@ export function PlanningPage() {
       <header className="page-intro">
         <p className="eyebrow">设定与章纲</p>
         <h2 className="page-title">AI 素材库</h2>
-        <p className="page-subtitle">整理设定和章纲，供 AI 理解作品背景。</p>
+        <p className="page-subtitle">生成提案 → 查看改动 → 人工采纳；素材提案不会直接覆盖源文件。</p>
       </header>
       <div className="outline-layout page-section">
         <aside className="card catalog-card"><CatalogPanel variant="library" /></aside>
@@ -100,32 +100,32 @@ export function AiWorkbenchPage() {
       <header className="page-intro">
         <p className="eyebrow">草稿与写回</p>
         <h2 className="page-title">AI 工作台</h2>
-        <p className="page-subtitle">选择章节 → 检查草稿 → 确认写回。</p>
+        <p className="page-subtitle">选择草稿 → 查看内容和改动 → 检查完成 → 正式写回正文。</p>
       </header>
       <div className="ai-workbench-layout">
         <div className="ai-main-row">
           <aside className="card catalog-card ai-catalog-card"><CatalogPanel variant="ai" /></aside>
           <div className="card ai-primary-card">
-            <div className="card-head"><h2>草稿检查与写回</h2></div>
+            <div className="card-head"><h2>人工检查与写回</h2></div>
             <div className="pad form-grid ai-card-body">
               <SafetyBoundaryBanner compact />
               {chapterContent.data ? (
                 <ChapterActions chapterId={chapterContent.data.id} mode="full" />
               ) : (
-                <p className="muted">选择章节后，可检查草稿并确认写回。</p>
+                <p className="muted">请先在左侧选择章节，再选择草稿、查看内容、检查完成并确认写回。</p>
               )}
             </div>
           </div>
         </div>
         <div className="ai-monitor-row">
           <div className="card ai-memory-card">
-            <div className="card-head"><h2>记忆与上下文</h2></div>
+            <div className="card-head"><h2>写作参考资料</h2></div>
             <div className="pad ai-card-body">
               <MemoryView compact />
             </div>
           </div>
           <div className="card ai-jobs-card">
-            <div className="card-head"><h2>运行监控</h2></div>
+            <div className="card-head"><h2>任务时间线</h2></div>
             <div className="pad ai-card-body">
               <JobList compact />
             </div>

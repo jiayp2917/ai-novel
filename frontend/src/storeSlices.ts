@@ -155,6 +155,45 @@ export const createDocumentSlice: SliceCreator = (set, get) => ({
     });
     return true;
   },
+  closeOtherChapterTabs: (id, options) => {
+    if (!canNavigate(get, options?.force)) {
+      return false;
+    }
+    const keep = get().openChapterTabIds.includes(id) ? id : get().selectedChapterId;
+    const openChapterTabIds = keep === null ? [] : [keep];
+    storeJson(STORAGE_KEYS.openChapterTabIds, openChapterTabIds);
+    if (keep !== null) {
+      storeValue(STORAGE_KEYS.selectedChapterId, keep);
+    }
+    set((state) => ({
+      openChapterTabIds,
+      selectedChapterId: keep,
+      selectedSourceFileId: null,
+      selectedAnnotationId: state.selectedChapterId === keep ? state.selectedAnnotationId : null,
+      selectedAnnotationIds: state.selectedChapterId === keep ? state.selectedAnnotationIds : [],
+      draftAnnotationSelection: state.selectedChapterId === keep ? state.draftAnnotationSelection : undefined,
+      activeArtifactId: state.selectedChapterId === keep ? state.activeArtifactId : null,
+      selectedChapterVersionId: state.selectedChapterId === keep ? state.selectedChapterVersionId : null,
+    }));
+    return true;
+  },
+  closeAllChapterTabs: (options) => {
+    if (!canNavigate(get, options?.force)) {
+      return false;
+    }
+    storeJson(STORAGE_KEYS.openChapterTabIds, []);
+    storeValue(STORAGE_KEYS.selectedChapterId, null);
+    set({
+      openChapterTabIds: [],
+      selectedChapterId: null,
+      selectedAnnotationId: null,
+      selectedAnnotationIds: [],
+      draftAnnotationSelection: undefined,
+      activeArtifactId: null,
+      selectedChapterVersionId: null,
+    });
+    return true;
+  },
   setChapterFilter: (value) => {
     storeValue(STORAGE_KEYS.chapterFilter, value);
     set({ chapterFilter: value });

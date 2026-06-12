@@ -105,6 +105,43 @@ class ReviewPublishService:
             "issues": issues,
         }
 
+    def manual_check_artifact(self, artifact_id: int) -> dict:
+        artifact = self._artifact(artifact_id)
+        self._validate_artifact_file(artifact)
+        if artifact.kind != "candidate" or artifact.base_chapter_id is None:
+            raise ReviewPublishError("Only chapter draft candidates can be manually checked")
+        issues = [
+            {
+                "severity": "info",
+                "type": "manual_check",
+                "description": "用户已人工查看草稿内容并确认可进入写回流程。",
+                "evidence": "manual_confirmation",
+                "owner": "user",
+                "fix_instruction": "",
+            }
+        ]
+        review = self.reviews.create(
+            {
+                "artifact_id": artifact.id,
+                "passed": True,
+                "issues_json": json.dumps(issues, ensure_ascii=False),
+                "evidence_count": 1,
+                "manual_required": False,
+                "candidate_hash": artifact.sha256,
+                "base_source_file_hash": artifact.base_source_file_hash,
+                "base_chapter_version_id": artifact.base_chapter_version_id,
+            }
+        )
+        self.session.commit()
+        return {
+            "review_id": review.id,
+            "artifact_id": artifact.id,
+            "passed": True,
+            "evidence_count": 1,
+            "manual_required": False,
+            "issues": issues,
+        }
+
     def diff_artifact(self, artifact_id: int) -> dict:
         artifact = self._artifact(artifact_id)
         self._validate_artifact_file(artifact)

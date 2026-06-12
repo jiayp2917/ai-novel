@@ -417,6 +417,50 @@ def test_model_config_api_hides_secret_and_keeps_yaml_unchanged(tmp_path: Path, 
     assert config_path.read_text(encoding="utf-8") == before
 
 
+def test_model_profiles_can_be_assigned_to_roles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup_app_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/admin/model-profiles",
+        json={
+            "name": "测试写作模型",
+            "provider": "kimi",
+            "model": "kimi-k2.6",
+            "base_url": "https://api.changed.local/v1",
+            "api_key_env": "KIMI_API_KEY",
+            "max_tokens": 2345,
+            "cheap": False,
+            "supports_json": True,
+        },
+    )
+    assert created.status_code == 200
+    profile_id = created.json()["profile"]["id"]
+
+    assigned = client.patch("/api/admin/model-role-assignments/writer", json={"profile_id": profile_id})
+    assert assigned.status_code == 200
+    route = ModelRouter().route("writer")
+    assert route.provider == "kimi"
+    assert route.model == "kimi-k2.6"
+    assert route.max_tokens == 2345
+
+    listed = client.get("/api/admin/model-config")
+    assert listed.status_code == 200
+    writer = next(item for item in listed.json()["roles"] if item["role"] == "writer")
+    assert writer["profile_id"] == profile_id
+    assert writer["profile_name"] == "测试写作模型"
+    assert any(profile["id"] == profile_id for profile in listed.json()["profiles"])
+
+    saved_secret = client.post(f"/api/admin/model-profiles/{profile_id}/secret", json={"key": "profile-secret"})
+    assert saved_secret.status_code == 200
+    assert saved_secret.json()["secret"]["status"] == "stored"
+    assert "profile-secret" not in json.dumps(saved_secret.json())
+
+    blocked_delete = client.delete(f"/api/admin/model-profiles/{profile_id}")
+    assert blocked_delete.status_code == 400
+    assert "正在被角色使用" in blocked_delete.json()["detail"]
+
+
 def test_admin_api_is_local_only_without_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     setup_app_db(tmp_path, monkeypatch)
     monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)

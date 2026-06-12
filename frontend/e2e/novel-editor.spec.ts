@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import path from 'node:path';
 
-const sandboxPath = String.raw`D:\2917\ai-novel\runtime\sandbox_workspace`;
+const sandboxPath = path.resolve(process.cwd(), '..', 'runtime', 'sandbox_workspace');
 const apiBaseUrl = 'http://127.0.0.1:18080';
 
 test('new user 10-minute path can add workspace, scan, read, save version, publish, and see history', async ({ page }) => {

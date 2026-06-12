@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file gives Codex project-level instructions for `D:\2917\ai-novel`.
+This file gives Codex project-level instructions for this repository.
 
 ## Project Identity
 
@@ -16,7 +16,7 @@ Before substantial work, read the relevant parts of:
 - `docs/通用长篇小说编辑器产品方案.md`: current product direction.
 - `docs/开发手册.md`: backend/frontend boundaries and test matrix.
 
-Specific book context belongs in the active novel workspace or in `D:\chat\plan\...` planning files. Do not promote a specific book's setting, characters, chapter status, or style into repository-wide rules unless the user explicitly asks for a generic template.
+Specific book context belongs in the active novel workspace or external planning files. Do not promote a specific book's setting, characters, chapter status, or style into repository-wide rules unless the user explicitly asks for a generic template.
 
 ## Non-Negotiable Safety Rules
 
@@ -43,7 +43,7 @@ Repository-owned areas:
 - `docs/`
 - root project docs and dependency files
 
-Repository `skills/` must stay generic. Book-specific style rules, review checklists, and long-lived preferences belong in `D:\chat\novel-workspaces\作品名\skills\` and must not be committed to the system repository.
+Repository `skills/` must stay generic. Book-specific style rules, review checklists, and long-lived preferences belong in the active novel workspace's `skills/` directory and must not be committed to the system repository.
 
 Novel workspace-owned areas:
 
@@ -53,7 +53,7 @@ Novel workspace-owned areas:
 - workspace `skills/` for book-specific style/review/memory rules
 - workspace `runtime/`
 
-Prefer external novel workspaces under `D:\chat\novel-workspaces\作品名`. Avoid inspecting or quoting full real chapter prose unless the user asks for content review or writing work. Metadata checks, path checks, database state checks, and publish-gate verification are acceptable when needed.
+Prefer external novel workspaces outside the code repository. Avoid inspecting or quoting full real chapter prose unless the user asks for content review or writing work. Metadata checks, path checks, database state checks, and publish-gate verification are acceptable when needed.
 
 ## Product Direction
 

@@ -4,12 +4,12 @@
 
 ## 验收环境
 
-- 项目路径：`D:\2917\ai-novel`
-- 复制测试工作区：`D:\chat\novel-workspaces\_test-ai-novel-destructive-20260611-221838`
-- 原始作品工作区：`D:\chat\novel-workspaces\机制怪？我是数值怪`
+- 项目路径：`<repo-root>`
+- 复制测试工作区：仓库外部小说工作区的测试副本
+- 原始作品工作区：仓库外部小说工作区
 - 后端：`http://127.0.0.1:8000`
 - 前端：`http://127.0.0.1:15173`
-- 详细测试报告：`D:\chat\novel-workspaces\_test-ai-novel-destructive-20260611-221838\runtime\reports\destructive_1_10_agnes_test_report.md`
+- 详细测试报告：测试副本的 `runtime/reports/destructive_1_10_agnes_test_report.md`
 
 ## 当前结论
 
@@ -53,7 +53,7 @@ content/chapters/
 
 这些内容用于本机手测。`.gitignore` 仍忽略 `content/` 下真实素材和 `content/runtime/`，代码提交不包含小说正文、设定、章纲或运行态产物。
 
-作品级 skill 已与系统仓库拆分：`numeric_xianxia_style.md` 和 `numeric_xianxia_review_checklist.md` 已迁到 `D:\chat\novel-workspaces\机制怪？我是数值怪\skills\`，仓库默认 `skills/` 只保留通用规则。
+作品级 skill 已与系统仓库拆分：仓库默认 `skills/` 只保留通用规则；具体作品的风格和审核规则保存在对应小说工作区的 `skills/` 目录。
 
 ## 验证命令
 
@@ -62,7 +62,7 @@ content/chapters/
 ```powershell
 python -m compileall -q .\backend .\tests
 python -m pytest -q
-cd D:\2917\ai-novel\frontend
+cd <repo-root>\frontend
 npm run build
 npm run e2e
 ```

@@ -75,7 +75,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 后端启动
 ```powershell
-cd D:\2917\ai-novel
+cd <repo-root>
 pip install -r .\requirements.txt
 python -m alembic upgrade head
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000

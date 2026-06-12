@@ -5,6 +5,7 @@ import { useChapterVersions } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import type { ChapterVersion } from '../types';
 import type { ReactNode } from 'react';
+import { LoadingSpinner } from './ui/LoadingSpinner';
 
 type PendingConfirm =
   | { action: 'publish'; version: ChapterVersion }
@@ -126,7 +127,7 @@ export function VersionHistory({ chapterId }: { chapterId: number | null }) {
       {chapterId && (
         <>
           <HistoryGroup title="正文版本">
-            {versions.isLoading && <p className="muted">正在读取正文版本...</p>}
+            {versions.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在读取正文版本...</p>}
             {(versions.data ?? []).map((version) => (
               <VersionCard
                 key={version.id}

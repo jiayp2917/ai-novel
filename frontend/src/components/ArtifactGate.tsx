@@ -5,6 +5,7 @@ import { useArtifact, useArtifacts, useJobs, usePublishDecisions } from '../hook
 import { useWorkbenchStore } from '../store';
 import { ArtifactTrace, CandidateSelector, PublishGateChecklist } from './ArtifactGatePanels';
 import { operationBlockReason, publishBlockReason, validateArtifactContext } from './artifactGateUtils';
+import { Button } from './ui/Button';
 
 type ArtifactGateProps = {
   artifactId: number | null;
@@ -138,38 +139,38 @@ export function ArtifactGate({
         artifactSelected={Boolean(artifactId)}
       />
       <div className="action-row">
-        <button
-          type="button"
-          className="secondary-button"
+        <Button
+          variant="secondary"
           onClick={() => reviewMutation.mutate()}
           disabled={!canOperate || reviewMutation.isPending}
           title={operationBlockedReason ?? undefined}
+          loading={reviewMutation.isPending}
         >
           检查草稿
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={() => diffMutation.mutate()}
           disabled={!canOperate || diffMutation.isPending}
           title={operationBlockedReason ?? undefined}
+          loading={diffMutation.isPending}
         >
           查看改动
-        </button>
+        </Button>
         {allowPublish ? (
-          <button
-            type="button"
-            className="secondary-button danger-button"
+          <Button
+            variant="danger"
             onClick={() => publishMutation.mutate()}
             disabled={!canPublish || publishMutation.isPending}
             title={publishBlockedReason ?? undefined}
+            loading={publishMutation.isPending}
           >
             确认写回正文
-          </button>
+          </Button>
         ) : (
-          <button type="button" className="secondary-button" disabled title="设定和章纲只生成提案，不在这里覆盖源文件。">
+          <Button variant="secondary" disabled title="设定和章纲只生成提案，不在这里覆盖源文件。">
             提案不直接写回
-          </button>
+          </Button>
         )}
       </div>
       {artifactId && selectedArtifact.isLoading && <p className="form-hint">正在校验草稿归属...</p>}

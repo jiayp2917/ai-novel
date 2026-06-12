@@ -14,6 +14,7 @@ import { AnnotationComposer } from './AnnotationForm';
 import { InsightPanel } from './AnnotationInsightPanel';
 import { AnnotationList } from './AnnotationList';
 import { VersionHistory } from './VersionHistory';
+import { Button } from './ui/Button';
 
 export function AnnotationSidebar({
   embedded = false,
@@ -158,9 +159,9 @@ export function AnnotationSidebar({
               <>
                 <p className="form-hint">选中文本后右键创建批注；如果选区识别失败，也可以手动粘贴引用文本。</p>
                 {(selectedChapterId || selectedSourceFileId) && (
-                  <button type="button" className="secondary-button" onClick={() => setDraftAnnotationSelection(null)}>
+                  <Button type="button" variant="secondary" onClick={() => setDraftAnnotationSelection(null)}>
                     手动创建批注
-                  </button>
+                  </Button>
                 )}
               </>
             )}

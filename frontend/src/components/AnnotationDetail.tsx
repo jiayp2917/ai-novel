@@ -8,6 +8,7 @@ import {
   severityLabel,
   utf16ToCodePointOffset,
 } from '../utils';
+import { Button } from './ui/Button';
 
 export type AnnotationUpdatePayload = Partial<Pick<AnnotationPayload, 'range_start' | 'range_end' | 'type' | 'severity' | 'comment' | 'example_rewrite'>> & {
   status?: string;
@@ -79,12 +80,12 @@ export function AnnotationDetail({
             <textarea value={editExampleRewrite} onChange={(event) => setEditExampleRewrite(event.target.value)} />
           </label>
           <div className="annotation-actions annotation-actions--flush">
-            <button type="submit" className="secondary-button" disabled={!editComment.trim() || updating}>
+            <Button type="submit" variant="secondary" disabled={!editComment.trim() || updating} loading={updating}>
               保存
-            </button>
-            <button type="button" className="secondary-button" onClick={() => setEditing(false)} disabled={updating}>
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={updating}>
               取消
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -92,23 +93,23 @@ export function AnnotationDetail({
         {annotation.status === 'needs_relocate' && (
           <ManualRelocateButton annotation={annotation} chapterText={chapterText} onUpdate={onUpdate} updating={updating} />
         )}
-        <button type="button" className="secondary-button" onClick={() => setEditing((value) => !value)}>
+        <Button type="button" variant="secondary" onClick={() => setEditing((value) => !value)}>
           编辑
-        </button>
-        <button type="button" className="secondary-button" onClick={() => onUpdate({ status: 'resolved' })} disabled={updating}>
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => onUpdate({ status: 'resolved' })} disabled={updating}>
           标为已处理
-        </button>
-        <button type="button" className="secondary-button" onClick={() => onUpdate({ status: 'ignored' })} disabled={updating}>
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => onUpdate({ status: 'ignored' })} disabled={updating}>
           忽略
-        </button>
+        </Button>
         {annotation.status !== 'open' && annotation.status !== 'needs_relocate' && (
-          <button type="button" className="secondary-button" onClick={() => onUpdate({ status: 'open' })} disabled={updating}>
+          <Button type="button" variant="secondary" onClick={() => onUpdate({ status: 'open' })} disabled={updating}>
             恢复待处理
-          </button>
+          </Button>
         )}
-        <button type="button" className="secondary-button danger-button" onClick={onDelete} disabled={deleting}>
+        <Button type="button" variant="danger" onClick={onDelete} disabled={deleting}>
           删除
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -145,8 +146,8 @@ function ManualRelocateButton({
   }, [annotation.quote_text, chapterText]);
 
   return (
-    <button type="button" className="secondary-button" onClick={() => match && onUpdate(match)} disabled={!match || updating}>
+    <Button type="button" variant="secondary" onClick={() => match && onUpdate(match)} disabled={!match || updating}>
       使用引用匹配
-    </button>
+    </Button>
   );
 }

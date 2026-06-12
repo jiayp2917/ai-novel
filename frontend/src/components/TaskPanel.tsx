@@ -1,6 +1,7 @@
 import { useCostDashboard, useHealth, useJobs } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import { useState } from 'react';
+import { Button } from './ui/Button';
 
 export function TaskPanel({ compact = false }: { compact?: boolean }) {
   const [expanded, setExpanded] = useState(false);
@@ -61,9 +62,9 @@ export function TaskPanel({ compact = false }: { compact?: boolean }) {
               <strong>运行状态</strong>
               <p className="muted">这里只显示最近反馈，不会改变正文布局。</p>
             </div>
-            <button type="button" className="secondary-button" onClick={() => setExpanded(false)}>
+            <Button variant="secondary" onClick={() => setExpanded(false)}>
               关闭
-            </button>
+            </Button>
           </div>
           <div className="cost-dashboard cost-dashboard--popover">
             {authorSummary}
@@ -75,7 +76,7 @@ export function TaskPanel({ compact = false }: { compact?: boolean }) {
                 {costSummary}
                 {jobs.isSuccess && <span>任务 {jobs.data.length}</span>}
               </div>
-              <p className="form-hint">完整模型调用记录请到“设置/模型”查看。</p>
+              <p className="form-hint">完整模型调用记录请到模型页查看。</p>
             </details>
           )}
           <div className="task-strip">

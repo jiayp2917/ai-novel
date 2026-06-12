@@ -4,6 +4,7 @@ import { apiRequest } from '../api';
 import { useMemoryItems } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import type { ContextPreview } from '../types';
+import { Button } from './ui/Button';
 
 export function MemoryView({ compact = false }: { compact?: boolean }) {
   const selectedChapterId = useWorkbenchStore((state) => state.selectedChapterId);
@@ -37,25 +38,67 @@ export function MemoryView({ compact = false }: { compact?: boolean }) {
     grouped.set(item.kind, (grouped.get(item.kind) ?? 0) + 1);
   }
 
-  const visibleMemory = compact ? (memory.data ?? []).slice(0, 12) : (memory.data ?? []).slice(0, 80);
+
+  if (compact) {
+    const total = (memory.data ?? []).length;
+    return (
+      <main className="content-view memory-view memory-view--compact">
+        <div className="dashboard-grid">
+          {[...grouped.entries()].map(([kind, count]) => (
+            <section className="metric-card" key={kind}>
+              <span>{kind}</span>
+              <strong>{count}</strong>
+            </section>
+          ))}
+          {memory.isSuccess && total === 0 && <p className="muted">暂无短记忆。请先扫描并重建。</p>}
+        </div>
+        {total > 0 && (
+          <p className="muted">已加载 {total} 份记忆，涵盖 {[...grouped.keys()].join('、')}。</p>
+        )}
+        <div className="action-row">
+          <Button variant="secondary" onClick={() => rebuildMutation.mutate()} disabled={rebuildMutation.isPending} loading={rebuildMutation.isPending}>
+            重建短记忆
+          </Button>
+        </div>
+        {preview && (
+          <details className="advanced-details">
+            <summary>查看上下文预览</summary>
+            <pre className="json-preview">{JSON.stringify(preview, null, 2)}</pre>
+          </details>
+        )}
+        <details className="advanced-details">
+          <summary>查看原始数据</summary>
+          <div className="memory-list">
+            {(memory.data ?? []).slice(0, 12).map((item) => (
+              <article className="memory-card" key={item.id}>
+                <strong>{item.kind} / {item.scope}</strong>
+                <p className="muted">{memorySummary(item.content_json)}</p>
+                <pre>{item.content_json}</pre>
+              </article>
+            ))}
+          </div>
+        </details>
+      </main>
+    );
+  }
 
   return (
-    <main className={compact ? 'content-view memory-view memory-view--compact' : 'content-view memory-view'}>
+    <main className="content-view memory-view">
       <div className="view-header">
         <div>
           <p className="eyebrow">记忆</p>
-          <h1>{compact ? '记忆与上下文' : '短记忆与上下文预算'}</h1>
+          <h1>短记忆与上下文预算</h1>
         </div>
         <div className="action-row">
-          <button className="secondary-button" type="button" onClick={() => rebuildMutation.mutate()} disabled={rebuildMutation.isPending}>
+          <Button variant="secondary" onClick={() => rebuildMutation.mutate()} disabled={rebuildMutation.isPending} loading={rebuildMutation.isPending}>
             重建短记忆
-          </button>
-          <button className="secondary-button" type="button" onClick={() => previewMutation.mutate()} disabled={!selectedChapterId || previewMutation.isPending}>
+          </Button>
+          <Button variant="secondary" onClick={() => previewMutation.mutate()} disabled={!selectedChapterId || previewMutation.isPending} loading={previewMutation.isPending}>
             当前章上下文预览
-          </button>
+          </Button>
         </div>
       </div>
-      {!compact && <section className="workflow-card workflow-card--compact">
+      <section className="workflow-card workflow-card--compact">
         <div className="section-title">
           <div>
             <p className="eyebrow">上下文原则</p>
@@ -68,7 +111,7 @@ export function MemoryView({ compact = false }: { compact?: boolean }) {
           <div><strong>人物/伏笔</strong><span>只选当前任务相关项</span></div>
           <div><strong>预算检查</strong><span>超限时应降级并记录原因</span></div>
         </div>
-      </section>}
+      </section>
       <div className="dashboard-grid">
         {[...grouped.entries()].map(([kind, count]) => (
           <section className="metric-card" key={kind}>
@@ -78,29 +121,26 @@ export function MemoryView({ compact = false }: { compact?: boolean }) {
         ))}
         {memory.isSuccess && (memory.data ?? []).length === 0 && <p className="muted">暂无短记忆。请先扫描并重建。</p>}
       </div>
-      <div className={compact ? 'split-grid memory-compact-grid' : 'split-grid'}>
+      <div className="split-grid">
         <section className="workflow-card">
           <div className="section-title">
             <div>
               <p className="eyebrow">全部记忆</p>
               <h2>索引摘要</h2>
             </div>
-            <button className="secondary-button" type="button" onClick={() => setShowRawMemory((value) => !value)}>
+            <Button variant="secondary" onClick={() => setShowRawMemory((value) => !value)}>
               {showRawMemory ? '隐藏 JSON' : '查看 JSON'}
-            </button>
+            </Button>
           </div>
           <p className="muted view-note">短记忆用于给模型注入必要上下文。默认只看类型、范围和摘要；需要排错时再展开 JSON。</p>
           <div className="memory-list">
-            {visibleMemory.map((item) => (
+            {(memory.data ?? []).slice(0, 80).map((item) => (
               <article className="memory-card" key={item.id}>
                 <strong>{item.kind} / {item.scope}</strong>
                 <p className="muted">{memorySummary(item.content_json)}</p>
                 {showRawMemory && <pre>{item.content_json}</pre>}
               </article>
             ))}
-            {compact && (memory.data ?? []).length > visibleMemory.length && (
-              <p className="muted">仅显示最近 {visibleMemory.length} 条，完整记忆请到设置/模型页查看。</p>
-            )}
           </div>
         </section>
         <section className="workflow-card">
@@ -110,7 +150,7 @@ export function MemoryView({ compact = false }: { compact?: boolean }) {
               <h2>当前章注入预览</h2>
             </div>
           </div>
-          {preview ? <pre className="json-preview">{JSON.stringify(preview, null, 2)}</pre> : <p className="muted">选择正文后点击“当前章上下文预览”。</p>}
+          {preview ? <pre className="json-preview">{JSON.stringify(preview, null, 2)}</pre> : <p className="muted">选择正文后点击"当前章上下文预览"。</p>}
         </section>
       </div>
     </main>

@@ -1,5 +1,6 @@
 import type { ModelUsageReport } from '../types';
 import { chapterLabel, percent, roleLabel, taskTypeLabel } from './modelViewUtils';
+import { LoadingSpinner } from './ui/LoadingSpinner';
 
 export function QualityTrendSection({ report, isLoading }: { report?: ModelUsageReport; isLoading: boolean }) {
   const reviewer = report?.role_quality.reviewer;

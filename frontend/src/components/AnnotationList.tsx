@@ -1,6 +1,7 @@
 import type { Annotation } from '../types';
 import { annotationStatusLabel, annotationTypeLabel, severityLabel } from '../utils';
 import { AnnotationDetail, type AnnotationUpdatePayload } from './AnnotationDetail';
+import { Button } from './ui/Button';
 
 export function AnnotationList({
   annotations,
@@ -65,14 +66,14 @@ export function AnnotationList({
           </button>
           {annotation.status === 'needs_relocate' && (
             <div className="annotation-actions">
-              <button
+              <Button
                 type="button"
-                className="secondary-button"
+                variant="secondary"
                 onClick={() => onRelocate(annotation.id)}
                 disabled={relocatingAnnotationId === annotation.id}
               >
                 自动定位
-              </button>
+              </Button>
             </div>
           )}
           <AnnotationDetail

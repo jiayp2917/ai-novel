@@ -92,7 +92,8 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   await expect(page.getByRole('button', { name: '查看改动' })).toBeDisabled();
 
   await mainNav(page, 'AI 素材库').click();
-  await expect(page.locator('.page.active')).toContainText('提案只用于改进设定和章纲');
+  await expect(page.locator('.page.active')).toContainText('整理设定和章纲，供 AI 理解作品背景');
+  await expect(page.locator('.page.active')).toContainText('仅提案');
   await expect(page.locator('.page.active')).not.toContainText('确认写回正文');
   await expect(page.locator('.page.active .catalog-section--chapters')).toHaveCount(0);
   await expect(page.locator('.page.active')).not.toContainText('未识别正文文件');
@@ -135,12 +136,13 @@ test('core views remain separated and writing layout does not use bottom overlay
     await mainNav(page, title).click();
     await expect(page.locator('.crumb')).toContainText(title);
   }
-  await settingsEntry(page).click();
-  await expect(page.locator('.crumb')).toContainText('设置/模型');
-  await expect(page.locator('.settings-dashboard-grid')).toBeVisible();
-  await expect(page.locator('.settings-workspace-card')).toContainText('工作区');
-  await expect(page.locator('.settings-model-card')).toContainText('AI 助手配置与运行状态');
-  await expect(mainNav(page, '设置/模型')).toHaveCount(0);
+  await openSettings(page);
+  await expect(page.locator('.crumb')).toContainText('设置');
+  await expect(page.locator('.settings-workspace-card--full')).toContainText('工作区');
+  await openModelsView(page);
+  await expect(page.locator('.crumb')).toContainText('模型配置');
+  await expect(page.locator('.models-section--connectivity')).toContainText('AI 助手配置');
+  await expect(mainNav(page, '设置')).toHaveCount(0);
   await expect(page.locator('.side-note')).toHaveCount(0);
   await expect(page.locator('.top-actions').getByRole('button', { name: /^工作区$/ })).toHaveCount(0);
   await mainNav(page, 'AI 素材库').click();
@@ -151,7 +153,7 @@ test('core views remain separated and writing layout does not use bottom overlay
   await expect(page.getByLabel('类型').locator('option')).toHaveText(['系统设定', '小说设定', '章纲']);
   await page.getByRole('button', { name: '取消' }).click();
   await page.locator('.workspace-chip--button').click();
-  await expect(page.locator('.crumb')).toContainText('设置/模型');
+  await expect(page.locator('.crumb')).toContainText('设置');
 
   await mainNav(page, '写作').click();
   await openChapter(page, '001');
@@ -367,12 +369,19 @@ test('narrow navigation keeps all entry points understandable', async ({ page })
     await expect(page.locator('.crumb')).toContainText(entry.label === '首页' ? '首页工作台' : entry.label);
   }
 
-  const settings = page.getByRole('button', { name: '打开设置/模型' });
+  const models = page.getByRole('button', { name: '打开模型配置' });
+  await expect(models).toBeVisible();
+  await expect(models).toHaveAttribute('title', '模型配置');
+  await expect(models.locator('.nav-short-label')).toContainText('模型');
+  await models.click();
+  await expect(page.locator('.crumb')).toContainText('模型配置');
+
+  const settings = page.getByRole('button', { name: '打开设置' });
   await expect(settings).toBeVisible();
-  await expect(settings).toHaveAttribute('title', '设置/模型');
+  await expect(settings).toHaveAttribute('title', '设置');
   await expect(settings.locator('.nav-short-label')).toContainText('设置');
   await settings.click();
-  await expect(page.locator('.crumb')).toContainText('设置/模型');
+  await expect(page.locator('.crumb')).toContainText('设置');
 });
 
 test('unsaved writing version protects chapter and version switching', async ({ page }) => {
@@ -506,7 +515,7 @@ test('status drawer floats without resizing writing area and long pages can scro
   await page.locator('.task-popover').getByRole('button', { name: '关闭' }).click();
   await expect(page.locator('.task-popover')).toHaveCount(0);
 
-  await openSettings(page);
+  await openModelsView(page);
   await page.evaluate(() => {
     const pageElement = document.querySelector('.page.active');
     pageElement?.scrollTo({ top: pageElement.scrollHeight });
@@ -606,7 +615,7 @@ test('AI workbench keeps catalog, memory, and task queue bounded inside panels',
   expect(metrics.memory?.overflowY).toBe('auto');
   expect(metrics.jobs?.overflowY).toBe('auto');
   expect(metrics.jobCards).toBeLessThanOrEqual(8);
-  await expect(page.locator('.job-list--compact')).toContainText('仅显示最近 8 条任务');
+  await expect(page.locator('.ai-jobs-card')).toContainText('仅显示最近 8 条任务');
 });
 
 test('review failure keeps draft unpublished and explains whether it needs manual judgment', async ({ page }) => {
@@ -719,7 +728,7 @@ test('budget pause is visible in author language and can be resumed from AI task
   const paused = await seedBudgetPausedJob(page);
 
   await page.reload();
-  await openSettings(page);
+  await openModelsView(page);
   await expect(page.getByText('AI 调用已暂停').first()).toBeVisible();
   await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('AI 调用已暂停');
 
@@ -737,7 +746,7 @@ test('model task page shows quality trends and context budget warnings', async (
 
   await page.reload();
   await openModelsView(page);
-  await expect(page.locator('.settings-dashboard-grid')).toBeVisible();
+  await expect(page.locator('.models-page')).toBeVisible();
   await expect(page.locator('.settings-metrics-grid')).toBeVisible();
   await expect(page.locator('.quality-grid')).toBeVisible();
   await expect(page.locator('.models-section--overview')).toContainText('AI 助手当前是否可用');
@@ -786,6 +795,9 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(callRecords.getByText('高级清理')).toBeVisible();
   await callRecords.getByText('高级清理').click();
   await expect(callRecords.getByRole('button', { name: '清理 30 天前记录' })).toBeVisible();
+  await callRecords.getByRole('button', { name: '清理 30 天前记录' }).click();
+  await expect(page.getByRole('dialog', { name: '清理 AI 请求记录' })).toContainText('不会删除正文、草稿、审核、改动对比、备份或发布记录');
+  await page.getByRole('button', { name: '取消' }).click();
   await page.getByText('查看 Skills').click();
   await expect(page.locator('.skill-card').first()).toContainText(/参与最近一次记录的上下文|最近一次记录的上下文未使用/);
   await expect(page.locator('.skill-card').filter({ hasText: '参与最近一次记录的上下文' })).toHaveCount(2);
@@ -806,8 +818,8 @@ test('cyberpunk theme keeps core work areas readable and uses project visual ass
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'anime');
   await mainNav(page, '首页').click();
-  await expect(page.locator('.dashboard-hero__visual img')).toHaveAttribute('alt', '赛博朋克小说创作工作台');
-  await expect(page.locator('.dashboard-hero__visual img')).toBeVisible();
+  await expect(page.locator('.dashboard-intro')).toBeVisible();
+  await expect(page.locator('.dashboard-hero__visual img')).toHaveCount(0);
 
   await mainNav(page, '写作').click();
   await openChapter(page, '001');
@@ -857,9 +869,10 @@ test('home and writing pages keep engineering details out of the main flow', asy
   await mainNav(page, '首页').click();
   await expect(page.locator('.top-actions')).not.toContainText('今日调用');
   await expect(page.locator('.dashboard-page')).not.toContainText(/今日调用|仅本地记录|候选池|发布门|流水线阶段接入中|token|provider|artifact|hash|raw JSON/);
-  await expect(page.locator('.dashboard-page')).toContainText('版本安全');
-  await expect(page.locator('.dashboard-page')).toContainText('AI 辅助');
-  await expect(page.locator('.dashboard-page')).toContainText('改动可查');
+  await expect(page.locator('.dashboard-page')).toContainText('待处理事项');
+  await expect(page.locator('.dashboard-page')).toContainText('最近章节');
+  await expect(page.locator('.dashboard-page')).not.toContainText('当前项目');
+  await expect(page.locator('.dashboard-page')).not.toContainText('快捷入口');
   await page.locator('.task-toggle').click();
   await expect(page.locator('.task-popover details.advanced-details').filter({ hasText: '查看调用和成本排错信息' })).toBeVisible();
   await page.locator('.task-popover').getByRole('button', { name: '关闭' }).click();
@@ -893,6 +906,7 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
   await page.getByLabel('起始章节').fill('1');
   await page.getByLabel('结束章节').fill('10');
   await page.getByLabel('执行模式').selectOption('full_auto');
+  await page.getByText('高级选项').click();
   await page.getByLabel('每批章节数').fill('3');
   await page.getByLabel('最大修订轮次').fill('2');
   await expect(page.locator('.pipeline-mode-card')).toContainText('固定为预演');
@@ -902,7 +916,7 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
   await expect(page.locator('.task-latest')).toContainText('自动流水线');
   await expect.poll(() => createdPipelinePayload?.dry_run).toBe(true);
   await expect(page.locator('.pipeline-run-item').first()).toContainText('第 1-10 章');
-  await expect(page.locator('.pipeline-report-summary')).toContainText('任务结束后生成轻量报告');
+  await expect(page.locator('.pipeline-advanced-grid')).toContainText('报告：暂无');
 
   await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '删除记录' }).click();
   await expect(page.getByRole('dialog', { name: '确认删除流水线记录' })).toContainText('这条流水线还没有结束');
@@ -915,7 +929,7 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
   await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '恢复' }).click();
   await expect(page.locator('.pipeline-status-grid')).toContainText('等待执行');
   await expect(page.locator('.pipeline-next-step')).toContainText('推进一次任务');
-  await expect(page.locator('.pipeline-status-grid')).toContainText('只生成草稿，不写回正文');
+  await expect(page.locator('.pipeline-advanced-grid')).toContainText('只生成草稿，不写回正文');
 
   await page.getByRole('button', { name: '推进一次任务' }).click();
   await expect(page.locator('.pipeline-chapter-card')).toHaveCount(10);
@@ -943,7 +957,7 @@ test('pipeline page can cancel a run and display retryable failure state', async
   await expect(page.locator('.pipeline-status-grid')).toContainText('已终止');
   await expect(page.locator('.pipeline-run-item').first()).toContainText('已终止');
   await expect(page.locator('.pipeline-next-step')).toContainText('复用设置');
-  await expect(page.locator('.pipeline-report-summary')).toContainText('reports/pipeline_run_');
+  await expect(page.locator('.pipeline-report-chip')).toContainText('reports/pipeline_run_');
   await page.locator('.pipeline-detail-grid .workflow-card').nth(1).getByRole('button', { name: '复用设置' }).click();
   await expect(page.getByLabel('起始章节')).toHaveValue('1');
   await expect(page.getByLabel('结束章节')).toHaveValue('1');
@@ -968,7 +982,7 @@ test('pipeline page can cancel a run and display retryable failure state', async
   await expect(page.locator('.pipeline-failure-summary')).toContainText('检查草稿');
   await expect(page.locator('.pipeline-failure-summary')).toContainText('模型返回格式错误');
   await expect(page.locator('.pipeline-failure-summary')).toContainText('可点击重试');
-  await expect(page.locator('.pipeline-report-summary')).toContainText('任务结束后生成轻量报告');
+  await expect(page.locator('.pipeline-advanced-grid')).toContainText('报告：暂无');
   await expect(page.locator('.json-preview')).toHaveCount(0);
 });
 
@@ -1107,7 +1121,7 @@ async function openSandboxWorkspace(page: Page, workspaceCard: ReturnType<Page['
 }
 
 async function openModelsView(page: Page) {
-  await openSettings(page);
+  await modelsEntry(page).click();
 }
 
 function mainNav(page: Page, name: string) {
@@ -1115,7 +1129,11 @@ function mainNav(page: Page, name: string) {
 }
 
 function settingsEntry(page: Page) {
-  return page.locator('.sidebar-settings');
+  return page.getByRole('button', { name: '打开设置' });
+}
+
+function modelsEntry(page: Page) {
+  return page.getByRole('button', { name: '打开模型配置' });
 }
 
 async function openSettings(page: Page) {

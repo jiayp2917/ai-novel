@@ -4,6 +4,8 @@ import { ApiRequestError, apiRequest, queryClient } from '../api';
 import { useChapters, useCostDashboard, usePipelineRuns } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import type { Job, PipelineRun, PipelineRunCreatePayload } from '../types';
+import { Button } from './ui/Button';
+import { LoadingSpinner } from './ui/LoadingSpinner';
 
 const RUN_LIST_LIMIT = 20;
 
@@ -203,12 +205,12 @@ export function PipelineView() {
           <h1>批量生成、检查和修订章节草稿</h1>
         </div>
         <div className="action-row">
-          <button className="secondary-button" type="button" onClick={() => runs.refetch()}>
+          <Button variant="secondary" onClick={() => runs.refetch()}>
             刷新进度
-          </button>
-          <button className="secondary-button" type="button" onClick={() => setActiveView('settings')}>
+          </Button>
+          <Button variant="secondary" onClick={() => setActiveView('models')}>
             查看 AI 设置
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -225,7 +227,7 @@ export function PipelineView() {
         <div className="section-title">
           <div>
             <p className="eyebrow">开始前确认</p>
-            <h2>按 4 步创建自动任务</h2>
+            <h2>按 3 步创建自动任务</h2>
           </div>
           <span className="chip ok">只生成草稿和报告</span>
         </div>
@@ -265,28 +267,30 @@ export function PipelineView() {
               ))}
             </select>
           </label>
-          <label>
-            <strong>4. 分批和修订</strong>
-            <span>分片越小越稳，修订轮次越高越耗额度。</span>
-            <div className="pipeline-range">
-              <input aria-label="每批章节数" min={1} max={20} type="number" value={form.chunk_size} onChange={(event) => updateNumber('chunk_size', event.target.value)} />
-              <input aria-label="最大修订轮次" min={0} max={5} type="number" value={form.max_fix_rounds} onChange={(event) => updateNumber('max_fix_rounds', event.target.value)} />
-            </div>
-          </label>
           <label className="pipeline-mode-card">
-            <strong>5. 写回策略</strong>
             <span>自动流水线固定为预演：只生成草稿、检查结果、改动对比和运行报告，不覆盖正文。</span>
             <span className="checkbox-row">只预演流程，不写回正文</span>
           </label>
+          <details className="advanced-details">
+            <summary>高级选项</summary>
+            <label>
+              <strong>分批和修订</strong>
+              <span>分片越小越稳，修订轮次越高越耗额度。</span>
+              <div className="pipeline-range">
+                <input aria-label="每批章节数" min={1} max={20} type="number" value={form.chunk_size} onChange={(event) => updateNumber('chunk_size', event.target.value)} />
+                <input aria-label="最大修订轮次" min={0} max={5} type="number" value={form.max_fix_rounds} onChange={(event) => updateNumber('max_fix_rounds', event.target.value)} />
+              </div>
+            </label>
+          </details>
         </div>
         <div className="notice safe">所有 AI 输出都会先进入草稿/候选。正式正文写回仍必须经过发布门；设定和章纲只生成提案。</div>
         <div className="action-row">
-          <button className="primary-button" type="button" onClick={() => createRun.mutate()} disabled={createRun.isPending}>
+          <Button variant="primary" onClick={() => createRun.mutate()} disabled={createRun.isPending} loading={createRun.isPending}>
             创建自动流水线
-          </button>
-          <button className="secondary-button" type="button" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending}>
+          </Button>
+          <Button variant="secondary" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending} loading={runJobsMutation.isPending}>
             推进一次任务
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -317,13 +321,13 @@ export function PipelineView() {
                 </button>
               );
             })}
-            {runs.isLoading && <p className="muted">正在加载自动任务...</p>}
+            {runs.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载自动任务...</p>}
             {!runs.isLoading && !allRuns.length && <p className="muted">还没有自动流水线任务。</p>}
           </div>
           {allRuns.length > RUN_LIST_LIMIT && (
-            <button className="secondary-button pipeline-list-toggle" type="button" onClick={() => setShowAllRuns((value) => !value)}>
+            <Button variant="secondary" className="pipeline-list-toggle" onClick={() => setShowAllRuns((value) => !value)}>
               {showAllRuns ? `收起到最近 ${RUN_LIST_LIMIT} 条` : `显示全部 ${allRuns.length} 条`}
-            </button>
+            </Button>
           )}
         </section>
 
@@ -335,63 +339,58 @@ export function PipelineView() {
             </div>
             {selectedRun && (
               <div className="action-row">
-                <button
-                  className="secondary-button"
-                  type="button"
+                <Button
+                  variant="secondary"
                   title={runOperationHelp.pause}
                   onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'pause' })}
                   disabled={mutateRun.isPending || !canPause(selectedRun)}
                   aria-disabled-reason={!canPause(selectedRun) ? disabledReason('pause', selectedRun) : undefined}
                 >
                   暂停
-                </button>
-                <button
-                  className="secondary-button"
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
                   title={runOperationHelp.resume}
                   onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'resume' })}
                   disabled={mutateRun.isPending || !canResume(selectedRun)}
                   aria-disabled-reason={!canResume(selectedRun) ? disabledReason('resume', selectedRun) : undefined}
                 >
                   恢复
-                </button>
-                <button
-                  className="secondary-button"
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
                   title={runOperationHelp.retry}
                   onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'retry' })}
                   disabled={mutateRun.isPending || !canRetry(selectedRun)}
                   aria-disabled-reason={!canRetry(selectedRun) ? disabledReason('retry', selectedRun) : undefined}
                 >
                   重试
-                </button>
-                <button
-                  className="secondary-button"
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
                   onClick={() => reuseRun(selectedRun)}
                   disabled={mutateRun.isPending}
                 >
                   复用设置
-                </button>
-                <button
-                  className="danger-button"
-                  type="button"
+                </Button>
+                <Button
+                  variant="danger"
                   title={runOperationHelp.cancel}
                   onClick={() => mutateRun.mutate({ runId: selectedRun.id, action: 'cancel' })}
                   disabled={mutateRun.isPending || !canCancel(selectedRun)}
                   aria-disabled-reason={!canCancel(selectedRun) ? disabledReason('cancel', selectedRun) : undefined}
                 >
                   停止
-                </button>
-                <button
-                  className="danger-button danger-button--quiet"
-                  type="button"
+                </Button>
+                <Button
+                  variant="danger"
+                  className="danger-button--quiet"
                   title={runOperationHelp.delete}
                   onClick={() => confirmDeleteRun(selectedRun)}
                   disabled={deleteRun.isPending}
                 >
                   删除记录
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -406,8 +405,6 @@ export function PipelineView() {
                 <span>状态：{statusText(selectedRun.status)}</span>
                 <span>需人工判断：{selectedSummary.manual}</span>
                 <span>失败/暂停：{selectedSummary.failed}</span>
-                <span>写回策略：{selectedRun.payload.dry_run ? '只生成草稿，不写回正文' : '允许写回正文'}</span>
-                <span>生成模式：{generationModeLabels[generationModeFromPayload(selectedRun)]}</span>
               </div>
               {selectedNextStep && (
                 <div className={`pipeline-next-step pipeline-next-step--${selectedNextStep.tone}`}>
@@ -417,27 +414,39 @@ export function PipelineView() {
                 </div>
               )}
               <PipelineFailureSummary run={selectedRun} />
-              <PipelineReportSummary run={selectedRun} />
+              {selectedRun.report_summary.path && (
+                <div className="pipeline-report-chip">
+                  <span className="chip blue">运行报告</span>
+                  <span className="muted">{selectedRun.report_summary.path}</span>
+                </div>
+              )}
               <div className="pipeline-chapter-timeline">
                 {groupTasksByChapter(selectedRun.child_tasks).map(([chapterNo, tasks]) => (
                   <article className="pipeline-chapter-card" key={chapterNo}>
                     <strong>第 {chapterNo} 章</strong>
                     <div>
                       {tasks.map((task) => (
-                        <span className={`pipeline-task-pill status-${task.status}`} key={task.id} title={task.error ?? undefined}>
+                        <span className={`pipeline-task-pill status-${task.status}`} key={task.id}>
                           {taskTypeLabel(task.type)}：{statusText(task.status)}
-                          {task.error ? ` · ${task.error}` : ''}
                         </span>
                       ))}
                     </div>
+                    {tasks.some((t) => t.error) && (
+                      <details className="advanced-details">
+                        <summary>查看错误详情</summary>
+                        {tasks.filter((t) => t.error).map((t) => (
+                          <small key={t.id}>{taskTypeLabel(t.type)}：{t.error}</small>
+                        ))}
+                      </details>
+                    )}
                   </article>
                 ))}
               </div>
               <details className="advanced-details">
-                <summary>查看高级详情</summary>
+                <summary>高级详情</summary>
                 <div className="pipeline-advanced-grid">
                   <span>任务编号：#{selectedRun.id}</span>
-                  <span>dry_run：{selectedRun.payload.dry_run ? 'true' : 'false'}</span>
+                  <span>写回策略：{selectedRun.payload.dry_run ? '只生成草稿，不写回正文' : '允许写回正文'}</span>
                   <span>模式：{modeLabels[(selectedRun.payload.mode as PipelineRunCreatePayload['mode'])] ?? String(selectedRun.payload.mode ?? '未知')}</span>
                   <span>生成模式：{generationModeLabels[generationModeFromPayload(selectedRun)]}</span>
                   <span>章节：第 {String(selectedRun.payload.start_chapter)}-{String(selectedRun.payload.end_chapter)} 章</span>
@@ -692,12 +701,12 @@ function PipelineDeleteDialog({
         {blockedReason && <div className="notice danger" role="alert">{blockedReason}</div>}
         {error && <div className="notice danger" role="alert">{error}</div>}
         <div className="confirm-dialog__actions">
-          <button className="secondary-button" type="button" onClick={onCancel} disabled={busy}>
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>
             取消
-          </button>
-          <button className="secondary-button danger-button" type="button" onClick={onConfirm} disabled={busy || Boolean(blockedReason)}>
+          </Button>
+          <Button variant="danger" onClick={onConfirm} disabled={busy || Boolean(blockedReason)} loading={busy}>
             {busy ? '删除中...' : '确认删除'}
-          </button>
+          </Button>
         </div>
       </section>
     </div>

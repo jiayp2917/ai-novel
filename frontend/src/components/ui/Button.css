@@ -1,0 +1,131 @@
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-elevated);
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.4;
+  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+}
+
+.ui-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Variants */
+.ui-btn--primary {
+  border-color: var(--brand);
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: var(--on-brand);
+}
+
+.ui-btn--secondary {
+  /* default styles above */
+}
+
+.ui-btn--danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.ui-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+}
+
+.ui-btn--ghost:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+/* Sizes */
+.ui-btn--sm {
+  min-height: 26px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.ui-btn--md {
+  /* default */
+}
+
+.ui-btn--lg {
+  min-height: 42px;
+  padding: 10px 20px;
+  font-size: 16px;
+}
+
+/* Loading spinner */
+.ui-btn--loading {
+  pointer-events: none;
+}
+
+.ui-btn__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ui-btn-spin 0.6s linear infinite;
+}
+
+@keyframes ui-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ui-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.1em;
+}
+
+.ui-btn__label {
+  /* wrapper for text */
+}
+
+/* Hover states */
+.ui-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.ui-btn--secondary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+}
+
+.ui-btn--danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+/* Bright theme overrides */
+:root[data-theme="bright"] .ui-btn {
+  border-color: rgba(35, 134, 163, 0.16);
+  background: var(--button-bg);
+  box-shadow: 0 4px 12px rgba(39, 92, 102, 0.05);
+}
+
+:root[data-theme="bright"] .ui-btn:hover:not(:disabled) {
+  border-color: rgba(35, 134, 163, 0.28);
+  background: #f3fbfa;
+}
+
+:root[data-theme="bright"] .ui-btn--primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #2386a3, #2aa184);
+  color: var(--on-brand);
+  box-shadow: 0 8px 18px rgba(35, 134, 163, 0.18);
+}
+
+:root[data-theme="bright"] .ui-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1f7894, #278f77);
+}

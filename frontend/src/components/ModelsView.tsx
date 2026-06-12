@@ -8,6 +8,7 @@ import {
   useModelConfig,
   useModelConstraints,
   useModelUsageReport,
+
   usePublishDecisions,
   useSkills,
 } from '../hooks';
@@ -24,6 +25,9 @@ import type {
 import { ContextBudgetSection, QualityTrendSection } from './ModelQualitySections';
 import { roleLabel, statusLabel, taskTypeLabel, usageSummary } from './modelViewUtils';
 import { JobList } from './WorkflowActions';
+import { Button } from './ui/Button';
+import { ConfirmDialog } from './ui/Dialog';
+import { LoadingSpinner } from './ui/LoadingSpinner';
 
 export function ModelsView() {
   const modelConfig = useModelConfig();
@@ -39,6 +43,7 @@ export function ModelsView() {
   const skills = useSkills();
   const pushTask = useWorkbenchStore((state) => state.pushTask);
   const [probeResult, setProbeResult] = useState<ProbeModelPayload | null>(null);
+  const [cleanupConfirmOpen, setCleanupConfirmOpen] = useState(false);
 
   const probeMutation = useMutation({
     mutationFn: ({ role, temporaryKey }: { role: string; temporaryKey?: string }) =>
@@ -95,10 +100,7 @@ export function ModelsView() {
   });
 
   const handleCleanupModelCalls = () => {
-    const confirmed = window.confirm('将清理 30 天前的 AI 请求排错记录。不会删除正文、草稿、审核、改动对比、备份或发布记录。是否继续？');
-    if (confirmed) {
-      cleanupModelCallsMutation.mutate();
-    }
+    setCleanupConfirmOpen(true);
   };
 
   const pausedCount = modelCallSummary.data?.filter((call) => call.status === 'paused_budget').length ?? 0;
@@ -151,7 +153,7 @@ export function ModelsView() {
               pushTask={pushTask}
             />
           ))}
-          {modelConfig.isLoading && <p className="muted">正在加载 AI 助手配置...</p>}
+          {modelConfig.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载 AI 助手配置...</p>}
         </div>
         {probeResult && (
           <details className="advanced-details" open>
@@ -181,27 +183,25 @@ export function ModelsView() {
             </div>
           </summary>
           <div className="call-records-toolbar">
-            <button
-              className="secondary-button"
-              type="button"
+            <Button
+              variant="secondary"
               onClick={() => {
                 setModelCallFailedOnly((value) => !value);
                 setModelCallLimit(20);
               }}
             >
               {modelCallFailedOnly ? '显示全部' : '只看失败'}
-            </button>
-            <button className="secondary-button" type="button" onClick={() => modelCalls.refetch()}>
+            </Button>
+            <Button variant="secondary" onClick={() => modelCalls.refetch()}>
               刷新
-            </button>
-            <button
-              className="secondary-button"
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => setModelCallLimit((value) => Math.min(value + 20, 200))}
               disabled={modelCallLimit >= 200}
             >
               查看更多
-            </button>
+            </Button>
             <span className="form-hint">{modelCallFailedOnly ? '当前只显示失败请求。' : '默认只显示最近 20 条。'}</span>
           </div>
           <div className="observability-table observability-table--calls" role="table" aria-label="最近 AI 调用">
@@ -213,15 +213,15 @@ export function ModelsView() {
               <span>排错信息</span>
             </div>
             {displayedModelCalls.map((call) => <ModelCallRow call={call} key={call.id} />)}
-            {modelCalls.isLoading && <p className="muted">正在加载 AI 请求记录...</p>}
+            {modelCalls.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载 AI 请求记录...</p>}
             {!modelCalls.isLoading && !displayedModelCalls.length && <p className="muted">暂无符合条件的 AI 请求记录。</p>}
           </div>
           <details className="advanced-details call-records-cleanup">
             <summary>高级清理</summary>
             <p className="form-hint">只清理 30 天前的 AI 请求排错记录，不影响正文、草稿、审核、改动对比、备份或发布记录。</p>
-            <button className="secondary-button danger-button" type="button" onClick={handleCleanupModelCalls} disabled={cleanupModelCallsMutation.isPending}>
+            <Button variant="danger" onClick={handleCleanupModelCalls} disabled={cleanupModelCallsMutation.isPending} loading={cleanupModelCallsMutation.isPending}>
               {cleanupModelCallsMutation.isPending ? '清理中...' : '清理 30 天前记录'}
-            </button>
+            </Button>
           </details>
         </details>
       </section>
@@ -233,9 +233,9 @@ export function ModelsView() {
               <p className="eyebrow">任务队列</p>
               <h2>继续执行或查看暂停原因</h2>
             </div>
-            <button className="secondary-button" type="button" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending}>
+            <Button variant="secondary" onClick={() => runJobsMutation.mutate()} disabled={runJobsMutation.isPending} loading={runJobsMutation.isPending}>
               继续执行任务
-            </button>
+            </Button>
           </div>
           {pausedCount > 0 && <section className="notice danger">AI 调用已暂停。请查看失败原因，确认预算后再继续执行任务。</section>}
           <JobList compact />
@@ -252,7 +252,7 @@ export function ModelsView() {
             <summary>查看 Skills</summary>
             <div className="skill-grid">
               {skills.data?.skills.map((skill) => <SkillCard skill={skill} key={skill.path} />)}
-              {skills.isLoading && <p className="muted">正在加载 skills...</p>}
+              {skills.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载 skills...</p>}
               {!skills.isLoading && !skills.data?.skills.length && <p className="muted">尚未配置 skills。</p>}
             </div>
           </details>
@@ -260,7 +260,7 @@ export function ModelsView() {
             <summary>查看运行事件</summary>
             <div className="observability-list">
               {recentEvents.map((event) => <EventCard event={event} key={event.id} />)}
-              {events.isLoading && <p className="muted">正在加载运行事件...</p>}
+              {events.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载运行事件...</p>}
               {!events.isLoading && !events.data?.length && <p className="muted">暂无运行事件。</p>}
             </div>
           </details>
@@ -286,10 +286,24 @@ export function ModelsView() {
         </div>
         <div className="observability-list">
           {publishDecisions.data?.map((decision) => <PublishCard decision={decision} key={decision.id} />)}
-          {publishDecisions.isLoading && <p className="muted">正在加载写回记录...</p>}
+          {publishDecisions.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载写回记录...</p>}
           {!publishDecisions.isLoading && !publishDecisions.data?.length && <p className="muted">暂无写回记录。</p>}
         </div>
       </section>
+      <ConfirmDialog
+        open={cleanupConfirmOpen}
+        onClose={() => setCleanupConfirmOpen(false)}
+        title="清理 AI 请求记录"
+        message="将清理 30 天前的 AI 请求排错记录。不会删除正文、草稿、审核、改动对比、备份或发布记录。"
+        confirmLabel="确认清理"
+        confirmVariant="danger"
+        mark="!"
+        markVariant="delete"
+        onConfirm={() => {
+          setCleanupConfirmOpen(false);
+          cleanupModelCallsMutation.mutate();
+        }}
+      />
     </main>
   );
 }
@@ -422,25 +436,24 @@ function ModelConfigCard({
       </details>
 
       <div className="model-config-actions">
-        <button className="secondary-button" type="button" onClick={() => setEditing((current) => !current)}>
+        <Button variant="secondary" onClick={() => setEditing((current) => !current)}>
           {editing ? '收起编辑' : '编辑配置'}
-        </button>
-        <button
-          className="secondary-button"
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={() => onProbe(config.role, editing && secret ? secret : undefined)}
           disabled={probePending || hasError}
         >
           测试连接
-        </button>
-        <button
-          className="primary-button"
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
           onClick={() => saveMutation.mutate()}
           disabled={!editing || saveMutation.isPending || hasError}
+          loading={saveMutation.isPending}
         >
           {saveMutation.isPending ? '保存中...' : '保存配置'}
-        </button>
+        </Button>
       </div>
     </article>
   );

@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../api';
 import { useAnnotationInsights } from '../hooks';
 import { useWorkbenchStore } from '../store';
+import { Button } from './ui/Button';
+import { LoadingSpinner } from './ui/LoadingSpinner';
 
 type LearnAnnotationsResponse = {
   created: number;
@@ -36,9 +38,9 @@ export function InsightPanel() {
           <p className="eyebrow">已学习规则</p>
           <h3>批注洞察</h3>
         </div>
-        <button className="secondary-button" type="button" onClick={() => learnMutation.mutate()} disabled={learnMutation.isPending}>
+        <Button variant="secondary" onClick={() => learnMutation.mutate()} disabled={learnMutation.isPending} loading={learnMutation.isPending}>
           {learnMutation.isPending ? '学习中...' : '学习已解决批注'}
-        </button>
+        </Button>
       </div>
       <p className="form-hint">只会学习状态为“已解决”的批注。新建批注需要先在批注页标记为已解决，才会沉淀成记忆规则。</p>
       {learnMutation.data?.message && (
@@ -46,7 +48,7 @@ export function InsightPanel() {
       )}
       {learnMutation.error && <p className="form-hint form-hint--error">{learnMutation.error.message}</p>}
       <div className="insight-list">
-        {insights.isLoading && <p className="muted">正在加载规则...</p>}
+        {insights.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载规则...</p>}
         {(insights.data ?? []).map((insight) => (
           <article className={insight.enabled ? 'insight-card' : 'insight-card insight-card--disabled'} key={insight.id}>
             <div className="insight-card__top">

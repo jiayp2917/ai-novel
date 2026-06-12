@@ -90,12 +90,11 @@ export function initialActiveView(): ActiveView {
     review: 'ai',
     memory: 'ai',
     fix_publish: 'ai',
-    models: 'settings',
   };
   if (raw && migrations[raw]) {
     return migrations[raw];
   }
-  const valid: ActiveView[] = ['home', 'writing', 'planning', 'pipeline', 'ai', 'settings'];
+  const valid: ActiveView[] = ['home', 'writing', 'planning', 'pipeline', 'ai', 'settings', 'models'];
   return valid.includes(raw as ActiveView) ? (raw as ActiveView) : 'home';
 }
 

@@ -3,7 +3,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { TaskPanel } from './components/TaskPanel';
 import { useHealth } from './hooks';
 import { DashboardPage } from './pages/DashboardPage';
-import { AiWorkbenchPage, PipelinePage, PlanningPage, SettingsModelsPage, WritingPage } from './pages/CorePages';
+import { AiWorkbenchPage, ModelsPage, PipelinePage, PlanningPage, SettingsPage, WritingPage } from './pages/CorePages';
 import { useWorkbenchStore } from './store';
 import { nextTheme, themeLabels } from './theme';
 import type { ActiveView } from './types';
@@ -23,6 +23,7 @@ const shortNavLabels: Record<ActiveView, string> = {
   ai: 'AI',
   pipeline: '流水线',
   settings: '设置',
+  models: '模型',
 };
 
 const viewTitles: Record<ActiveView, string> = {
@@ -31,7 +32,8 @@ const viewTitles: Record<ActiveView, string> = {
   planning: 'AI 素材库',
   pipeline: '自动流水线',
   ai: 'AI 工作台',
-  settings: '设置/模型',
+  settings: '设置',
+  models: '模型配置',
 };
 
 export function App() {
@@ -72,15 +74,26 @@ export function App() {
           ))}
         </nav>
         <button
+          className={activeView === 'models' ? 'sidebar-settings active' : 'sidebar-settings'}
+          type="button"
+          title="模型配置"
+          aria-label="打开模型配置"
+          onClick={() => setActiveView('models')}
+        >
+          <span className="ico">◈</span>
+          <span>模型</span>
+          <small className="nav-short-label">模型</small>
+        </button>
+        <button
           className={activeView === 'settings' ? 'sidebar-settings active' : 'sidebar-settings'}
           type="button"
-          title="设置/模型"
-          aria-label="打开设置/模型"
+          title="设置"
+          aria-label="打开设置"
           onClick={() => setActiveView('settings')}
         >
           <span className="ico">⚙</span>
-          <span>设置/模型</span>
-          <small className="nav-short-label">{shortNavLabels.settings}</small>
+          <span>设置</span>
+          <small className="nav-short-label">设置</small>
         </button>
       </aside>
 
@@ -119,7 +132,8 @@ export function App() {
           {activeView === 'planning' && <PlanningPage />}
           {activeView === 'pipeline' && <PipelinePage />}
           {activeView === 'ai' && <AiWorkbenchPage />}
-          {activeView === 'settings' && <SettingsModelsPage />}
+          {activeView === 'settings' && <SettingsPage />}
+          {activeView === 'models' && <ModelsPage />}
         </ErrorBoundary>
       </main>
     </div>

@@ -3,6 +3,8 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { apiRequest } from '../api';
 import { useCatalogStatus, useChapters, useSources } from '../hooks';
 import { useWorkbenchStore } from '../store';
+import { LoadingSpinner } from './ui/LoadingSpinner';
+import { Button } from './ui/Button';
 import type { Chapter, CreateSourceFilePayload, CreateSourceFileResult, SourceFile } from '../types';
 import {
   chapterMatchesFilter,
@@ -155,9 +157,9 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
         <div className="catalog-header-actions">
           <span className="count-badge">{variant === 'library' ? grouped.system.length + grouped.settings.length + grouped.outlines.length : visibleSourceCount}</span>
           {showCreateButton && (
-            <button type="button" className="secondary-button catalog-add-button" onClick={() => setShowCreate(true)}>
+            <Button variant="secondary" className="catalog-add-button" onClick={() => setShowCreate(true)}>
               新增
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -218,7 +220,7 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
                   placeholder="章号或标题"
                 />
               </label>
-              {chapters.isLoading && <p className="muted">正在加载正文...</p>}
+              {chapters.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载正文...</p>}
               <div className="catalog-subtitle">已识别章节</div>
               {volumes.map(([volume, items], index) => {
                 const volumeOpen = openVolumes[volume] ?? (volume === selectedChapterVolume || (!selectedChapterVolume && index === 0));
@@ -417,14 +419,14 @@ function UnparsedSourceButton({
       <div className="unparsed-row__tools">
         <input aria-label="规范化章号" value={chapterNo} onChange={(event) => setChapterNo(event.target.value)} placeholder="章号" />
         <input aria-label="规范化标题" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" />
-        <button
-          type="button"
-          className="secondary-button"
+        <Button
+          variant="secondary"
           onClick={() => onNormalize(normalizedNo, title.trim())}
           disabled={!canNormalize || normalizing}
+          loading={normalizing}
         >
           {normalizing ? '处理中...' : '转为章节'}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -639,9 +641,8 @@ function CreateSourceDialog({
           {error && <div className="inline-error">{error}</div>}
         </div>
         <div className="confirm-dialog__actions">
-          <button
-            className="secondary-button"
-            type="button"
+          <Button
+            variant="secondary"
             onClick={() => {
               clearError();
               onClose();
@@ -649,10 +650,10 @@ function CreateSourceDialog({
             disabled={busy}
           >
             取消
-          </button>
-          <button className="primary-button" type="button" onClick={submit} disabled={!canSubmit || busy}>
+          </Button>
+          <Button variant="primary" onClick={submit} disabled={!canSubmit || busy} loading={busy}>
             {busy ? '创建中...' : '创建并扫描'}
-          </button>
+          </Button>
         </div>
       </section>
     </div>

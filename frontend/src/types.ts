@@ -4,7 +4,8 @@ export type ActiveView =
   | 'planning'
   | 'pipeline'
   | 'ai'
-  | 'settings';
+  | 'settings'
+  | 'models';
 
 export type ThemeMode = 'bright' | 'anime';
 

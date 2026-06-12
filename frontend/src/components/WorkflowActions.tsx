@@ -5,6 +5,7 @@ import { useArtifacts, useJobs } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import type { Artifact, ContextPreview, SourceFile } from '../types';
 import { ArtifactGate } from './ArtifactGate';
+import { LoadingSpinner } from './ui/LoadingSpinner';
 
 export function ChapterActions({
   chapterId,
@@ -319,39 +320,46 @@ export function SourceProposalActions({
         <button type="button" className="secondary-button" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
           生成提案
         </button>
-        {canGenerateWorkProfile && (
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => workProfileMutation.mutate()}
-            disabled={workProfileMutation.isPending}
-          >
-            生成作品档案
-          </button>
-        )}
-        {canGenerateWritingCard && (
-          <>
-            <label className="inline-field">
-              <span>章号</span>
-              <input
-                aria-label="写作卡章号"
-                min={1}
-                type="number"
-                value={writingCardChapterNo}
-                onChange={(event) => setWritingCardChapterNo(event.target.value)}
-              />
-            </label>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => writingCardMutation.mutate()}
-              disabled={writingCardMutation.isPending}
-            >
-              生成第 {chapterNo} 章写作卡
-            </button>
-          </>
-        )}
       </div>
+      {(canGenerateWorkProfile || canGenerateWritingCard) && (
+        <details className="advanced-details">
+          <summary>高级生成操作</summary>
+          <div className="action-row">
+            {canGenerateWorkProfile && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => workProfileMutation.mutate()}
+                disabled={workProfileMutation.isPending}
+              >
+                生成作品档案
+              </button>
+            )}
+            {canGenerateWritingCard && (
+              <>
+                <label className="inline-field">
+                  <span>章号</span>
+                  <input
+                    aria-label="写作卡章号"
+                    min={1}
+                    type="number"
+                    value={writingCardChapterNo}
+                    onChange={(event) => setWritingCardChapterNo(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => writingCardMutation.mutate()}
+                  disabled={writingCardMutation.isPending}
+                >
+                  生成第 {chapterNo} 章写作卡
+                </button>
+              </>
+            )}
+          </div>
+        </details>
+      )}
       {(canConfirmWorkProfile || canConfirmWritingCard) && (
         <div className="action-row">
           {canConfirmWorkProfile && (
@@ -378,10 +386,7 @@ export function SourceProposalActions({
         </div>
       )}
       {selectedArtifact?.metadata.canonical === true && (
-        <p className="form-hint">当前提案已确认为 {confirmedProposalLabel(selectedArtifact)}，后续 writer 上下文会读取这份记忆。</p>
-      )}
-      {canGenerateWritingCard && (
-        <p className="form-hint">写作卡按上方章号生成；确认后才会作为该章 writer 上下文来源。</p>
+        <p className="form-hint">已确认为 {confirmedProposalLabel(selectedArtifact)}，AI 写作时会读取这份记忆。</p>
       )}
       <ArtifactGate
         artifactId={artifactId}
@@ -441,8 +446,51 @@ export function JobList({ compact = false }: { compact?: boolean }) {
   const allJobs = jobs.data ?? [];
   const visibleJobs = compact ? allJobs.slice(0, 8) : allJobs;
 
+  if (compact) {
+    const succeeded = allJobs.filter((j) => ['succeeded', 'done', 'approved'].includes(j.status)).length;
+    const failed = allJobs.filter((j) => ['failed', 'failed_terminal', 'failed_retryable'].includes(j.status)).length;
+    const running = allJobs.filter((j) => j.status === 'running').length;
+    return (
+      <section className="workflow-card workflow-card--compact">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">任务队列</p>
+            <h2>最近任务</h2>
+          </div>
+          <span className="count-badge">{allJobs.length}</span>
+        </div>
+        {allJobs.length > 0 ? (
+          <p className="muted">共 {allJobs.length} 个任务：{succeeded} 个成功，{failed} 个失败{running > 0 ? `，${running} 个执行中` : ''}。</p>
+        ) : jobs.isLoading ? (
+          <p className="muted"><LoadingSpinner size="sm" /> 正在加载任务...</p>
+        ) : (
+          <p className="muted">暂无任务。</p>
+        )}
+        <div className="job-list job-list--compact">
+          {visibleJobs.map((job) => (
+            <article className={`job-card job-card--${job.status}`} key={job.id}>
+              <div>
+                <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
+                <span>{jobStatusLabel(job.status)}</span>
+              </div>
+              {job.status === 'paused_budget' && <p>AI 调用已暂停。查看原因后，可在模型页点击"继续执行任务"。</p>}
+              <details className="advanced-details">
+                <summary>高级详情</summary>
+                {job.error && <p>{job.error}</p>}
+                {job.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
+              </details>
+            </article>
+          ))}
+        </div>
+        {allJobs.length > visibleJobs.length && (
+          <p className="muted">仅显示最近 {visibleJobs.length} 条任务，完整队列请到模型页查看。</p>
+        )}
+      </section>
+    );
+  }
+
   return (
-    <section className={compact ? 'workflow-card workflow-card--compact' : 'workflow-card'}>
+    <section className="workflow-card">
       <div className="section-title">
         <div>
           <p className="eyebrow">任务队列</p>
@@ -450,32 +498,20 @@ export function JobList({ compact = false }: { compact?: boolean }) {
         </div>
         <span className="count-badge">{allJobs.length}</span>
       </div>
-      <div className={compact ? 'job-list job-list--compact' : 'job-list'}>
-        {jobs.isLoading && <p className="muted">正在加载任务...</p>}
+      <div className="job-list">
+        {jobs.isLoading && <p className="muted"><LoadingSpinner size="sm" /> 正在加载任务...</p>}
         {visibleJobs.map((job) => (
           <article className={`job-card job-card--${job.status}`} key={job.id}>
             <div>
               <strong>#{job.id} {jobTypeLabel(job.type)}</strong>
               <span>{jobStatusLabel(job.status)}</span>
             </div>
-            {job.status === 'paused_budget' && <p>AI 调用已暂停。查看原因后，可在设置/模型页点击“继续执行任务”。</p>}
+            {job.status === 'paused_budget' && <p>AI 调用已暂停。查看原因后，可在模型页点击"继续执行任务"。</p>}
             {job.error && <p>{job.error}</p>}
-            {job.result && (
-              compact ? (
-                <details className="advanced-details">
-                  <summary>高级详情</summary>
-                  <pre>{JSON.stringify(job.result, null, 2)}</pre>
-                </details>
-              ) : (
-                <pre>{JSON.stringify(job.result, null, 2)}</pre>
-              )
-            )}
+            {job.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
           </article>
         ))}
         {!jobs.isLoading && allJobs.length === 0 && <p className="muted">暂无任务。</p>}
-        {compact && allJobs.length > visibleJobs.length && (
-          <p className="muted">仅显示最近 {visibleJobs.length} 条任务，完整队列请到设置/模型页查看。</p>
-        )}
       </div>
     </section>
   );

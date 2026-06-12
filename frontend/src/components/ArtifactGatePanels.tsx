@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useChapters } from '../hooks';
 import type { Artifact } from '../types';
 import { isManualEditorDraft, publishBlockReason, reviewLabel, reviewStatus, shortHash } from './artifactGateUtils';
+import { Button } from './ui/Button';
 
 type PublishDecision = {
   id: number;
@@ -184,14 +185,13 @@ export function CandidateSelector({
             onChange={(event) => setManualId(event.target.value.replace(/[^\d]/g, ''))}
             placeholder="手动输入草稿编号"
           />
-          <button
-            type="button"
-            className="secondary-button"
+          <Button
+            variant="secondary"
             onClick={() => setArtifactId(manualId ? Number.parseInt(manualId, 10) : null)}
             disabled={manualId.trim() === ''}
           >
             绑定草稿
-          </button>
+          </Button>
         </div>
       </details>
       <div className="candidate-list">

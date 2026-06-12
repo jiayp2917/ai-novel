@@ -5,6 +5,7 @@ import { useChapters, useHealth, useSources, useWorkspace } from '../hooks';
 import { useWorkbenchStore } from '../store';
 import type { WorkspaceBookmark, WorkspaceStatus } from '../types';
 import { layoutLabel, workspaceLocationLabel, workspaceStatusFromHealth } from '../utils';
+import { Button } from './ui/Button';
 
 export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
   const health = useHealth();
@@ -189,35 +190,33 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
                 </small>
               </div>
               <div className="workspace-bookmark__actions">
-                <button className="secondary-button" type="button" onClick={() => openBookmark(bookmark)} disabled={switchMutation.isPending}>
+                <Button variant="secondary" onClick={() => openBookmark(bookmark)} disabled={switchMutation.isPending}>
                   打开
-                </button>
+                </Button>
                 {renamingId === bookmark.id ? (
-                  <button
-                    className="secondary-button"
-                    type="button"
+                  <Button
+                    variant="secondary"
                     onClick={() => {
                       renameWorkspaceBookmark(bookmark.id, renameValue);
                       setRenamingId(null);
                     }}
                   >
                     保存名称
-                  </button>
+                  </Button>
                 ) : (
-                  <button
-                    className="secondary-button"
-                    type="button"
+                  <Button
+                    variant="secondary"
                     onClick={() => {
                       setRenamingId(bookmark.id);
                       setRenameValue(bookmark.name);
                     }}
                   >
                     重命名
-                  </button>
+                  </Button>
                 )}
-                <button className="secondary-button" type="button" onClick={() => removeWorkspaceBookmark(bookmark.id)}>
+                <Button variant="secondary" onClick={() => removeWorkspaceBookmark(bookmark.id)}>
                   移除
-                </button>
+                </Button>
               </div>
             </article>
           ))}
@@ -239,15 +238,15 @@ export function WorkspacePanel({ compact = false }: { compact?: boolean }) {
             <input aria-label="当前路径" value={path} onChange={(event) => setPath(event.target.value)} />
           </label>
           <div className="action-row">
-            <button type="button" className="secondary-button" onClick={() => switchMutation.mutate(path)} disabled={switchMutation.isPending}>
+            <Button variant="secondary" onClick={() => switchMutation.mutate(path)} disabled={switchMutation.isPending} loading={switchMutation.isPending}>
               打开并扫描
-            </button>
-            <button type="button" className="secondary-button" onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending}>
+            </Button>
+            <Button variant="secondary" onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending} loading={scanMutation.isPending}>
               重新扫描当前作品
-            </button>
-            <button type="button" className="secondary-button" onClick={() => rebuildMemoryMutation.mutate()} disabled={rebuildMemoryMutation.isPending || chapterCount === 0}>
+            </Button>
+            <Button variant="secondary" onClick={() => rebuildMemoryMutation.mutate()} disabled={rebuildMemoryMutation.isPending || chapterCount === 0} loading={rebuildMemoryMutation.isPending}>
               整理记忆库
-            </button>
+            </Button>
           </div>
           <div className="workspace-stats">
             <span>素材文件：{sourceCount}</span>

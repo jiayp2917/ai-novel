@@ -13,8 +13,9 @@ Before substantial work, read the relevant parts of:
 - `CLAUDE.md`: local engineering constraints.
 - `PRD.md`: intended product workflows and publish gate semantics.
 - `README.md`: startup, workspace structures, model roles, and validation commands.
-- `docs/通用长篇小说编辑器产品方案.md`: current product direction.
-- `docs/开发手册.md`: backend/frontend boundaries and test matrix.
+- `docs/ai-novel使用手册.md`: user startup, workspace, and publish-gate usage.
+- `docs/ai-novel设计方案.md`: current product direction and safety boundaries.
+- `docs/ai-novel开发计划.md`: implementation priorities, engineering boundaries, and test matrix.
 
 Specific book context belongs in the active novel workspace or external planning files. Do not promote a specific book's setting, characters, chapter status, or style into repository-wide rules unless the user explicitly asks for a generic template.
 

@@ -1007,6 +1007,20 @@ pre {
   color: var(--warn);
 }
 
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  color: var(--muted);
+}
+
+.inline-field input {
+  width: 76px;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
 .chip.danger {
   background: var(--danger-bg);
   color: var(--danger);

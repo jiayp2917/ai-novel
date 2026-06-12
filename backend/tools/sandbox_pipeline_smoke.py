@@ -283,6 +283,22 @@ class SmokePipelineTaskExecutor(PipelineTaskExecutor):
         return result
 
     def _run_summarize_published_chapter(self, job: Job) -> dict[str, Any]:
+        publish_state = self._dependency_publish_result(job)
+        if publish_state is not None and not publish_state.get("published"):
+            result = {
+                "skipped": True,
+                "reason": "Chapter was not published; summary proposal is only generated after publish.",
+                "publish_job_id": publish_state.get("job_id"),
+                "published": False,
+            }
+            self.machine.transition(
+                job,
+                "done",
+                result_updates=result,
+                payload_updates={"execution": "skipped"},
+                error=None,
+            )
+            return result
         chapter = self._chapter(job)
         result = SummarizerService(self.session, model_client=self.model_client).summarize_chapter(chapter.id)
         self.machine.transition(
@@ -375,6 +391,9 @@ def assert_report(report: dict[str, Any], *, expected_chapters: int, published: 
         raise SmokeError("Published run did not create one publish decision per chapter")
     if not published and report["publish_decision_count"] != 0:
         raise SmokeError("Dry-run created publish decisions")
+    summary_tasks = [task for task in report["child_tasks"] if task["type"] == "summarize_published_chapter"]
+    if not published and any(not task["result"].get("skipped") for task in summary_tasks):
+        raise SmokeError("Dry-run generated summary proposals before publish")
 
 
 def create_workspace(root: Path, chapters: int) -> None:

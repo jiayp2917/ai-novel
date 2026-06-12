@@ -18,6 +18,7 @@ from backend.app.services.annotations import NotFoundError
 from backend.app.services.library import LibraryScanner
 from backend.app.services.memory import MemoryService
 from backend.app.services.model_client import ChatMessage, ModelClient
+from backend.app.services.pipeline.findings import has_blocking_finding, normalize_review_findings
 from backend.app.services.workspace import WorkspaceResolver, workspace_runtime_root
 from backend.app.utils.hashing import sha256_file
 
@@ -74,8 +75,8 @@ class ReviewPublishService:
             ]
             payload = {"passed": False, "issues": issues}
 
-        issues = self._normalize_issues(payload.get("issues", []))
-        passed = bool(payload.get("passed", False)) and not self._has_blocking_issue(issues)
+        issues = normalize_review_findings(payload.get("issues", []))
+        passed = bool(payload.get("passed", False)) and not has_blocking_finding(issues)
         evidence_count = sum(1 for issue in issues if issue.get("evidence"))
         manual_required = any(issue.get("owner") == "admin" for issue in issues)
         review = self.reviews.create(

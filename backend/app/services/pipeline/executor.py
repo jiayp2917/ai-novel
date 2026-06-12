@@ -195,6 +195,22 @@ class PipelineTaskExecutor:
         return result
 
     def _run_summarize_published_chapter(self, job: Job) -> dict[str, Any]:
+        publish_state = self._dependency_publish_result(job)
+        if publish_state is not None and not publish_state.get("published"):
+            result = {
+                "skipped": True,
+                "reason": "Chapter was not published; summary proposal is only generated after publish.",
+                "publish_job_id": publish_state.get("job_id"),
+                "published": False,
+            }
+            self.machine.transition(
+                job,
+                PipelineState.DONE,
+                result_updates=result,
+                payload_updates={"execution": "skipped"},
+                error=None,
+            )
+            return result
         chapter = self._chapter(job)
         result = SummarizerService(self.session).summarize_chapter(chapter.id)
         self.machine.transition(
@@ -210,6 +226,21 @@ class PipelineTaskExecutor:
             error=None,
         )
         return result
+
+    def _dependency_publish_result(self, job: Job) -> dict[str, Any] | None:
+        dependency_id = job_payload(job).get("depends_on_job_id")
+        if not isinstance(dependency_id, int):
+            return None
+        dependency = self.session.get(Job, dependency_id)
+        if dependency is None or dependency.type != PipelineTaskType.PUBLISH_CHAPTER_CANDIDATE.value:
+            return None
+        result = job_result(dependency)
+        return {
+            "job_id": dependency.id,
+            "published": dependency.status == PipelineState.PUBLISHED.value and result.get("published") is True,
+            "status": dependency.status,
+            "result": result,
+        }
 
     def _candidate_artifact_id(self, job: Job) -> int:
         combined = {**job_payload(job), **job_result(job)}

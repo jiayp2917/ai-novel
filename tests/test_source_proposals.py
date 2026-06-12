@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
-from backend.app.db.models import Annotation, Artifact, Review, SourceFile
+from backend.app.db.models import Annotation, Artifact, MemoryItem, Review, SourceFile
 from backend.app.db.session import get_engine, reset_engine
 from backend.app.main import app
 from backend.app.schemas import AnnotationRequest
@@ -152,14 +152,14 @@ def test_generate_writing_card_creates_proposal_without_writing_outline(tmp_path
 
     result = WritingCardService(
         session,
-        model_client=FakeModelClient("# 第001章 First 写作卡\n\n- 本章目标：稳定生成。"),
+        model_client=FakeModelClient("# Chapter 001 Writing Card\n\n- Goal: stable generation."),
     ).generate_card(source.id, chapter_no=1, generation_mode="stable")
 
     artifact = session.get(Artifact, result["artifact_id"])
     assert artifact is not None
     assert artifact.kind == "proposal"
     assert artifact.base_source_file_id == source.id
-    assert (runtime_root / artifact.path).read_text(encoding="utf-8").startswith("# 第001章 First 写作卡")
+    assert (runtime_root / artifact.path).read_text(encoding="utf-8").startswith("# Chapter 001 Writing Card")
     assert (content_root / source.path).read_text(encoding="utf-8") == original
     metadata = json.loads(artifact.metadata_json)
     assert metadata["purpose"] == "chapter_writing_card"
@@ -168,6 +168,70 @@ def test_generate_writing_card_creates_proposal_without_writing_outline(tmp_path
     assert metadata["canonical"] is False
     get_settings.cache_clear()
 
+
+def test_confirm_writing_card_promotes_proposal_to_context_memory(tmp_path: Path, monkeypatch) -> None:
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    seed_sources(content_root)
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    get_settings.cache_clear()
+    session = make_session()
+    LibraryScanner(session, content_root).scan()
+    source = session.scalar(select(SourceFile).where(SourceFile.kind == "outlines"))
+    assert source is not None
+    card = "# Chapter 001 Writing Card\n\n- Goal: confirmed card."
+    result = WritingCardService(session, model_client=FakeModelClient(card)).generate_card(source.id, chapter_no=1)
+
+    confirmed = WritingCardService(session).confirm_card(result["artifact_id"])
+
+    assert confirmed["confirmed"] is True
+    artifact = session.get(Artifact, result["artifact_id"])
+    assert artifact is not None
+    metadata = json.loads(artifact.metadata_json)
+    assert metadata["canonical"] is True
+    memory = session.scalar(select(MemoryItem).where(MemoryItem.kind == "chapter_card"))
+    assert memory is not None
+    payload = json.loads(memory.content_json)
+    assert memory.kind == "chapter_card"
+    assert memory.scope == "1"
+    assert payload["source"] == "confirmed_writing_card"
+    assert payload["artifact_id"] == result["artifact_id"]
+    assert "confirmed card" in payload["card_markdown"]
+    get_settings.cache_clear()
+
+
+def test_generate_and_confirm_work_profile_proposal(tmp_path: Path, monkeypatch) -> None:
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    seed_sources(content_root)
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    get_settings.cache_clear()
+    session = make_session()
+    LibraryScanner(session, content_root).scan()
+    source = session.scalar(select(SourceFile).where(SourceFile.kind == "settings"))
+    assert source is not None
+    profile = "# Work Profile\n\n- Positioning: test."
+
+    result = SourceProposalService(session, model_client=FakeModelClient(profile)).generate_work_profile_proposal(source.id)
+    confirmed = SourceProposalService(session).confirm_work_profile(result["artifact_id"])
+
+    assert confirmed["confirmed"] is True
+    artifact = session.get(Artifact, result["artifact_id"])
+    assert artifact is not None
+    metadata = json.loads(artifact.metadata_json)
+    assert metadata["purpose"] == "work_profile_proposal"
+    assert metadata["canonical"] is True
+    memory = session.scalar(select(MemoryItem).where(MemoryItem.kind == "work_profile"))
+    assert memory is not None
+    payload = json.loads(memory.content_json)
+    assert payload["source"] == "confirmed_work_profile"
+    assert payload["artifact_id"] == result["artifact_id"]
+    assert "Work Profile" in payload["profile_markdown"]
+    get_settings.cache_clear()
 
 def test_generate_writing_card_accepts_table_outline_rows(tmp_path: Path, monkeypatch) -> None:
     content_root = tmp_path / "content"

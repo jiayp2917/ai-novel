@@ -11,6 +11,7 @@ from backend.app.services.annotations import NotFoundError
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.context_builder import ContextBuilder
 from backend.app.services.model_client import ChatMessage, ModelClient
+from backend.app.services.pipeline.findings import authorized_writer_findings, normalize_review_findings, unauthorized_findings
 from backend.app.services.workspace import workspace_runtime_root
 from backend.app.utils.hashing import sha256_file
 
@@ -36,30 +37,18 @@ class FixerService:
         self._validate_artifact_file(artifact)
         chapter = self._base_chapter(artifact)
         review = self._review(artifact_id, review_id)
+        self._validate_review_binding(review, artifact)
         issues = json.loads(review.issues_json or "[]")
-        if not isinstance(issues, list):
-            issues = []
-        non_writer = [issue for issue in issues if isinstance(issue, dict) and issue.get("owner") != "writer"]
-        if non_writer:
+        issues = normalize_review_findings(issues)
+        blocked = unauthorized_findings(issues)
+        if blocked:
             return {
                 "status": "manual_required",
                 "artifact_id": artifact.id,
                 "review_id": review.id,
-                "issues": non_writer,
+                "issues": blocked,
             }
-        writer_issues = [issue for issue in issues if isinstance(issue, dict) and issue.get("owner") == "writer"]
-        invalid_writer_issues = [
-            issue
-            for issue in writer_issues
-            if not str(issue.get("evidence", "")).strip() or not str(issue.get("fix_instruction", "")).strip()
-        ]
-        if invalid_writer_issues:
-            return {
-                "status": "manual_required",
-                "artifact_id": artifact.id,
-                "review_id": review.id,
-                "issues": invalid_writer_issues,
-            }
+        writer_issues = authorized_writer_findings(issues)
         if not writer_issues:
             return {
                 "status": "no_fix_needed",
@@ -71,6 +60,7 @@ class FixerService:
             chapter_id=chapter.id,
             annotation_ids=[],
             task_type="fix_chapter_candidate",
+            generation_mode="fix",
         )
         candidate = self._artifact_text(artifact)
         response = self.model_client.chat(
@@ -96,7 +86,12 @@ class FixerService:
                 "task_type": "fix_chapter_candidate",
                 "parent_artifact_id": artifact.id,
                 "review_id": review.id,
+                "consumed_review_id": review.id,
+                "consumed_finding_ids": [str(issue.get("finding_id")) for issue in writer_issues],
                 "fixed_issue_count": len(writer_issues),
+                "memory_sources": context.report.get("memory_sources", []),
+                "skills": context.report.get("skills", []),
+                "context_sources": context.report.get("context_sources", []),
                 "context_report": context.report,
                 "context_report_artifact_id": context.report_artifact_id,
                 "model_call_id": response.model_call_id,
@@ -114,6 +109,7 @@ class FixerService:
             "artifact_sha256": fixed.sha256,
             "parent_artifact_id": artifact.id,
             "review_id": review.id,
+            "consumed_finding_ids": [str(issue.get("finding_id")) for issue in writer_issues],
             "model_call_id": response.model_call_id,
         }
 
@@ -144,6 +140,14 @@ class FixerService:
         if review is None:
             raise PipelineFixError("Candidate has no review")
         return review
+
+    def _validate_review_binding(self, review: Review, artifact: Artifact) -> None:
+        if review.candidate_hash != artifact.sha256:
+            raise PipelineFixError("Review candidate hash does not match artifact")
+        if review.base_source_file_hash != artifact.base_source_file_hash:
+            raise PipelineFixError("Review source hash does not match artifact")
+        if review.base_chapter_version_id != artifact.base_chapter_version_id:
+            raise PipelineFixError("Review chapter version does not match artifact")
 
     def _artifact(self, artifact_id: int) -> Artifact:
         artifact = self.session.get(Artifact, artifact_id)

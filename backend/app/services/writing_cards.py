@@ -1,15 +1,17 @@
 import json
 import re
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.file_utils import safe_read_text
-from backend.app.db.models import SourceFile
+from backend.app.db.models import Artifact, MemoryItem, SourceFile
 from backend.app.services.annotations import InvalidRequestError, NotFoundError
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.model_client import ChatMessage, ModelClient
-from backend.app.services.workspace import WorkspaceResolver
+from backend.app.services.workspace import WorkspaceResolver, workspace_runtime_root
+from backend.app.utils.hashing import sha256_file
 
 
 CHAPTER_HEADING_RE = re.compile(r"^\ufeff?[ \t]*#{0,6}[ \t]*第[ \t]*0*(\d+)[ \t]*章[^\n]*$", re.MULTILINE)
@@ -116,6 +118,68 @@ class WritingCardService:
             "generation_mode": generation_mode,
         }
 
+    def confirm_card(self, artifact_id: int) -> dict:
+        artifact = self.session.get(Artifact, artifact_id)
+        if artifact is None:
+            raise NotFoundError("Artifact not found")
+        metadata = _artifact_metadata(artifact)
+        if artifact.kind != "proposal" or metadata.get("purpose") != "chapter_writing_card":
+            raise InvalidRequestError("Artifact is not a chapter writing card proposal")
+        chapter_no = int(metadata.get("chapter_no") or 0)
+        if chapter_no <= 0:
+            raise InvalidRequestError("Writing card proposal is missing chapter_no")
+        source_file = self.session.get(SourceFile, artifact.base_source_file_id)
+        if source_file is None or not source_file.active:
+            raise NotFoundError("Source file not found")
+        if source_file.sha256 != artifact.base_source_file_hash:
+            raise InvalidRequestError("Source file hash changed; regenerate writing card")
+        runtime_root = workspace_runtime_root().resolve()
+        path = (runtime_root / artifact.path).resolve()
+        if path != runtime_root and runtime_root not in path.parents:
+            raise InvalidRequestError("Artifact path escapes runtime root")
+        if sha256_file(path) != artifact.sha256:
+            raise InvalidRequestError("Artifact file hash mismatch")
+        card_markdown = safe_read_text(path, encoding="utf-8")
+        payload = {
+            "chapter_no": chapter_no,
+            "source": "confirmed_writing_card",
+            "card_markdown": card_markdown,
+            "source_file_id": source_file.id,
+            "source_path": source_file.path,
+            "artifact_id": artifact.id,
+            "artifact_sha256": artifact.sha256,
+            "generation_mode": metadata.get("generation_mode") or "stable",
+            "confirmed_at": datetime.now(UTC).isoformat(),
+        }
+        for item in self.session.scalars(
+            select(MemoryItem).where(
+                MemoryItem.kind == "chapter_card",
+                MemoryItem.scope == str(chapter_no),
+                MemoryItem.stale.is_(False),
+            )
+        ):
+            if _memory_payload(item).get("source") == "confirmed_writing_card":
+                item.stale = True
+        memory = MemoryItem(
+            kind="chapter_card",
+            scope=str(chapter_no),
+            content_json=json.dumps(payload, ensure_ascii=False),
+            source_hash=artifact.sha256,
+            stale=False,
+        )
+        self.session.add(memory)
+        metadata["canonical"] = True
+        metadata["confirmed_memory_kind"] = "chapter_card"
+        artifact.metadata_json = json.dumps(metadata, ensure_ascii=False)
+        self.session.commit()
+        return {
+            "artifact_id": artifact.id,
+            "chapter_no": chapter_no,
+            "memory_id": memory.id,
+            "memory_kind": memory.kind,
+            "confirmed": True,
+        }
+
     def _chapter_block(self, text: str, chapter_no: int) -> str:
         matches = list(CHAPTER_HEADING_RE.finditer(text))
         for index, match in enumerate(matches):
@@ -142,3 +206,19 @@ def normalize_generation_mode(value: str | None) -> str:
     if mode not in VALID_GENERATION_MODES:
         raise InvalidRequestError("generation_mode must be one of: stable, quality, fast")
     return mode
+
+
+def _artifact_metadata(artifact: Artifact) -> dict:
+    try:
+        payload = json.loads(artifact.metadata_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _memory_payload(item: MemoryItem) -> dict:
+    try:
+        payload = json.loads(item.content_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}

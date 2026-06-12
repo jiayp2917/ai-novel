@@ -10,6 +10,7 @@ from backend.app.repositories import Repository
 from backend.app.services.annotations import NotFoundError
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.model_client import ChatMessage, ModelClient
+from backend.app.services.pipeline.findings import has_blocking_finding, normalize_review_findings
 from backend.app.services.pipeline.local_rules import run_local_rules
 from backend.app.services.workspace import workspace_runtime_root
 from backend.app.utils.hashing import sha256_file
@@ -55,9 +56,9 @@ class ReviewerService:
             ],
         )
         payload = self._parse_review(response.content, artifact)
-        issues = self._normalize_issues(payload.get("issues", []))
+        issues = normalize_review_findings(payload.get("issues", []))
         issues = self._merge_local_issues(issues, local_issues)
-        passed = bool(payload.get("passed", False)) and not self._has_blocking_issue(issues)
+        passed = bool(payload.get("passed", False)) and not has_blocking_finding(issues)
         manual_required = any(issue.get("owner") == "admin" for issue in issues)
         review = self.reviews.create(
             {
@@ -172,7 +173,7 @@ class ReviewerService:
         for issue in local_issues:
             key = (issue.get("source"), issue.get("rule_id"), issue.get("description"))
             if key not in keys:
-                issues.append(issue)
+                issues.extend(normalize_review_findings([issue]))
         return issues
 
     def _severity(self, value: str) -> str:

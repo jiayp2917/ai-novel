@@ -27,6 +27,7 @@ class WriterService:
             chapter_id=chapter.id,
             annotation_ids=[],
             task_type="generate_chapter_draft",
+            generation_mode=mode,
         )
         response = self.model_client.chat(
             role="writer",
@@ -50,6 +51,10 @@ class WriterService:
             metadata={
                 "task_type": "generate_chapter_draft",
                 "generation_mode": mode,
+                "writing_card": context.report.get("writing_card"),
+                "memory_sources": context.report.get("memory_sources", []),
+                "skills": context.report.get("skills", []),
+                "context_sources": context.report.get("context_sources", []),
                 "context_report": context.report,
                 "context_report_artifact_id": context.report_artifact_id,
                 "model_call_id": response.model_call_id,

@@ -72,7 +72,7 @@ export function PlanningPage() {
             {sourceContent.data && sourceContent.data.kind !== 'chapters' ? (
               <>
                 <pre className="document-preview">{sourceContent.data.text}</pre>
-                <SourceProposalActions sourceFileId={sourceContent.data.id} />
+                <SourceProposalActions sourceFileId={sourceContent.data.id} sourceKind={sourceContent.data.kind} />
               </>
             ) : (
               <p className="muted">选择设定或章纲后，可在这里查看内容并生成提案。</p>

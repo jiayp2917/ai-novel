@@ -22,6 +22,10 @@ class WritingCardRequest(BaseModel):
     force: bool = False
 
 
+class WorkProfileProposalRequest(BaseModel):
+    force: bool = False
+
+
 @router.post("/{source_file_id}/generate-proposal")
 def generate_source_proposal(
     source_file_id: int,
@@ -55,4 +59,38 @@ def generate_writing_card(
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (InvalidRequestError, ModelClientError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{source_file_id}/generate-work-profile")
+def generate_work_profile(
+    source_file_id: int,
+    payload: WorkProfileProposalRequest,
+    session: Session = Depends(get_db),
+) -> dict:
+    try:
+        return SourceProposalService(session).generate_work_profile_proposal(source_file_id, force=payload.force)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (InvalidRequestError, ModelClientError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/writing-cards/{artifact_id}/confirm")
+def confirm_writing_card(artifact_id: int, session: Session = Depends(get_db)) -> dict:
+    try:
+        return WritingCardService(session).confirm_card(artifact_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InvalidRequestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/work-profiles/{artifact_id}/confirm")
+def confirm_work_profile(artifact_id: int, session: Session = Depends(get_db)) -> dict:
+    try:
+        return SourceProposalService(session).confirm_work_profile(artifact_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InvalidRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

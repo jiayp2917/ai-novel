@@ -48,11 +48,18 @@ class SummarizerService:
         except json.JSONDecodeError:
             payload = {"summary": response.content[:500], "parse_failed": True}
         artifact = ArtifactStore(self.session).save_json(
-            kind="summary",
+            kind="proposal",
             payload=payload,
             metadata={
+                "purpose": "chapter_memory_proposal",
                 "task_type": "summarize_published_chapter",
                 "chapter_no": chapter.chapter_no,
+                "canonical": False,
+                "memory_kind": "chapter_summary",
+                "memory_scope": str(chapter.chapter_no),
+                "memory_sources": context.report.get("memory_sources", []),
+                "skills": context.report.get("skills", []),
+                "context_sources": context.report.get("context_sources", []),
                 "context_report": context.report,
                 "context_report_artifact_id": context.report_artifact_id,
                 "model_call_id": response.model_call_id,
@@ -95,4 +102,3 @@ class SummarizerService:
         if chapter.current_version is None:
             raise InvalidRequestError("Chapter has no current version")
         return chapter
-

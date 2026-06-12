@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
-from backend.app.db.models import Artifact, Chapter, Review
+from backend.app.db.models import Artifact, Chapter, MemoryItem, Review
 from backend.app.services.artifacts import ArtifactStore
 from backend.app.services.library import LibraryScanner
 from backend.app.services.memory import MemoryService
@@ -128,6 +128,41 @@ def test_writer_records_generation_mode_and_temperature(tmp_path: Path, monkeypa
     get_settings.cache_clear()
 
 
+def test_writer_records_confirmed_card_sources_in_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session, _, _, _, chapter = setup_project(tmp_path, monkeypatch)
+    session.add(
+        MemoryItem(
+            kind="chapter_card",
+            scope="1",
+            content_json=json.dumps(
+                {
+                    "source": "confirmed_writing_card",
+                    "chapter_no": 1,
+                    "card_markdown": "confirmed card",
+                    "artifact_id": 42,
+                    "artifact_sha256": "a" * 64,
+                    "generation_mode": "stable",
+                },
+                ensure_ascii=False,
+            ),
+            source_hash="a" * 64,
+            stale=False,
+        )
+    )
+    session.commit()
+    draft = "# 第001章 起步\n" + "许满握紧拳头，沿着章纲推进。" * 100
+
+    result = WriterService(session, model_client=FakeModelClient(draft)).generate_chapter_draft(chapter.id)
+
+    artifact = session.get(Artifact, result["artifact_id"])
+    assert artifact is not None
+    metadata = json.loads(artifact.metadata_json)
+    assert metadata["writing_card"]["artifact_id"] == 42
+    assert any(source["artifact_id"] == 42 for source in metadata["memory_sources"])
+    assert metadata["skills"]
+    get_settings.cache_clear()
+
+
 def test_reviewer_merges_local_rules_and_enforces_evidence_guard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     session, _, _, _, chapter = setup_project(tmp_path, monkeypatch)
     short_candidate = "# 第001章 起步\n许满走进试炼。"
@@ -157,6 +192,7 @@ def test_reviewer_merges_local_rules_and_enforces_evidence_guard(tmp_path: Path,
     owners = {issue["owner"] for issue in result["issues"]}
     assert "admin" in owners
     assert any(issue.get("rule_id") == "word_count_min" for issue in result["issues"])
+    assert all("finding_id" in issue for issue in result["issues"])
     review = session.get(Review, result["review_id"])
     assert review is not None
     assert review.candidate_hash == artifact.sha256
@@ -206,6 +242,8 @@ def test_fixer_repairs_only_writer_issues_and_creates_new_candidate(tmp_path: Pa
     metadata = json.loads(fixed.metadata_json)
     assert metadata["parent_artifact_id"] == artifact.id
     assert metadata["role"] == "quick_fix"
+    assert metadata["consumed_review_id"] == result["review_id"]
+    assert metadata["consumed_finding_ids"]
     get_settings.cache_clear()
 
 
@@ -246,6 +284,41 @@ def test_fixer_routes_non_writer_issues_to_manual_required(tmp_path: Path, monke
     get_settings.cache_clear()
 
 
+def test_fixer_rejects_stale_review_binding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session, _, _, _, chapter = setup_project(tmp_path, monkeypatch)
+    artifact = ArtifactStore(session).save_text(kind="candidate", text="# 第001章 起步\n正文。", metadata={}, base_chapter=chapter)
+    review = Review(
+        artifact_id=artifact.id,
+        passed=False,
+        issues_json=json.dumps(
+            [
+                {
+                    "chapter": 1,
+                    "severity": "medium",
+                    "type": "length",
+                    "description": "字数不足",
+                    "evidence": "当前中文字符数：8",
+                    "owner": "writer",
+                    "fix_instruction": "扩写正文",
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        evidence_count=1,
+        manual_required=False,
+        candidate_hash="0" * 64,
+        base_source_file_hash=artifact.base_source_file_hash,
+        base_chapter_version_id=artifact.base_chapter_version_id,
+    )
+    session.add(review)
+    session.commit()
+
+    with pytest.raises(Exception, match="Review candidate hash does not match artifact"):
+        FixerService(session, model_client=FakeModelClient("unused")).fix_candidate(artifact.id, review_id=review.id)
+
+    get_settings.cache_clear()
+
+
 def test_summarizer_creates_summary_artifact_without_writing_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     session, content_root, runtime_root, original, chapter = setup_project(tmp_path, monkeypatch)
     summary = json.dumps(
@@ -262,9 +335,11 @@ def test_summarizer_creates_summary_artifact_without_writing_source(tmp_path: Pa
 
     artifact = session.get(Artifact, result["artifact_id"])
     assert artifact is not None
-    assert artifact.kind == "summary"
+    assert artifact.kind == "proposal"
+    metadata = json.loads(artifact.metadata_json)
+    assert metadata["purpose"] == "chapter_memory_proposal"
+    assert metadata["canonical"] is False
     payload = json.loads((runtime_root / artifact.path).read_text(encoding="utf-8"))
     assert payload["summary"] == "许满进入试炼前展示劲大天赋。"
     assert (content_root / "chapters" / "book.md").read_text(encoding="utf-8") == original
     get_settings.cache_clear()
-

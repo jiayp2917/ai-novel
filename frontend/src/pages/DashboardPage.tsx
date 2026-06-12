@@ -1,16 +1,20 @@
-import { useChapters, useCostDashboard, useJobs, useSources } from '../hooks';
+import { useArtifacts, useChapters, useCostDashboard, useJobs, useSources } from '../hooks';
 import { useWorkbenchStore } from '../store';
+import type { ActiveView, Artifact } from '../types';
 import animeHero from '../assets/theme/2917.png';
 import cyberpunkHero from '../assets/theme/cyberpunk-theme-hero.png';
 
 export function DashboardPage() {
   const setActiveView = useWorkbenchStore((state) => state.setActiveView);
   const setSelectedChapterId = useWorkbenchStore((state) => state.setSelectedChapterId);
+  const setSelectedSourceFileId = useWorkbenchStore((state) => state.setSelectedSourceFileId);
   const recentChapterIds = useWorkbenchStore((state) => state.recentChapterIds);
   const sources = useSources();
   const chapters = useChapters();
   const cost = useCostDashboard();
   const jobs = useJobs();
+  const proposals = useArtifacts({ kind: 'proposal', limit: 100 });
+  const candidates = useArtifacts({ kind: 'candidate', limit: 100 });
   const theme = useWorkbenchStore((state) => state.theme);
   const sourceCount = sources.data?.length ?? 0;
   const chapterCount = chapters.data?.length ?? 0;
@@ -25,19 +29,49 @@ export function DashboardPage() {
   const pausedBudgetJobs = allJobs.filter((job) => job.status === 'paused_budget').length;
   const manualRequiredJobs = allJobs.filter((job) => job.status === 'manual_required').length;
   const failedJobs = allJobs.filter((job) => job.status === 'failed' || job.status === 'failed_retryable' || job.status === 'failed_terminal').length;
+  const pendingProposals = (proposals.data ?? []).filter(isPendingProposal);
+  const pendingDrafts = (candidates.data ?? []).filter(isPendingDraft);
   const hasRecentChapter = recentChapters.length > 0;
   const continueChapter = recentChapters[0];
-  const attentionItems = [
-    { label: '后台任务', value: runningJobs, detail: runningJobs ? '有任务正在等待或执行。' : '当前没有运行中的后台任务。', view: 'pipeline' as const },
-    { label: '需人工处理', value: manualRequiredJobs, detail: manualRequiredJobs ? '有 AI 或流水线结果需要你判断。' : '暂无需要人工处理的任务。', view: 'ai' as const },
-    { label: 'AI 调用暂停', value: pausedBudgetJobs, detail: pausedBudgetJobs ? '确认预算后可到设置/模型继续处理。' : 'AI 调用没有暂停。', view: 'settings' as const },
-    { label: '失败任务', value: failedJobs, detail: failedJobs ? '查看失败原因后可重试或停止。' : '暂无失败任务。', view: 'pipeline' as const },
-  ];
-
   const openChapter = (chapterId: number) => {
     setSelectedChapterId(chapterId);
     setActiveView('writing');
   };
+
+  const openProposal = (artifact?: Artifact) => {
+    if (artifact?.base_source_file_id) {
+      setSelectedSourceFileId(artifact.base_source_file_id);
+    }
+    setActiveView('planning');
+  };
+
+  const openDraft = (artifact?: Artifact) => {
+    if (artifact?.base_chapter_id) {
+      setSelectedChapterId(artifact.base_chapter_id);
+    }
+    setActiveView('ai');
+  };
+
+  const attentionItems: AttentionItem[] = [
+    { label: '后台任务', value: runningJobs, detail: runningJobs ? '有任务正在等待或执行。' : '当前没有运行中的后台任务。', view: 'pipeline' as const },
+    {
+      label: '待处理提案',
+      value: pendingProposals.length,
+      detail: pendingProposals.length ? '有设定、章纲或写作卡提案等待查看。' : '暂无待处理素材提案。',
+      view: 'planning' as const,
+      action: () => openProposal(pendingProposals[0]),
+    },
+    {
+      label: '待审草稿',
+      value: pendingDrafts.length,
+      detail: pendingDrafts.length ? '有章节草稿等待检查或查看改动。' : '暂无待审章节草稿。',
+      view: 'ai' as const,
+      action: () => openDraft(pendingDrafts[0]),
+    },
+    { label: '需人工处理', value: manualRequiredJobs, detail: manualRequiredJobs ? '有 AI 或流水线结果需要你判断。' : '暂无需要人工处理的任务。', view: 'ai' as const },
+    { label: 'AI 调用暂停', value: pausedBudgetJobs, detail: pausedBudgetJobs ? '确认预算后可到设置/模型继续处理。' : 'AI 调用没有暂停。', view: 'settings' as const },
+    { label: '失败任务', value: failedJobs, detail: failedJobs ? '查看失败原因后可重试或停止。' : '暂无失败任务。', view: 'pipeline' as const },
+  ];
 
   return (
     <section className="page active dashboard-page">
@@ -96,7 +130,7 @@ export function DashboardPage() {
           <div className="card-head"><h2>待处理事项</h2></div>
           <div className="attention-list">
             {attentionItems.map((item) => (
-              <button type="button" className="attention-item" key={item.label} onClick={() => setActiveView(item.view)}>
+              <button type="button" className="attention-item" key={item.label} onClick={() => (item.action ? item.action() : setActiveView(item.view))}>
                 <span>{item.label}</span>
                 <strong>{item.value}</strong>
                 <small>{item.detail}</small>
@@ -140,4 +174,37 @@ export function DashboardPage() {
       </div>
     </section>
   );
+}
+
+type AttentionItem = {
+  label: string;
+  value: number;
+  detail: string;
+  view: ActiveView;
+  action?: () => void;
+};
+
+function isPendingProposal(artifact: Artifact): boolean {
+  const metadata = artifact.metadata ?? {};
+  if (metadata.canonical === true || artifact.latest_publish) {
+    return false;
+  }
+  if (artifact.kind !== 'proposal') {
+    return false;
+  }
+  if (!artifact.latest_review) {
+    return true;
+  }
+  return artifact.latest_review.manual_required || !artifact.latest_review.passed;
+}
+
+function isPendingDraft(artifact: Artifact): boolean {
+  if (artifact.kind !== 'candidate' || artifact.latest_publish) {
+    return false;
+  }
+  const source = typeof artifact.metadata?.source === 'string' ? artifact.metadata.source : '';
+  if (source === 'manual_editor_draft') {
+    return false;
+  }
+  return !artifact.latest_review || artifact.latest_review.manual_required || !artifact.latest_review.passed;
 }

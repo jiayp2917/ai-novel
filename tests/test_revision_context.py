@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
-from backend.app.db.models import Artifact, Chapter, ChapterVersion, Job
+from backend.app.db.models import Artifact, Chapter, ChapterVersion, Job, MemoryItem
 from backend.app.db.session import get_engine, reset_engine
 from backend.app.main import app
 from backend.app.services.annotations import AnnotationService
@@ -294,6 +294,74 @@ def test_draft_candidate_api_creates_artifact_without_writing_source(tmp_path: P
         assert (runtime_root / artifact.path).read_text(encoding="utf-8") == draft
         assert (runtime_root / version.text_snapshot_path).read_text(encoding="utf-8") == draft
     assert (content_root / "chapters" / "book.md").read_text(encoding="utf-8") == original
+    get_settings.cache_clear()
+
+
+def test_context_builder_prefers_confirmed_writing_card_and_includes_work_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    content_root = tmp_path / "content"
+    runtime_root = tmp_path / "runtime"
+    seed_project(content_root)
+    monkeypatch.setenv("CONTENT_ROOT", str(content_root))
+    monkeypatch.setenv("RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(runtime_root))
+    monkeypatch.setenv("MAX_INPUT_CHARS_PER_CALL", "20000")
+    get_settings.cache_clear()
+    session = make_session()
+    LibraryScanner(session, content_root).scan()
+    MemoryService(session, content_root).rebuild()
+    session.add_all(
+        [
+            MemoryItem(
+                kind="chapter_card",
+                scope="1",
+                content_json=json.dumps(
+                    {
+                        "source": "confirmed_writing_card",
+                        "chapter_no": 1,
+                        "card_markdown": "confirmed card enters writer context",
+                        "artifact_id": 77,
+                        "artifact_sha256": "a" * 64,
+                        "generation_mode": "stable",
+                    },
+                    ensure_ascii=False,
+                ),
+                source_hash="a" * 64,
+                stale=False,
+            ),
+            MemoryItem(
+                kind="work_profile",
+                scope="global",
+                content_json=json.dumps(
+                    {
+                        "source": "confirmed_work_profile",
+                        "profile_markdown": "confirmed work profile context",
+                        "artifact_id": 88,
+                        "artifact_sha256": "b" * 64,
+                    },
+                    ensure_ascii=False,
+                ),
+                source_hash="b" * 64,
+                stale=False,
+            ),
+        ]
+    )
+    session.commit()
+
+    result = ContextBuilder(session).build(
+        chapter_id=1,
+        annotation_ids=[],
+        task_type="generate_chapter_draft",
+        generation_mode="stable",
+    )
+
+    assert "confirmed card enters writer context" in result.context
+    assert "confirmed work profile context" in result.context
+    assert result.report["generation_mode"] == "stable"
+    assert result.report["writing_card"]["artifact_id"] == 77
+    assert any(source["kind"] == "work_profile" for source in result.report["memory_sources"])
     get_settings.cache_clear()
     reset_engine()
 

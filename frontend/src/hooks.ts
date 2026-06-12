@@ -211,7 +211,7 @@ export function useSkills() {
   });
 }
 
-export function useArtifacts(filters: { baseChapterId?: number | null; baseSourceFileId?: number | null; kind?: string | null }) {
+export function useArtifacts(filters: { baseChapterId?: number | null; baseSourceFileId?: number | null; kind?: string | null; limit?: number | null }) {
   const params = new URLSearchParams();
   if (filters.baseChapterId) {
     params.set('base_chapter_id', String(filters.baseChapterId));
@@ -222,9 +222,12 @@ export function useArtifacts(filters: { baseChapterId?: number | null; baseSourc
   if (filters.kind) {
     params.set('kind', filters.kind);
   }
+  if (filters.limit) {
+    params.set('limit', String(filters.limit));
+  }
   const query = params.toString();
   return useQuery({
-    queryKey: ['artifacts', filters.baseChapterId ?? null, filters.baseSourceFileId ?? null, filters.kind ?? null],
+    queryKey: ['artifacts', filters.baseChapterId ?? null, filters.baseSourceFileId ?? null, filters.kind ?? null, filters.limit ?? null],
     queryFn: () => apiRequest<Artifact[]>(`/api/artifacts${query ? `?${query}` : ''}`),
   });
 }

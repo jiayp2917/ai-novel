@@ -24,6 +24,7 @@ MANAGED_KINDS = {
     "rolling_summary",
     "structured_state",
 }
+PRESERVED_MEMORY_SOURCES = {"confirmed_writing_card", "confirmed_work_profile"}
 CHARACTER_HINTS = ("许满", "林浅", "王大雷", "李燃")
 CLUE_HINTS = ("伏笔", "线索", "谜", "异常", "未解", "埋下", "提示")
 
@@ -35,7 +36,10 @@ class MemoryService:
         self.memory_items = Repository(session, MemoryItem)
 
     def rebuild(self) -> dict[str, int]:
-        self.session.execute(delete(MemoryItem).where(MemoryItem.kind.in_(MANAGED_KINDS)))
+        for item in self.session.scalars(select(MemoryItem).where(MemoryItem.kind.in_(MANAGED_KINDS))):
+            if _memory_payload(item).get("source") in PRESERVED_MEMORY_SOURCES:
+                continue
+            self.session.delete(item)
         counts = {
             "core_facts": 0,
             "character_cards": 0,
@@ -56,6 +60,43 @@ class MemoryService:
         counts["structured_state"] = self._rebuild_structured_state()
         self.session.commit()
         return counts
+
+    def confirm_summary_proposal(self, artifact_id: int) -> dict[str, Any]:
+        from backend.app.db.models import Artifact
+        from backend.app.services.workspace import workspace_runtime_root
+        from backend.app.utils.hashing import sha256_file
+
+        artifact = self.session.get(Artifact, artifact_id)
+        if artifact is None:
+            raise ValueError("Artifact not found")
+        metadata = _artifact_metadata(artifact)
+        if metadata.get("purpose") != "chapter_memory_proposal":
+            raise ValueError("Artifact is not a chapter memory proposal")
+        chapter_no = int(metadata.get("chapter_no") or 0)
+        if chapter_no <= 0:
+            raise ValueError("Summary proposal is missing chapter_no")
+        root = workspace_runtime_root().resolve()
+        path = (root / artifact.path).resolve()
+        if path != root and root not in path.parents:
+            raise ValueError("Artifact path escapes runtime root")
+        if sha256_file(path) != artifact.sha256:
+            raise ValueError("Artifact file hash mismatch")
+        payload = json.loads(safe_read_text(path, encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("Summary proposal must be a JSON object")
+        payload.update(
+            {
+                "source": "confirmed_summary_proposal",
+                "artifact_id": artifact.id,
+                "artifact_sha256": artifact.sha256,
+            }
+        )
+        self._stale_existing("chapter_summary", str(chapter_no), source="confirmed_summary_proposal")
+        self._create_memory("chapter_summary", str(chapter_no), payload, artifact.sha256)
+        metadata["canonical"] = True
+        artifact.metadata_json = json.dumps(metadata, ensure_ascii=False)
+        self.session.commit()
+        return {"artifact_id": artifact.id, "chapter_no": chapter_no, "memory_kind": "chapter_summary", "confirmed": True}
 
     def list_memory(self) -> list[MemoryItem]:
         return list(self.session.scalars(select(MemoryItem).order_by(MemoryItem.kind, MemoryItem.scope)))
@@ -259,6 +300,13 @@ class MemoryService:
             }
         )
 
+    def _stale_existing(self, kind: str, scope: str, *, source: str) -> None:
+        for item in self.session.scalars(
+            select(MemoryItem).where(MemoryItem.kind == kind, MemoryItem.scope == scope, MemoryItem.stale.is_(False))
+        ):
+            if _memory_payload(item).get("source") == source:
+                item.stale = True
+
     def _read_source(self, source: SourceFile) -> str:
         return safe_read_text(self.workspace.resolve_source_path(source.path), encoding="utf-8-sig")
 
@@ -299,3 +347,19 @@ class MemoryService:
         lines = self._meaningful_lines(text, limit=6)
         joined = " ".join(lines)
         return joined[:300]
+
+
+def _memory_payload(item: MemoryItem) -> dict[str, Any]:
+    try:
+        payload = json.loads(item.content_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _artifact_metadata(artifact) -> dict[str, Any]:
+    try:
+        payload = json.loads(artifact.metadata_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}

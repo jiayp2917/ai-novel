@@ -12,6 +12,7 @@ from backend.app.db.session import get_engine, reset_engine
 from backend.app.main import app
 from backend.app.repositories import Repository
 from backend.app.services.artifacts import ArtifactStore
+from backend.app.services.pipeline.findings import MISSING_EVIDENCE_PREFIX
 from backend.app.services.pipeline.fixer import FixerService
 from backend.app.services.pipeline.executor import PipelineTaskExecutor
 from backend.app.services.pipeline.runs import DIRECT_PUBLISH_ERROR, PipelineRunError, PipelineRunService
@@ -336,6 +337,10 @@ def test_pipeline_run_delete_requires_terminal_state_and_removes_task_records(tm
     assert deleted.json()["run_id"] == run["id"]
     assert deleted.json()["deleted_child_tasks"] == 2
     assert deleted.json()["report_path"] == f"reports/pipeline_run_{run['id']}.json"
+    report_path = tmp_path / "runtime" / deleted.json()["report_path"]
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["run_id"] == run["id"]
+    assert "runtime" in report["note"]
 
     missing = client.get(f"/api/pipeline/runs/{run['id']}")
     assert missing.status_code == 404
@@ -726,8 +731,10 @@ def test_fixer_requires_writer_issue_evidence_and_instruction(tmp_path, monkeypa
         assert result["status"] == "manual_required"
         assert result["artifact_id"] == artifact.id
         assert result["review_id"] == review.id
-        assert result["issues"][0]["owner"] == "writer"
-        assert result["issues"][0]["evidence"] == ""
+        assert result["issues"][0]["owner"] == "admin"
+        assert result["issues"][0]["severity"] == "blocking"
+        assert result["issues"][0]["evidence"] == MISSING_EVIDENCE_PREFIX
+        assert result["issues"][0]["authorized_for_fixer"] is False
         assert session.scalar(select(Artifact).where(Artifact.id != artifact.id)) is None
     get_settings.cache_clear()
     reset_engine()

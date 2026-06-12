@@ -18,6 +18,7 @@ SECTION_PRIORITY = {
     "task_instruction": 0,
     "skills": 1,
     "annotations": 2,
+    "work_profile": 2,
     "chapter_card": 3,
     "chapter_text": 4,
     "rolling_summary": 5,
@@ -43,7 +44,14 @@ class ContextBuilder:
         self.settings = get_settings()
         self.workspace = WorkspaceResolver()
 
-    def build(self, *, chapter_id: int, annotation_ids: list[int], task_type: str) -> ContextBuildResult:
+    def build(
+        self,
+        *,
+        chapter_id: int,
+        annotation_ids: list[int],
+        task_type: str,
+        generation_mode: str | None = None,
+    ) -> ContextBuildResult:
         chapter = self.session.get(Chapter, chapter_id)
         if chapter is None or not chapter.active:
             raise NotFoundError("Chapter not found")
@@ -55,9 +63,12 @@ class ContextBuilder:
         sections = self._sections(chapter, annotations, task_type, skills)
         selected, dropped = self._select_sections(sections)
         context = "\n\n".join(section["text"] for section in selected)
+        memory_sources = _section_sources(selected)
+        writing_card = _first_source(memory_sources, kind="chapter_card")
         report = {
             "chapter_id": chapter_id,
             "task_type": task_type,
+            "generation_mode": generation_mode,
             "budget": self.settings.max_input_chars_per_call,
             "input_chars": len(context),
             "context_degraded": bool(dropped),
@@ -70,6 +81,13 @@ class ContextBuilder:
             "annotation_ids": [annotation.id for annotation in annotations],
             "task_profile": self._task_profile(task_type),
             "skills": [skill_summary(skill) for skill in skills],
+            "memory_sources": memory_sources,
+            "context_sources": [
+                {"name": section["name"], "sources": section.get("sources", [])}
+                for section in selected
+                if section.get("sources")
+            ],
+            "writing_card": writing_card,
         }
         artifact_id = None
         if dropped:
@@ -104,7 +122,8 @@ class ContextBuilder:
         profile = self._task_profile(task_type)
         sections = [
             self._section("annotations", self._annotation_text(annotations)),
-            self._section("chapter_card", self._memory_text("chapter_card", str(chapter.chapter_no), limit=1)),
+            self._memory_section("work_profile", "work_profile", "global", limit=1),
+            self._memory_section("chapter_card", "chapter_card", str(chapter.chapter_no), limit=1),
             self._section("task_instruction", f"Task type: {task_type}. Keep the chapter heading unchanged."),
         ]
         if skills:
@@ -112,17 +131,17 @@ class ContextBuilder:
         if profile["include_chapter_text"]:
             sections.append(self._section("chapter_text", self._chapter_text(chapter)))
         if profile["include_rolling_summary"]:
-            sections.append(self._section("rolling_summary", self._memory_text("rolling_summary", "global", limit=1)))
+            sections.append(self._memory_section("rolling_summary", "rolling_summary", "global", limit=1))
         if profile["include_character_cards"]:
-            sections.append(self._section("character_cards", self._memory_text("character_card", "global", limit=20)))
+            sections.append(self._memory_section("character_cards", "character_card", "global", limit=20))
         if profile["include_clues"]:
-            sections.append(self._section("clue_register", self._memory_text("clue_register", "global", limit=20)))
+            sections.append(self._memory_section("clue_register", "clue_register", "global", limit=20))
         if profile["include_timeline"]:
-            sections.append(self._section("timeline", self._memory_text("timeline_event", "global", limit=20)))
+            sections.append(self._memory_section("timeline", "timeline_event", "global", limit=20))
         if profile["include_core_facts"]:
-            sections.append(self._section("core_facts", self._memory_text("core_fact", "global", limit=50)))
+            sections.append(self._memory_section("core_facts", "core_fact", "global", limit=50))
         if profile["include_structured_state"]:
-            sections.append(self._section("structured_state", self._memory_text("structured_state", "global", limit=1)))
+            sections.append(self._memory_section("structured_state", "structured_state", "global", limit=1))
         if profile["include_annotation_insights"]:
             sections.append(self._section("annotation_insights", self._insights_text()))
         return sections
@@ -167,11 +186,12 @@ class ContextBuilder:
             "include_annotation_insights": True,
         }
 
-    def _section(self, name: str, body: str) -> dict[str, str | int]:
+    def _section(self, name: str, body: str, *, sources: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         return {
             "name": name,
             "priority": SECTION_PRIORITY.get(name, 9),
             "text": f"## {name}\n{body.strip()}",
+            "sources": sources or [],
         }
 
     def _select_sections(self, sections: list[dict[str, str | int]]) -> tuple[list[dict[str, str | int]], list[dict[str, str | int]]]:
@@ -213,16 +233,40 @@ class ContextBuilder:
         text = safe_read_text(self.workspace.resolve_source_path(chapter.source_file.path), encoding="utf-8-sig")
         return text[chapter.range_start : chapter.range_end]
 
-    def _memory_text(self, kind: str, scope: str, *, limit: int) -> str:
+    def _memory_section(self, name: str, kind: str, scope: str, *, limit: int) -> dict[str, Any]:
+        items = self._memory_items(kind, scope, limit=limit)
+        return self._section(
+            name,
+            "\n".join(item.content_json for item in items),
+            sources=[self._memory_source(item) for item in items],
+        )
+
+    def _memory_items(self, kind: str, scope: str, *, limit: int) -> list[MemoryItem]:
         items = list(
             self.session.scalars(
                 select(MemoryItem)
                 .where(MemoryItem.kind == kind, MemoryItem.scope == scope, MemoryItem.stale.is_(False))
                 .order_by(MemoryItem.id)
-                .limit(limit)
             )
         )
-        return "\n".join(item.content_json for item in items)
+        if kind == "chapter_card":
+            items.sort(key=lambda item: (0 if _memory_payload(item).get("source") == "confirmed_writing_card" else 1, -item.id))
+        else:
+            items = items[-limit:] if len(items) > limit else items
+        return items[:limit]
+
+    def _memory_source(self, item: MemoryItem) -> dict[str, Any]:
+        payload = _memory_payload(item)
+        return {
+            "id": item.id,
+            "kind": item.kind,
+            "scope": item.scope,
+            "source_hash": item.source_hash,
+            "source": payload.get("source"),
+            "artifact_id": payload.get("artifact_id"),
+            "artifact_sha256": payload.get("artifact_sha256"),
+            "generation_mode": payload.get("generation_mode"),
+        }
 
     def _insights_text(self) -> str:
         insights = list(
@@ -239,3 +283,27 @@ class ContextBuilder:
             for insight in insights
         ]
         return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _memory_payload(item: MemoryItem) -> dict[str, Any]:
+    try:
+        payload = json.loads(item.content_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _section_sources(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
+    for section in sections:
+        section_sources = section.get("sources")
+        if isinstance(section_sources, list):
+            sources.extend(source for source in section_sources if isinstance(source, dict))
+    return sources
+
+
+def _first_source(sources: list[dict[str, Any]], *, kind: str) -> dict[str, Any] | None:
+    for source in sources:
+        if source.get("kind") == kind:
+            return source
+    return None

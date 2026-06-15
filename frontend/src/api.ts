@@ -49,7 +49,7 @@ function adminHeaders(path: string): Record<string, string> {
 function localizeApiError(detail: string): string {
   const exact: Record<string, string> = {
     'Workspace path does not exist or is not a directory': '工作区路径不存在，或不是文件夹。',
-    'Workspace does not contain supported source directories': '工作区内没有识别到旧目录或 content 目录。',
+    'Workspace does not contain supported source directories': '工作区内没有识别到 content/settings、content/outlines、content/chapters 目录。',
     'Source file not found': '源文件不存在。',
     'Source file already exists': '同名文件已经存在，请换一个文件名。',
     'Folder path already exists as a file': '这个路径已经是文件，不能创建为文件夹。',

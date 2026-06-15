@@ -5,7 +5,7 @@ describe('createNavigationSlice', () => {
   beforeEach(() => {
     useWorkbenchStore.setState({
       activeView: 'home',
-      theme: 'bright',
+      theme: 'breeze',
     });
   });
 
@@ -24,16 +24,18 @@ describe('createNavigationSlice', () => {
   });
 
   it('setTheme changes theme', () => {
-    useWorkbenchStore.getState().setTheme('anime');
-    expect(useWorkbenchStore.getState().theme).toBe('anime');
+    useWorkbenchStore.getState().setTheme('stargold');
+    expect(useWorkbenchStore.getState().theme).toBe('stargold');
   });
 
-  it('toggleTheme toggles between bright and anime', () => {
-    expect(useWorkbenchStore.getState().theme).toBe('bright');
+  it('toggleTheme cycles through the three writing themes', () => {
+    expect(useWorkbenchStore.getState().theme).toBe('breeze');
     useWorkbenchStore.getState().toggleTheme();
-    expect(useWorkbenchStore.getState().theme).toBe('anime');
+    expect(useWorkbenchStore.getState().theme).toBe('stargold');
     useWorkbenchStore.getState().toggleTheme();
-    expect(useWorkbenchStore.getState().theme).toBe('bright');
+    expect(useWorkbenchStore.getState().theme).toBe('silk');
+    useWorkbenchStore.getState().toggleTheme();
+    expect(useWorkbenchStore.getState().theme).toBe('breeze');
   });
 });
 

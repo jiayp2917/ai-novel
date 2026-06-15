@@ -12,10 +12,20 @@ key.txt
 # Local app/runtime state
 runtime/
 content/runtime/
+runtime/**/*.log
+runtime/**/dev-*
+runtime/**/p2_*
+runtime/**/manual_*
+runtime/**/sandbox_*
+runtime/**/e2e_*
+runtime/**/image2-*
+runtime/**/reports/
 
 # In-repo legacy novel workspaces are local content, not system code.
 /00-系统/
+/00-设定/
 /01-设定/
+/01-大纲/
 /02-正文/
 /03-章纲/
 

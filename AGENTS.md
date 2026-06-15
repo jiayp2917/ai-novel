@@ -19,6 +19,12 @@ Before substantial work, read the relevant parts of:
 
 Specific book context belongs in the active novel workspace or external planning files. Do not promote a specific book's setting, characters, chapter status, or style into repository-wide rules unless the user explicitly asks for a generic template.
 
+## First Rule: Ask When Unclear
+
+When a request, boundary, design direction, data source, writeback target, commit/push intent, or expected outcome is unclear, stop and ask the user before acting. Do not silently choose between multiple plausible interpretations.
+
+This rule takes priority over implementation speed. It especially applies to UI direction, real novel workspace writes, destructive cleanup, broad refactors, Git operations, API key handling, model-provider changes, and anything that could make the user wonder what changed.
+
 ## Non-Negotiable Safety Rules
 
 - Do not read, print, copy, commit, or include contents from `key.txt`, `.env`, or API keys in reports.
@@ -48,9 +54,8 @@ Repository `skills/` must stay generic. Book-specific style rules, review checkl
 
 Novel workspace-owned areas:
 
-- legacy structure: `00-系统/`, `01-设定/`, `02-正文/`, `03-章纲/`
-- current project structure: `00-设定/`, `01-大纲/`, `02-正文/`, `03-章纲/`
-- new content structure: `content/settings/`, `content/outlines/`, `content/chapters/`
+- active content structure: `content/settings/`, `content/outlines/`, `content/chapters/`
+- legacy structures such as `00-系统/`, `00-设定/`, `01-设定/`, `01-大纲/`, `02-正文/`, `03-章纲/` are migration inputs only. The app should not auto-scan them at runtime.
 - workspace `skills/` for book-specific style/review/memory rules
 - workspace `runtime/`
 
@@ -130,7 +135,7 @@ If a task intentionally writes to a real novel workspace, report:
 - what was generated or modified
 - artifact/review/diff/publish decision IDs when available
 - backup path
-- whether `02-正文`, `runtime`, `key.txt`, or `.env` were touched
+- whether `content/chapters`, `runtime`, `key.txt`, or `.env` were touched
 - whether the next stage is safe to proceed
 
 ## Frontend Product Expectations
@@ -162,7 +167,7 @@ Current priority order:
 5. Strengthen the human-led editor without making daily writing depend on model availability.
 6. Keep documentation and tests synchronized with actual behavior.
 
-Do not do broad legacy cleanup, model-router redesign, new major features, or novel outline expansion unless the user asks.
+Do not do broad model-router redesign, new major features, or novel outline expansion unless the user asks.
 
 ## Reporting Rules
 

@@ -175,12 +175,7 @@ class SourceFileManager:
             return self._first_matching(specs, lambda spec: spec.kind == "chapters")
         if root_key == "outlines":
             return self._first_matching(specs, lambda spec: spec.kind == "outlines")
-        if root_key == "system":
-            return self._first_matching(specs, lambda spec: spec.kind == "settings" and spec.directory.name.startswith("00-")) or self._first_matching(
-                specs,
-                lambda spec: spec.kind == "settings",
-            )
-        if root_key == "settings":
+        if root_key in {"system", "settings"}:
             return self._first_matching(specs, lambda spec: spec.kind == "settings" and not spec.directory.name.startswith("00-")) or self._first_matching(
                 specs,
                 lambda spec: spec.kind == "settings",

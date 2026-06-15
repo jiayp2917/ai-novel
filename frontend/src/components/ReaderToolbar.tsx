@@ -67,11 +67,18 @@ export function ReaderToolbar({
   onToggleRightPanel,
   onBackToCurrentVersion,
 }: ReaderToolbarProps) {
+  const titleParts = title.split('：');
+  const titleLead = titleParts.length > 1 ? `${titleParts.shift()}：` : '';
+  const titleName = titleParts.length > 0 ? titleParts.join('：') : title;
+
   return (
     <div className="reader-header reader-header--workspace">
       <div className="reader-header__main">
         <p className="eyebrow">{kindLabel}</p>
-        <h1>{title}</h1>
+        <h1>
+          {titleLead && <span>{titleLead}</span>}
+          {titleName}
+        </h1>
         <div className="reader-status-row">
           <span>{activeContentExists ? `${activeTextLength} 字符` : '等待选择'}</span>
           <span>批注 {annotationCount}</span>
@@ -83,71 +90,75 @@ export function ReaderToolbar({
         {viewingVersion && !editing && <p className="form-hint">正在查看历史正文版本。确认无误后请在右侧“版本”里先查看改动，再确认发布。</p>}
       </div>
       <div className="reader-meta">
-        <div className="reader-tabs">
-          <button className={!editing ? 'reader-tab reader-tab--active' : 'reader-tab'} type="button" onClick={() => onSetEditing(false)}>
-            阅读
-          </button>
-          <button className={editing ? 'reader-tab reader-tab--active' : 'reader-tab'} type="button" onClick={onStartEditing} disabled={!activeContentExists}>
-            {editing ? '正在编辑正文' : '编辑正文'}
-          </button>
-          {viewingVersion && (
-            <button className="reader-tab" type="button" onClick={onBackToCurrentVersion}>
-              回到当前
+        <div className="reader-mode-strip">
+          <div className="reader-tabs" aria-label="正文模式">
+            <button className={!editing ? 'reader-tab reader-tab--active' : 'reader-tab'} type="button" onClick={() => onSetEditing(false)}>
+              阅读
             </button>
-          )}
-          {draftActive && (
-            <button className="reader-tab" type="button" onClick={onDiscardDraft}>
-              放弃修改
+            <button className={editing ? 'reader-tab reader-tab--active' : 'reader-tab'} type="button" onClick={onStartEditing} disabled={!activeContentExists}>
+              {editing ? '正在编辑正文' : '编辑正文'}
             </button>
+            {viewingVersion && (
+              <button className="reader-tab" type="button" onClick={onBackToCurrentVersion}>
+                回到当前
+              </button>
+            )}
+            {draftActive && (
+              <button className="reader-tab" type="button" onClick={onDiscardDraft}>
+                放弃修改
+              </button>
+            )}
+          </div>
+          {variant === 'writing' && (
+            <div className="layout-controls" aria-label="布局控制">
+              <button type="button" className="icon-button" onClick={onToggleCatalog}>
+                {catalogPanelOpen ? '隐藏目录' : '打开目录'}
+              </button>
+              <button type="button" className="icon-button" onClick={onToggleRightPanel}>
+                {rightPanelOpen ? '收起侧栏' : '打开侧栏'}
+              </button>
+              <button type="button" className="icon-button" onClick={onToggleFullscreen}>
+                {writingFullscreen ? '退出全屏' : '全屏写作'}
+              </button>
+            </div>
           )}
         </div>
         {variant === 'writing' && (
-          <div className="chapter-jump">
-            <button type="button" className="icon-button" onClick={() => previousChapter && onSelectChapter(previousChapter.id)} disabled={!previousChapter}>
-              上一章
-            </button>
-            <input
-              aria-label="跳转章节"
-              value={jumpValue}
-              onChange={(event) => onJumpValueChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  onJumpToChapter();
-                }
-              }}
-              placeholder="章号/标题"
-            />
-            <button type="button" className="icon-button" onClick={onJumpToChapter}>
-              跳转
-            </button>
-            <button type="button" className="icon-button" onClick={() => nextChapter && onSelectChapter(nextChapter.id)} disabled={!nextChapter}>
-              下一章
-            </button>
-          </div>
-        )}
-        {variant === 'writing' && recentChapters.length > 0 && (
-          <details className="recent-chapters">
-            <summary>最近章节</summary>
-            <div>
-              {recentChapters.map((chapter) => (
-                <button type="button" className="reader-tab" key={chapter.id} onClick={() => onSelectChapter(chapter.id)}>
-                  {String(chapter.chapter_no).padStart(3, '0')}
-                </button>
-              ))}
+          <div className="reader-navigation-strip">
+            <div className="chapter-jump">
+              <button type="button" className="icon-button" onClick={() => previousChapter && onSelectChapter(previousChapter.id)} disabled={!previousChapter}>
+                上一章
+              </button>
+              <input
+                aria-label="跳转章节"
+                value={jumpValue}
+                onChange={(event) => onJumpValueChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    onJumpToChapter();
+                  }
+                }}
+                placeholder="章号/标题"
+              />
+              <button type="button" className="icon-button" onClick={onJumpToChapter}>
+                跳转
+              </button>
+              <button type="button" className="icon-button" onClick={() => nextChapter && onSelectChapter(nextChapter.id)} disabled={!nextChapter}>
+                下一章
+              </button>
             </div>
-          </details>
-        )}
-        {variant === 'writing' && (
-          <div className="layout-controls" aria-label="布局控制">
-            <button type="button" className="icon-button" onClick={onToggleCatalog}>
-              {catalogPanelOpen ? '隐藏目录' : '打开目录'}
-            </button>
-            <button type="button" className="icon-button" onClick={onToggleRightPanel}>
-              {rightPanelOpen ? '收起侧栏' : '打开侧栏'}
-            </button>
-            <button type="button" className="icon-button" onClick={onToggleFullscreen}>
-              {writingFullscreen ? '退出全屏' : '全屏写作'}
-            </button>
+            {recentChapters.length > 0 && (
+              <details className="recent-chapters">
+                <summary>最近章节</summary>
+                <div>
+                  {recentChapters.map((chapter) => (
+                    <button type="button" className="reader-tab" key={chapter.id} onClick={() => onSelectChapter(chapter.id)}>
+                      {String(chapter.chapter_no).padStart(3, '0')}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
         <div className="reader-save-control">

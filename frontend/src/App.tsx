@@ -1,19 +1,21 @@
 import { useEffect } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { Bot, Cpu, Home, LibraryBig, PenLine, Settings, Workflow } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TaskPanel } from './components/TaskPanel';
 import { useHealth } from './hooks';
 import { DashboardPage } from './pages/DashboardPage';
 import { AiWorkbenchPage, ModelsPage, PipelinePage, PlanningPage, SettingsPage, WritingPage } from './pages/CorePages';
 import { useWorkbenchStore } from './store';
-import { nextTheme, themeLabels } from './theme';
+import { nextTheme, themeLabels, themeShortLabels } from './theme';
 import type { ActiveView } from './types';
 
-const navItems: Array<{ id: ActiveView; icon: string; label: string }> = [
-  { id: 'home', icon: '⌂', label: '首页' },
-  { id: 'writing', icon: '✎', label: '写作' },
-  { id: 'planning', icon: '☷', label: 'AI 素材库' },
-  { id: 'ai', icon: '◇', label: 'AI 工作台' },
-  { id: 'pipeline', icon: '⇄', label: '自动流水线' },
+const navItems: Array<{ id: ActiveView; icon: LucideIcon; label: string }> = [
+  { id: 'home', icon: Home, label: '首页' },
+  { id: 'writing', icon: PenLine, label: '写作' },
+  { id: 'planning', icon: LibraryBig, label: 'AI 素材库' },
+  { id: 'ai', icon: Bot, label: 'AI 工作台' },
+  { id: 'pipeline', icon: Workflow, label: '自动流水线' },
 ];
 
 const shortNavLabels: Record<ActiveView, string> = {
@@ -44,7 +46,7 @@ export function App() {
   const health = useHealth();
   const workspaceRoot = health.data?.workspace?.root ?? health.data?.content_root ?? '未连接工作区';
   const workspaceLabel = shortWorkspaceLabel(workspaceRoot);
-  const themeShortLabel = theme === 'bright' ? '主题1' : '主题2';
+  const nextThemeMode = nextTheme(theme);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -52,52 +54,43 @@ export function App() {
 
   return (
     <div className="app prototype-shell">
+      <a className="skip-link" href="#main-content">跳到主要内容</a>
       <aside className="sidebar">
         <div className="brand">
           <h1>小说编辑器</h1>
-          <p>长篇创作安全工作台</p>
+          <p>长篇写作台</p>
         </div>
         <nav className="nav" aria-label="主导航">
           {navItems.map((item) => (
-            <button
-              className={item.id === activeView ? 'active' : ''}
+            <NavIconButton
+              active={item.id === activeView}
+              icon={item.icon}
               key={item.id}
-              type="button"
-              title={item.label}
-              aria-label={`打开${item.label}`}
+              label={item.label}
+              shortLabel={shortNavLabels[item.id]}
               onClick={() => setActiveView(item.id)}
-            >
-              <span className="ico" aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
-              <small className="nav-short-label" aria-hidden="true">{shortNavLabels[item.id]}</small>
-            </button>
+            />
           ))}
         </nav>
-        <button
-          className={activeView === 'models' ? 'sidebar-settings active' : 'sidebar-settings'}
-          type="button"
-          title="模型配置"
-          aria-label="打开模型配置"
+        <NavIconButton
+          active={activeView === 'models'}
+          className="sidebar-settings"
+          icon={Cpu}
+          label="模型配置"
+          shortLabel="模型"
           onClick={() => setActiveView('models')}
-        >
-          <span className="ico" aria-hidden="true">◈</span>
-          <span>模型</span>
-          <small className="nav-short-label" aria-hidden="true">模型</small>
-        </button>
-        <button
-          className={activeView === 'settings' ? 'sidebar-settings active' : 'sidebar-settings'}
-          type="button"
-          title="设置"
-          aria-label="打开设置"
+        />
+        <NavIconButton
+          active={activeView === 'settings'}
+          className="sidebar-settings"
+          icon={Settings}
+          label="设置"
+          shortLabel="设置"
           onClick={() => setActiveView('settings')}
-        >
-          <span className="ico" aria-hidden="true">⚙</span>
-          <span>设置</span>
-          <small className="nav-short-label" aria-hidden="true">设置</small>
-        </button>
+        />
       </aside>
 
-      <main className="main">
+      <main className="main" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div className="crumb">
             <strong>{viewTitles[activeView]}</strong>
@@ -116,11 +109,11 @@ export function App() {
               className="btn theme-switch theme-switch--compact"
               type="button"
               onClick={toggleTheme}
-              title={`当前：${themeLabels[theme]}，点击切换为${themeLabels[nextTheme(theme)]}`}
-              aria-label={`界面风格：${themeLabels[theme]}，点击切换为${themeLabels[nextTheme(theme)]}`}
+              title={`当前：${themeLabels[theme]}，点击切换为${themeLabels[nextThemeMode]}`}
+              aria-label={`界面风格：${themeLabels[theme]}，点击切换为${themeLabels[nextThemeMode]}`}
             >
-              {themeShortLabel}
-              <span>切换为{themeLabels[nextTheme(theme)]}</span>
+              {themeShortLabels[theme]}
+              <span>切换为{themeLabels[nextThemeMode]}</span>
             </button>
           </div>
         </header>
@@ -137,6 +130,35 @@ export function App() {
         </ErrorBoundary>
       </main>
     </div>
+  );
+}
+
+type NavIconButtonProps = {
+  active: boolean;
+  className?: string;
+  icon: LucideIcon;
+  label: string;
+  shortLabel: string;
+  onClick: () => void;
+};
+
+function NavIconButton({ active, className, icon: Icon, label, shortLabel, onClick }: NavIconButtonProps) {
+  const classes = [className ?? '', active ? 'active' : ''].filter(Boolean).join(' ');
+
+  return (
+    <button
+      className={classes}
+      type="button"
+      title={label}
+      aria-label={`打开${label}`}
+      onClick={onClick}
+    >
+      <span className="ico" aria-hidden="true">
+        <Icon size={18} strokeWidth={1.8} />
+      </span>
+      <span>{label}</span>
+      <small className="nav-short-label" aria-hidden="true">{shortLabel}</small>
+    </button>
   );
 }
 

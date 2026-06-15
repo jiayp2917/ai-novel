@@ -12,10 +12,11 @@ import {
   emptyChapterFoldersByVolume,
   groupSourceFiles,
   unparsedChapterFilesByVolume,
+  volumeName,
 } from '../utils';
 
-type CatalogSectionKey = 'system' | 'settings' | 'outlines' | 'chapters';
-type CreateMode = 'system' | 'settings' | 'outlines' | 'chapter-folder' | 'chapter-file' | 'chapter-markdown';
+type CatalogSectionKey = 'settings' | 'outlines' | 'chapters';
+type CreateMode = 'settings' | 'outlines' | 'chapter-folder' | 'chapter-file' | 'chapter-markdown';
 type CatalogVariant = 'writing' | 'library' | 'ai';
 
 export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant }) {
@@ -26,7 +27,7 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
   const showSourceCatalog = variant === 'library';
   const showCreateButton = variant !== 'ai';
   const createModes = useMemo<CreateMode[]>(
-    () => (variant === 'library' ? ['system', 'settings', 'outlines'] : ['chapter-folder', 'chapter-file', 'chapter-markdown']),
+    () => (variant === 'library' ? ['settings', 'outlines'] : ['chapter-folder', 'chapter-file', 'chapter-markdown']),
     [variant],
   );
   const visibleSourceCount = variant === 'library'
@@ -68,11 +69,9 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
       return null;
     }
     const source = (sources.data ?? []).find((file) => file.id === selectedChapter.source_file_id);
-    const match = source?.path.match(/02-正文\/([^/]+)/);
-    return match?.[1] ?? '正文';
+    return source ? volumeName(source.path) : '正文';
   }, [selectedChapter, sources.data]);
   const [openSections, setOpenSections] = useState<Record<CatalogSectionKey, boolean>>({
-    system: variant === 'library',
     settings: variant === 'library',
     outlines: variant === 'library',
     chapters: true,
@@ -111,9 +110,7 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
     if (!selectedSource) {
       return;
     }
-    if (selectedSource.path.startsWith('00-系统/')) {
-      setOpenSections((current) => ({ ...current, system: true }));
-    } else if (selectedSource.kind === 'settings') {
+    if (selectedSource.kind === 'settings') {
       setOpenSections((current) => ({ ...current, settings: true }));
     } else if (selectedSource.kind === 'outlines') {
       setOpenSections((current) => ({ ...current, outlines: true }));
@@ -155,7 +152,7 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
           <h2>{variant === 'library' ? 'AI 素材库' : variant === 'ai' ? '章节选择' : '正文目录'}</h2>
         </div>
         <div className="catalog-header-actions">
-          <span className="count-badge">{variant === 'library' ? grouped.system.length + grouped.settings.length + grouped.outlines.length : visibleSourceCount}</span>
+          <span className="count-badge">{variant === 'library' ? grouped.settings.length + grouped.outlines.length : visibleSourceCount}</span>
           {showCreateButton && (
             <Button variant="secondary" className="catalog-add-button" onClick={() => setShowCreate(true)}>
               新增
@@ -167,17 +164,6 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
       <div className="catalog-scroll">
         {showSourceCatalog && (
           <>
-            <SourceSection
-              count={grouped.system.length}
-              files={grouped.system}
-              label="系统设定"
-              open={openSections.system}
-              emptyText="尚未索引系统设定。"
-              selectedSourceFileId={selectedSourceFileId}
-              onToggle={() => toggleSection('system')}
-              onSelectSource={setSelectedSourceFileId}
-            />
-
             <SourceSection
               count={grouped.settings.length}
               files={grouped.settings}
@@ -317,7 +303,7 @@ export function CatalogPanel({ variant = 'writing' }: { variant?: CatalogVariant
 
 function groupedSourceCountPlaceholder(files: SourceFile[]): number {
   const grouped = groupSourceFiles(files);
-  return grouped.system.length + grouped.settings.length + grouped.outlines.length;
+  return grouped.settings.length + grouped.outlines.length;
 }
 
 function unparsedSourceCount(files: SourceFile[], status: { unparsed_chapter_files?: string[] } | undefined): number {
@@ -456,7 +442,7 @@ function CreateSourceDialog({
   onCreated: (result: CreateSourceFileResult) => void;
   onError: (error: Error) => void;
 }) {
-  const [mode, setMode] = useState<CreateMode>(allowedModes.includes('chapter-file') ? 'chapter-file' : (allowedModes[0] ?? 'system'));
+  const [mode, setMode] = useState<CreateMode>(allowedModes.includes('chapter-file') ? 'chapter-file' : (allowedModes[0] ?? 'settings'));
   const [folder, setFolder] = useState('06卷');
   const [filename, setFilename] = useState('');
   const [chapterNo, setChapterNo] = useState('');
@@ -544,7 +530,6 @@ function CreateSourceDialog({
                 setMode(event.target.value as CreateMode);
               }}
             >
-              {allowedModes.includes('system') && <option value="system">系统设定</option>}
               {allowedModes.includes('settings') && <option value="settings">小说设定</option>}
               {allowedModes.includes('outlines') && <option value="outlines">章纲</option>}
               {allowedModes.includes('chapter-folder') && <option value="chapter-folder">正文卷</option>}
@@ -661,9 +646,6 @@ function CreateSourceDialog({
 }
 
 function modeRoot(mode: CreateMode): CreateSourceFilePayload['root'] {
-  if (mode === 'system') {
-    return 'system';
-  }
   if (mode === 'settings') {
     return 'settings';
   }
@@ -682,9 +664,6 @@ function defaultFilename(mode: CreateMode, chapterNo: number, title: string): st
   }
   if (mode === 'outlines') {
     return title.trim() ? `${title.trim()}.md` : '新章纲.md';
-  }
-  if (mode === 'system') {
-    return title.trim() ? `${title.trim()}.md` : '系统设定.md';
   }
   if (mode === 'settings') {
     return title.trim() ? `${title.trim()}.md` : '小说设定.md';

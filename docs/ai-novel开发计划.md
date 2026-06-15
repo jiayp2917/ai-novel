@@ -6,7 +6,7 @@
 
 当前项目已经具备以下基础能力：
 
-- 工作区扫描，兼容旧目录、当前作品目录和 content 目录。
+- 工作区扫描统一到 `content/settings`、`content/outlines`、`content/chapters`；旧 `00/01/02/03` 目录仅作为迁移工具输入。
 - 设定、大纲、章纲等 source proposal。
 - 正文 artifact、review、diff、backup、publish decision 和发布门。
 - 人工正文版本保存、diff 和发布确认。
@@ -29,6 +29,10 @@
 - 预算暂停使用明确异常类型，不靠字符串匹配。
 - 流水线 artifact 准备从异常控制流改为状态化推进。
 - 文件哈希改为分块读取。
+- 主应用工作区扫描统一为 `content/settings`、`content/outlines`、`content/chapters`，历史 `00/01/02/03` 目录只保留为迁移工具输入。
+- 测试目录已按 `unit`、`integration`、`acceptance`、`tools`、`fixtures` 分层；原 1000 行级 pipeline API 测试已拆为运行管理、发布保护、worker 流程和 sandbox 工具测试。
+- `backend/tools` 已补充工具边界说明，区分本地启动、沙盒验证、迁移、打包、验收和高风险批量发布工具。
+- 运行态、沙盒、E2E、image2 临时输出和旧/新作品目录 ignore 规则已补强，避免本地数据误入仓库。
 - CI 覆盖后端编译、pytest、前端构建和 Playwright E2E。
 - README 和 docs 不写真实作品内容、密钥明文和个人本机路径。
 
@@ -42,6 +46,7 @@
 - 拆分过大的全局样式文件。
 - 增加 Dockerfile 或安装包说明，改善部署体验。
 - 保持前端普通用户可见文案中文优先，并用测试防止新增明显英文按钮、提示、空状态或错误说明。
+- 保持三主题视觉系统可维护：清风微动、星空鎏金、白丝质感必须共享语义 token 和操作结构，禁止退回通用 AI Dashboard 风格或只靠大面积渐变堆叠。
 
 ## 3. 当前验证基线
 
@@ -50,17 +55,18 @@
 最近一次本地验证基线：
 
 - `python -m compileall -q .\backend .\tests`
-- `python -m pytest -q`：207 passed
+- `python -m pytest -q`：206 passed
 - `cd .\frontend && npm test -- --run`：46 passed
 - `cd .\frontend && npm run build`
 - `cd .\frontend && npm run e2e`：27 passed
+- `python <codex-home>\skills\codex-dev-team\scripts\project_audit.py --root <repo-root> --json`：无 forbidden hits；`.env.example` 仅作为配置模板被标记为可疑路径。
 
 新增 E2E 覆盖包含破坏性误操作：草稿切换后旧 diff 不得残留、未检查草稿不能查看改动或写回、无效模型配置被拒绝、被角色使用的模型档案不能删除、预算暂停状态必须从任务队列正确显示。
 
 保留风险：
 
 - 需要补一章复制工作区显式发布门验收，确认 diff、backup、publish decision 和原始作品 hash 不变。
-- 轻量 pipeline report 需要 UTF-8 JSON parse 回归。
+- 审计仍显示 `frontend/src/styles.css`、模型配置/流水线组件和若干集成测试文件偏大，需要继续拆分。
 - 自动流水线的宣传和文档必须继续避免“无人值守全书发布”表述。
 
 ## 4. P0：稳定写作闭环
@@ -144,6 +150,8 @@ npm run e2e
 ```
 
 前端可见文案变化还应运行 Vitest，确保中文优先防回退检查通过。
+
+前端主题变化还应检查三套主题的首页、写作页和 AI 工作台：正文纸面文字必须清晰，顶部工具栏和发布门按钮位置稳定，窄屏无横向滚动，主题切换后不丢失当前工作流状态。
 
 破坏性 E2E 重点：
 

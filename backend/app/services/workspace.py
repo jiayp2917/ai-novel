@@ -9,18 +9,8 @@ from backend.app.core.file_utils import safe_read_text, safe_write_text
 from backend.app.utils.paths import safe_join
 
 
-LEGACY_LAYOUT = "legacy"
 CONTENT_LAYOUT = "content"
 UNSUPPORTED_LAYOUT = "unsupported"
-
-LEGACY_SOURCE_DIRS: tuple[tuple[str, str, str], ...] = (
-    ("00-系统", "settings", "系统设定"),
-    ("00-设定", "settings", "小说设定"),
-    ("01-设定", "settings", "小说设定"),
-    ("01-大纲", "outlines", "全文大纲"),
-    ("03-章纲", "outlines", "章纲"),
-    ("02-正文", "chapters", "正文"),
-)
 
 CONTENT_SOURCE_DIRS: tuple[tuple[str, str, str], ...] = (
     ("settings", "settings", "设定"),
@@ -83,19 +73,6 @@ def workspace_config_path() -> Path:
 
 def detect_workspace(root: Path) -> WorkspaceInfo:
     resolved = root.resolve()
-    legacy_roots = tuple(
-        SourceRootSpec(resolved / name, kind, label)
-        for name, kind, label in LEGACY_SOURCE_DIRS
-        if (resolved / name).exists()
-    )
-    if legacy_roots:
-        return WorkspaceInfo(
-            root=resolved,
-            layout=LEGACY_LAYOUT,
-            source_roots=legacy_roots,
-            detected_counts=_detected_counts(legacy_roots),
-        )
-
     direct_content_roots = tuple(
         SourceRootSpec(resolved / name, kind, label)
         for name, kind, label in CONTENT_SOURCE_DIRS

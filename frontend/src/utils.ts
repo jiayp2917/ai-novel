@@ -63,9 +63,6 @@ export function annotationStatusLabel(status: string): string {
 }
 
 export function layoutLabel(layout: WorkspaceStatus['layout'] | undefined): string {
-  if (layout === 'legacy') {
-    return '旧目录';
-  }
   if (layout === 'content') {
     return 'content 目录';
   }
@@ -84,15 +81,14 @@ export function workspaceLocationLabel(location: WorkspaceStatus['workspace_loca
 
 export function groupSourceFiles(files: SourceFile[]) {
   return {
-    system: files.filter((file) => file.path.startsWith('00-系统/')),
-    settings: files.filter((file) => file.kind === 'settings' && !file.path.startsWith('00-系统/')),
+    settings: files.filter((file) => file.kind === 'settings'),
     outlines: files.filter((file) => file.kind === 'outlines'),
     chapters: files.filter((file) => file.kind === 'chapters'),
   };
 }
 
 export function volumeName(path: string): string {
-  const match = path.match(/02-正文\/([^/]+)/);
+  const match = path.match(/(?:content\/)?chapters\/([^/]+)/);
   return match?.[1] ?? '正文';
 }
 
@@ -120,7 +116,7 @@ export function emptyChapterFoldersByVolume(status: CatalogStatus | undefined) {
   const paths = status?.empty_chapter_folders ?? [];
   return paths
     .map((path) => {
-      const match = path.match(/02-正文\/(.+)/);
+      const match = path.match(/(?:content\/)?chapters\/(.+)/);
       return match?.[1] ?? path;
     })
     .filter(Boolean)

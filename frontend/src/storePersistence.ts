@@ -1,4 +1,5 @@
 import type { ActiveView, InspectorTab, ThemeMode } from './types';
+import { normalizeTheme } from './theme';
 
 export const STORAGE_KEYS = {
   activeView: 'novel-editor-active-view',
@@ -16,13 +17,10 @@ export const STORAGE_KEYS = {
 
 export function initialTheme(): ThemeMode {
   if (typeof window === 'undefined') {
-    return 'bright';
+    return 'breeze';
   }
   const raw = window.localStorage.getItem('novel-editor-theme');
-  if (raw === 'anime' || raw === 'dark') {
-    return 'anime';
-  }
-  return 'bright';
+  return normalizeTheme(raw);
 }
 
 export function storedString(key: string): string | null {

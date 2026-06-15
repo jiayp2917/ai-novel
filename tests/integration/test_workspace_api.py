@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 import importlib
 
 from fastapi.testclient import TestClient
@@ -17,11 +17,23 @@ def write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def test_workspace_api_switches_to_legacy_layout(tmp_path: Path, monkeypatch) -> None:
+def test_workspace_api_rejects_legacy_layout(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
     monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
     monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
+    get_settings.cache_clear()
+    reset_engine()
+    Base.metadata.create_all(get_engine())
+
+    workspace = tmp_path / "workspace"
+    write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 First\nBody")
+    client = TestClient(app)
+    response = client.post("/api/workspace", json={"path": str(workspace)})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Workspace does not contain supported source directories"
+
     get_settings.cache_clear()
     reset_engine()
 
@@ -32,8 +44,8 @@ def test_configured_workspace_overrides_content_root(tmp_path: Path, monkeypatch
     content_root = tmp_path / "content-root"
     switched = tmp_path / "switched"
     monkeypatch.setenv("CONTENT_ROOT", str(content_root))
-    write(content_root / "02-正文" / "01卷" / "第001章.md", "# 第001章 Content\nBody")
-    write(switched / "02-正文" / "01卷" / "第002章.md", "# 第002章 Switched\nBody")
+    write(content_root / "content" / "chapters" / "01卷" / "第001章.md", "# 第001章 Content\nBody")
+    write(switched / "content" / "chapters" / "01卷" / "第002章.md", "# 第002章 Switched\nBody")
     get_settings.cache_clear()
     reset_engine()
     Base.metadata.create_all(get_engine())
@@ -52,65 +64,6 @@ def test_configured_workspace_overrides_content_root(tmp_path: Path, monkeypatch
 
     get_settings.cache_clear()
     reset_engine()
-    Base.metadata.create_all(get_engine())
-
-    workspace = tmp_path / "workspace"
-    write(workspace / "00-系统" / "system.md", "# System")
-    write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 First\nBody")
-
-    client = TestClient(app)
-    response = client.post("/api/workspace", json={"path": str(workspace)})
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["layout"] == "legacy"
-    assert payload["detected_counts"]["00-系统"] == 1
-    assert payload["detected_counts"]["02-正文"] == 1
-
-    scan = client.post("/api/library/scan")
-    assert scan.status_code == 200
-    assert scan.json()["chapters_seen"] == 1
-
-    health = client.get("/health").json()
-    assert health["workspace"]["runtime_root"] == str((workspace / "runtime").resolve())
-    assert health["workspace"]["app_runtime_root"] == str((tmp_path / "runtime").resolve())
-
-    get_settings.cache_clear()
-    reset_engine()
-
-
-def test_workspace_api_accepts_numeric_alias_layout(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
-    monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
-    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
-    get_settings.cache_clear()
-    reset_engine()
-    Base.metadata.create_all(get_engine())
-
-    workspace = tmp_path / "workspace"
-    write(workspace / "00-设定" / "设定文档.md", "# 设定")
-    write(workspace / "01-大纲" / "00-全文总纲v3.md", "# 总纲")
-    write(workspace / "03-章纲" / "01-第一卷.md", "# 第一卷")
-    write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 First\nBody")
-
-    client = TestClient(app)
-    response = client.post("/api/workspace", json={"path": str(workspace)})
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["layout"] == "legacy"
-    assert payload["detected_counts"]["00-设定"] == 1
-    assert payload["detected_counts"]["01-大纲"] == 1
-    assert payload["detected_counts"]["03-章纲"] == 1
-    assert payload["detected_counts"]["02-正文"] == 1
-
-    scan = client.post("/api/library/scan")
-    assert scan.status_code == 200
-    assert scan.json()["source_files_seen"] == 4
-    assert client.get("/api/chapters").json()[0]["chapter_no"] == 1
-
-    get_settings.cache_clear()
-    reset_engine()
 
 
 def test_artifacts_default_to_active_workspace_runtime(tmp_path: Path, monkeypatch) -> None:
@@ -118,7 +71,7 @@ def test_artifacts_default_to_active_workspace_runtime(tmp_path: Path, monkeypat
     monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "artifact-runtime"))
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
     workspace = tmp_path / "workspace"
-    write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 First\nBody")
+    write(workspace / "content" / "chapters" / "01卷" / "第001章.md", "# 第001章 First\nBody")
     get_settings.cache_clear()
     reset_engine()
     Base.metadata.create_all(get_engine())
@@ -150,7 +103,7 @@ def test_workspace_runtime_defaults_to_workspace_when_runtime_env_absent(tmp_pat
     monkeypatch.delenv("RUNTIME_ROOT", raising=False)
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
     workspace = tmp_path / "workspace"
-    write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 First\nBody")
+    write(workspace / "content" / "chapters" / "01卷" / "第001章.md", "# 第001章 First\nBody")
     get_settings.cache_clear()
     reset_engine()
 
@@ -242,7 +195,7 @@ def test_runtime_root_env_does_not_override_workspace_runtime(tmp_path: Path, mo
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
     monkeypatch.delenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", raising=False)
     workspace = tmp_path / "workspace"
-    write(workspace / "02-正文" / "01卷" / "第001章.md", "# 第001章 First\nBody")
+    write(workspace / "content" / "chapters" / "01卷" / "第001章.md", "# 第001章 First\nBody")
     get_settings.cache_clear()
     reset_engine()
     Base.metadata.create_all(get_engine())
@@ -264,8 +217,8 @@ def test_source_file_create_folder_file_and_normalize_chapter(tmp_path: Path, mo
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
     monkeypatch.setenv("WORKSPACE_RUNTIME_ROOT_OVERRIDE", str(tmp_path / "runtime"))
     workspace = tmp_path / "workspace"
-    (workspace / "02-正文").mkdir(parents=True)
-    (workspace / "01-设定").mkdir(parents=True)
+    (workspace / "content" / "chapters").mkdir(parents=True)
+    (workspace / "content" / "settings").mkdir(parents=True)
     get_settings.cache_clear()
     reset_engine()
     Base.metadata.create_all(get_engine())
@@ -275,8 +228,8 @@ def test_source_file_create_folder_file_and_normalize_chapter(tmp_path: Path, mo
 
     folder = client.post("/api/source-folders/create", json={"root": "chapters", "folder": "06卷"})
     assert folder.status_code == 200
-    assert (workspace / "02-正文" / "06卷").is_dir()
-    assert "02-正文/06卷" in folder.json()["scan"]["empty_chapter_folders"]
+    assert (workspace / "content" / "chapters" / "06卷").is_dir()
+    assert "content/chapters/06卷" in folder.json()["scan"]["empty_chapter_folders"]
 
     chapter = client.post(
         "/api/source-files/create",
@@ -307,7 +260,7 @@ def test_source_file_create_folder_file_and_normalize_chapter(tmp_path: Path, mo
     )
     assert loose.status_code == 200
     loose_source_id = loose.json()["source_file_id"]
-    assert "02-正文/06卷/待整理.md" in loose.json()["scan"]["unparsed_chapter_files"]
+    assert "content/chapters/06卷/待整理.md" in loose.json()["scan"]["unparsed_chapter_files"]
 
     normalized = client.post(
         f"/api/source-files/{loose_source_id}/normalize-chapter",
@@ -324,7 +277,7 @@ def test_source_file_create_folder_file_and_normalize_chapter(tmp_path: Path, mo
     assert normalized.json()["chapter_id"] is not None
     assert normalized.json()["backup_path"].startswith("backups/")
     assert [item["chapter_no"] for item in client.get("/api/chapters").json()] == [146, 147]
-    assert "# 第147章 整理成章" in (workspace / "02-正文" / "06卷" / "待整理.md").read_text(encoding="utf-8")
+    assert "# 第147章 整理成章" in (workspace / "content" / "chapters" / "06卷" / "待整理.md").read_text(encoding="utf-8")
     assert (tmp_path / "runtime" / normalized.json()["backup_path"]).exists()
     with get_session_local()() as session:
         event = session.query(Event).filter_by(event_type="source_file_normalized").one()
@@ -339,7 +292,7 @@ def test_source_file_create_rejects_unsafe_paths_and_duplicates(tmp_path: Path, 
     monkeypatch.setenv("RUNTIME_ROOT", str(tmp_path / "runtime"))
     monkeypatch.setenv("CONTENT_ROOT", str(tmp_path / "empty-content"))
     workspace = tmp_path / "workspace"
-    (workspace / "02-正文").mkdir(parents=True)
+    (workspace / "content" / "chapters").mkdir(parents=True)
     get_settings.cache_clear()
     reset_engine()
     Base.metadata.create_all(get_engine())
@@ -380,3 +333,4 @@ def test_source_file_create_rejects_unsafe_paths_and_duplicates(tmp_path: Path, 
 
     get_settings.cache_clear()
     reset_engine()
+

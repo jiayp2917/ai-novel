@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { InspectorTab } from './types';
+import { nextTheme } from './theme';
 import {
   STORAGE_KEYS,
   initialActiveView,
@@ -58,8 +59,7 @@ export const createNavigationSlice: SliceCreator = (set, get) => ({
     set({ theme });
   },
   toggleTheme: () => {
-    const next = get().theme === 'anime' ? 'bright' : 'anime';
-    get().setTheme(next);
+    get().setTheme(nextTheme(get().theme));
   },
 });
 

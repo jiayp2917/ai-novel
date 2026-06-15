@@ -52,7 +52,7 @@ describe('UI regressions from browser E2E', () => {
     useWorkbenchStore.setState({
       activeView: 'home',
       selectedChapterVersionId: null,
-      theme: 'bright',
+      theme: 'breeze',
     });
   });
 

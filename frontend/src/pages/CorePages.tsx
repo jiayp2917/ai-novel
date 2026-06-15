@@ -97,40 +97,56 @@ export function AiWorkbenchPage() {
 
   return (
     <section className="page active ai-workbench-page">
-      <header className="page-intro">
-        <p className="eyebrow">草稿与写回</p>
-        <h2 className="page-title">AI 工作台</h2>
-        <p className="page-subtitle">选择草稿 → 查看内容和改动 → 检查完成 → 正式写回正文。</p>
-      </header>
       <div className="ai-workbench-layout">
-        <div className="ai-main-row">
-          <aside className="card catalog-card ai-catalog-card"><CatalogPanel variant="ai" /></aside>
-          <div className="card ai-primary-card">
-            <div className="card-head"><h2>人工检查与写回</h2></div>
-            <div className="pad form-grid ai-card-body">
-              <SafetyBoundaryBanner compact />
-              {chapterContent.data ? (
-                <ChapterActions chapterId={chapterContent.data.id} mode="full" />
-              ) : (
-                <p className="muted">请先在左侧选择章节，再选择草稿、查看内容、检查完成并确认写回。</p>
-              )}
+        <aside className="ai-workbench-rail ai-workbench-rail--catalog ai-catalog-card">
+          <CatalogPanel variant="ai" />
+        </aside>
+        <main className="ai-review-desk ai-primary-card">
+          <header className="ai-review-header">
+            <div>
+              <p className="eyebrow">出版编辑台</p>
+              <h2 className="page-title">草稿检查与正文写回</h2>
             </div>
+            <ol className="ai-review-steps" aria-label="人工写回主流程">
+              <li>选择草稿</li>
+              <li>查看内容</li>
+              <li>检查完成</li>
+              <li>正式写回</li>
+            </ol>
+          </header>
+          <div className="ai-review-body">
+            <SafetyBoundaryBanner compact />
+            {chapterContent.data ? (
+              <ChapterActions chapterId={chapterContent.data.id} mode="full" />
+            ) : (
+              <div className="empty-editor-note">
+                <p className="eyebrow">等待章节</p>
+                <h3>先从左侧选择一章正文</h3>
+                <p>选择章节后，这里会显示可检查的草稿、正文预览、改动对比和写回按钮。</p>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="ai-monitor-row">
-          <div className="card ai-memory-card">
-            <div className="card-head"><h2>写作参考资料</h2></div>
-            <div className="pad ai-card-body">
+        </main>
+        <aside className="ai-workbench-rail ai-workbench-rail--assistant">
+          <section className="assistant-dock ai-memory-card">
+            <div className="assistant-dock__head">
+              <p className="eyebrow">写作参考资料</p>
+              <h2>本章上下文</h2>
+            </div>
+            <div className="ai-card-body">
               <MemoryView compact />
             </div>
-          </div>
-          <div className="card ai-jobs-card">
-            <div className="card-head"><h2>任务时间线</h2></div>
-            <div className="pad ai-card-body">
+          </section>
+          <section className="assistant-dock ai-jobs-card">
+            <div className="assistant-dock__head">
+              <p className="eyebrow">运行监控</p>
+              <h2>任务时间线</h2>
+            </div>
+            <div className="ai-card-body">
               <JobList compact />
             </div>
-          </div>
-        </div>
+          </section>
+        </aside>
       </div>
     </section>
   );

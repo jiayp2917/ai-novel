@@ -39,14 +39,13 @@ describe('severityLabel', () => {
 describe('groupSourceFiles', () => {
   it('groups files by kind and path prefix', () => {
     const files: SourceFile[] = [
-      { id: 1, path: '00-系统/config.md', kind: 'settings', active: true },
-      { id: 2, path: '01-设定/world.md', kind: 'settings', active: true },
-      { id: 3, path: '02-正文/vol1/outline.md', kind: 'outlines', active: true },
-      { id: 4, path: '02-正文/vol1/chapter.md', kind: 'chapters', active: true },
+      { id: 1, path: 'content/settings/config.md', kind: 'settings', active: true },
+      { id: 2, path: 'content/settings/world.md', kind: 'settings', active: true },
+      { id: 3, path: 'content/outlines/vol1.md', kind: 'outlines', active: true },
+      { id: 4, path: 'content/chapters/vol1/chapter.md', kind: 'chapters', active: true },
     ];
     const result = groupSourceFiles(files);
-    expect(result.system).toHaveLength(1);
-    expect(result.settings).toHaveLength(1);
+    expect(result.settings).toHaveLength(2);
     expect(result.outlines).toHaveLength(1);
     expect(result.chapters).toHaveLength(1);
   });
@@ -54,7 +53,7 @@ describe('groupSourceFiles', () => {
 
 describe('volumeName', () => {
   it('extracts volume from path', () => {
-    expect(volumeName('02-正文/第一卷/chapter.md')).toBe('第一卷');
+    expect(volumeName('content/chapters/第一卷/chapter.md')).toBe('第一卷');
   });
 
   it('returns default for paths without volume', () => {
@@ -65,8 +64,8 @@ describe('volumeName', () => {
 describe('chaptersByVolume', () => {
   it('groups chapters by volume', () => {
     const sources: SourceFile[] = [
-      { id: 1, path: '02-正文/第一卷/ch1.md', kind: 'chapters', active: true },
-      { id: 2, path: '02-正文/第二卷/ch2.md', kind: 'chapters', active: true },
+      { id: 1, path: 'content/chapters/第一卷/ch1.md', kind: 'chapters', active: true },
+      { id: 2, path: 'content/chapters/第二卷/ch2.md', kind: 'chapters', active: true },
     ];
     const chapters: Chapter[] = [
       { id: 1, chapter_no: 1, title: '第一章', source_file_id: 1, current_version_id: null, active: true },

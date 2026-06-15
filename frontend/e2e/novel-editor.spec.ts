@@ -71,7 +71,8 @@ test('new user 10-minute path can add workspace, scan, read, save version, publi
   const themeBefore = await page.locator('html').getAttribute('data-theme');
   await page.getByRole('button', { name: /界面风格/ }).first().click();
   await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', themeBefore === 'anime' ? 'bright' : 'anime');
+  const expectedTheme = themeBefore === 'breeze' ? 'stargold' : themeBefore === 'stargold' ? 'silk' : 'breeze';
+  await expect(page.locator('html')).toHaveAttribute('data-theme', expectedTheme);
 });
 
 test('safety gates reject mismatched drafts, settings proposals, and publish sandbox chapter only after checks', async ({ page }) => {
@@ -101,7 +102,7 @@ test('safety gates reject mismatched drafts, settings proposals, and publish san
   if ((await settingsToggle.getAttribute('aria-expanded')) !== 'true') {
     await settingsToggle.click();
   }
-  await page.locator('.source-row').filter({ hasText: '01-设定' }).click();
+  await page.locator('.source-row').filter({ hasText: 'content/settings' }).first().click();
   const setting = await firstSource(page, 'settings');
   const settingContent = await sourceContent(page, setting.id);
   const proposal = await seedProposal(page, setting.id, `${settingContent.text}\n\n测试提案。`);
@@ -150,7 +151,7 @@ test('core views remain separated and writing layout does not use bottom overlay
   await expect(page.locator('.page.active').getByRole('button', { name: '新增' })).toBeVisible();
   await page.getByRole('button', { name: '新增' }).click();
   await expect(page.getByRole('dialog', { name: '新增素材' })).toBeVisible();
-  await expect(page.getByLabel('类型').locator('option')).toHaveText(['系统设定', '小说设定', '章纲']);
+  await expect(page.getByLabel('类型').locator('option')).toHaveText(['小说设定', '章纲']);
   await page.getByRole('button', { name: '取消' }).click();
   await page.locator('.workspace-chip--button').click();
   await expect(page.locator('.crumb')).toContainText('设置');
@@ -205,11 +206,10 @@ test('writing workspace supports tabs, search, fullscreen, filter, and safe cont
   await expect(page.locator('.chapter-row').filter({ hasText: '002' })).toHaveCount(1);
   await page.getByPlaceholder('章号或标题').fill('');
 
-  await expect(page.locator('.page.active .catalog-toggle').filter({ hasText: '系统设定' })).toHaveCount(0);
   await expect(page.locator('.page.active .catalog-toggle').filter({ hasText: '小说设定' })).toHaveCount(0);
   await expect(page.locator('.page.active .catalog-toggle').filter({ hasText: '章纲' })).toHaveCount(0);
-  await expect(page.locator('.page.active .source-row').filter({ hasText: '01-设定' })).toHaveCount(0);
-  await expect(page.locator('.page.active .source-row').filter({ hasText: '03-章纲' })).toHaveCount(0);
+  await expect(page.locator('.page.active .source-row').filter({ hasText: 'content/settings' })).toHaveCount(0);
+  await expect(page.locator('.page.active .source-row').filter({ hasText: 'content/outlines' })).toHaveCount(0);
 
   const volumeToggle = page.locator('.volume-title').first();
   await expect(volumeToggle).toBeVisible();
@@ -600,6 +600,7 @@ test('AI workbench keeps catalog, memory, and task queue bounded inside panels',
       };
     };
     return {
+      viewportHeight: window.innerHeight,
       pageOverflowsDocument: document.documentElement.scrollHeight > document.documentElement.clientHeight + 1,
       layout: read('.ai-workbench-layout'),
       catalog: read('.ai-catalog-card .catalog-scroll'),
@@ -610,7 +611,7 @@ test('AI workbench keeps catalog, memory, and task queue bounded inside panels',
   });
 
   expect(metrics.pageOverflowsDocument).toBeFalsy();
-  expect(metrics.layout?.height ?? 0).toBeLessThanOrEqual(560);
+  expect(metrics.layout?.height ?? 0).toBeLessThanOrEqual(metrics.viewportHeight - 96);
   expect(metrics.catalog?.overflowY).toBe('auto');
   expect(metrics.memory?.overflowY).toBe('auto');
   expect(metrics.jobs?.overflowY).toBe('auto');
@@ -660,7 +661,7 @@ test('AI workbench keeps advanced actions and engineering fields out of the main
 
   const workbench = page.locator('.ai-workbench-page');
   const primary = page.locator('.ai-primary-card');
-  await expect(primary).toContainText('人工检查与写回');
+  await expect(primary).toContainText('草稿检查与正文写回');
   await expect(primary.getByRole('button', { name: '按批注创建修订', exact: true })).toBeVisible();
   await expect(primary.getByRole('button', { name: '上下文预览', exact: true })).toHaveCount(0);
   await expect(primary.getByRole('button', { name: '推进待处理任务', exact: true })).toHaveCount(0);
@@ -885,18 +886,18 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(callRecords.locator('.observability-row').first()).not.toContainText(/provider|token|base_url|JSON/);
 });
 
-test('cyberpunk theme keeps core work areas readable and uses project visual assets', async ({ page }) => {
+test('three writing themes keep core work areas readable and use project visual assets', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => window.localStorage.clear());
   await page.goto('/');
   await switchWorkspace(page);
 
   const theme = await page.locator('html').getAttribute('data-theme');
-  if (theme !== 'anime') {
+  if (theme !== 'stargold') {
     await page.getByRole('button', { name: /界面风格/ }).first().click();
   }
   await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'anime');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'stargold');
   await mainNav(page, '首页').click();
   await expect(page.locator('.dashboard-intro')).toBeVisible();
   await expect(page.locator('.dashboard-hero__visual img')).toHaveCount(0);
@@ -933,11 +934,22 @@ test('cyberpunk theme keeps core work areas readable and uses project visual ass
     };
   });
   for (const [name, color] of Object.entries(colors)) {
-    expect(color, `${name} should not be transparent in anime theme`).not.toBe('rgba(0, 0, 0, 0)');
+    expect(color, `${name} should not be transparent in stargold theme`).not.toBe('rgba(0, 0, 0, 0)');
   }
-  expect(colors.taskPanel, 'task panel should not fall back to light gray in cyberpunk theme').not.toBe('rgba(255, 255, 255, 0.88)');
-  expect(colors.chapterTabs, 'chapter tabs should match dark chrome in cyberpunk theme').not.toBe('rgba(255, 255, 255, 0.88)');
-  expect(colors.paperText, 'paper text should use readable dark ink on light paper').toBe('rgb(31, 47, 58)');
+  expect(colors.taskPanel, 'task panel should not fall back to light gray in stargold theme').not.toBe('rgba(255, 255, 255, 0.88)');
+  expect(colors.chapterTabs, 'chapter tabs should match dark chrome in stargold theme').not.toBe('rgba(255, 255, 255, 0.88)');
+  expect(colors.paperText, 'paper text should use readable dark ink on light paper').toBe('rgb(32, 36, 42)');
+
+  await page.getByRole('button', { name: /界面风格/ }).first().click();
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'silk');
+  await mainNav(page, '首页').click();
+  await expect(page.locator('.dashboard-intro')).toBeVisible();
+  await page.getByRole('button', { name: /界面风格/ }).first().click();
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'breeze');
+  await mainNav(page, '首页').click();
+  await expect(page.locator('.dashboard-intro')).toBeVisible();
 });
 
 test('home and writing pages keep engineering details out of the main flow', async ({ page }) => {

@@ -2,18 +2,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 7px 12px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 9px 14px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface-elevated);
   color: var(--ink);
   white-space: nowrap;
   cursor: pointer;
   font: inherit;
-  line-height: 1.4;
-  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+  line-height: 1.35;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+}
+
+.ui-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand) 34%, transparent);
+  outline-offset: 2px;
 }
 
 .ui-btn:disabled {
@@ -24,7 +29,7 @@
 /* Variants */
 .ui-btn--primary {
   border-color: var(--brand);
-  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  background: var(--brand);
   color: var(--on-brand);
 }
 
@@ -49,8 +54,8 @@
 
 /* Sizes */
 .ui-btn--sm {
-  min-height: 26px;
-  padding: 3px 8px;
+  min-height: 36px;
+  padding: 6px 10px;
   font-size: 12px;
 }
 
@@ -59,7 +64,7 @@
 }
 
 .ui-btn--lg {
-  min-height: 42px;
+  min-height: 48px;
   padding: 10px 20px;
   font-size: 16px;
 }
@@ -96,36 +101,41 @@
 
 /* Hover states */
 .ui-btn--primary:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--brand-2);
 }
 
 .ui-btn--secondary:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+  background: var(--surface-muted);
 }
 
 .ui-btn--danger:hover:not(:disabled) {
   background: var(--danger-bg);
 }
 
-/* Bright theme overrides */
-:root[data-theme="bright"] .ui-btn {
-  border-color: rgba(35, 134, 163, 0.16);
+/* Light material themes */
+:root[data-theme="breeze"] .ui-btn,
+:root[data-theme="silk"] .ui-btn {
+  border-color: var(--line);
   background: var(--button-bg);
-  box-shadow: 0 4px 12px rgba(39, 92, 102, 0.05);
+  box-shadow: none;
 }
 
-:root[data-theme="bright"] .ui-btn:hover:not(:disabled) {
-  border-color: rgba(35, 134, 163, 0.28);
-  background: #f3fbfa;
+:root[data-theme="breeze"] .ui-btn:hover:not(:disabled),
+:root[data-theme="silk"] .ui-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand) 34%, var(--line));
+  background: var(--surface-muted);
 }
 
-:root[data-theme="bright"] .ui-btn--primary {
-  border-color: transparent;
-  background: linear-gradient(135deg, #2386a3, #2aa184);
+:root[data-theme="breeze"] .ui-btn--primary,
+:root[data-theme="silk"] .ui-btn--primary {
+  border-color: var(--brand);
+  background: var(--brand);
   color: var(--on-brand);
-  box-shadow: 0 8px 18px rgba(35, 134, 163, 0.18);
+  box-shadow: none;
 }
 
-:root[data-theme="bright"] .ui-btn--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1f7894, #278f77);
+:root[data-theme="breeze"] .ui-btn--primary:hover:not(:disabled),
+:root[data-theme="silk"] .ui-btn--primary:hover:not(:disabled) {
+  background: var(--brand-2);
 }

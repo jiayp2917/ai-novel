@@ -7,13 +7,13 @@ export type ActiveView =
   | 'settings'
   | 'models';
 
-export type ThemeMode = 'bright' | 'anime';
+export type ThemeMode = 'breeze' | 'stargold' | 'silk';
 
 export type InspectorTab = 'annotations' | 'candidates' | 'history' | 'review' | 'memory';
 
 export type WorkspaceStatus = {
   root: string;
-  layout: 'legacy' | 'content' | 'unsupported';
+  layout: 'content' | 'unsupported';
   app_root?: string;
   app_runtime_root?: string;
   runtime_root?: string;
@@ -76,7 +76,7 @@ export type CatalogStatus = {
 };
 
 export type CreateSourceFilePayload = {
-  root: 'system' | 'settings' | 'outlines' | 'chapters';
+  root: 'settings' | 'outlines' | 'chapters';
   folder?: string;
   filename: string;
   template?: 'blank' | 'chapter';

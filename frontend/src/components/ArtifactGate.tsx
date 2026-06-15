@@ -139,114 +139,137 @@ export function ArtifactGate({
   return (
     <div className="artifact-gate">
       <div className="manual-publish-flow" aria-label={allowPublish ? '人工写回流程' : '提案检查流程'}>
-        <div className={artifactId ? 'manual-step manual-step--done' : 'manual-step'}>
-          <strong>1 选择草稿</strong>
-          <span>{artifactId ? `已选择 #${artifactId}` : '先从下方草稿列表选择一份。'}</span>
-        </div>
-        <div className={artifactText.data ? 'manual-step manual-step--done' : 'manual-step'}>
-          <strong>2 查看内容</strong>
-          <span>{artifactText.data ? '草稿内容已显示，可人工检查。' : '选择后会显示草稿正文。'}</span>
-        </div>
-        <div className={manualChecked ? 'manual-step manual-step--done' : 'manual-step'}>
-          <strong>3 检查完成</strong>
-          <span>{manualChecked ? '已由人工确认可进入写回。' : '确认内容无误后点击检查完成。'}</span>
-        </div>
-        <div className={selectedPublishDecision ? 'manual-step manual-step--done' : 'manual-step'}>
-          <strong>{allowPublish ? '4 正式写回' : '4 人工采纳'}</strong>
-          <span>{allowPublish ? '查看改动后确认写回正文。' : '提案只供人工采纳，不直接覆盖。'}</span>
-        </div>
+        <FlowStep index={1} title="选择草稿" done={Boolean(artifactId)}>
+          {artifactId ? `已选择 #${artifactId}` : '先从左侧草稿列表选择一份。'}
+        </FlowStep>
+        <FlowStep index={2} title="查看内容" done={Boolean(artifactText.data)}>
+          {artifactText.data ? '草稿正文已显示，可逐段检查。' : '选择后会显示草稿正文。'}
+        </FlowStep>
+        <FlowStep index={3} title="检查完成" done={manualChecked}>
+          {manualChecked ? '已记录人工检查结果。' : '确认内容无误后点击检查完成。'}
+        </FlowStep>
+        <FlowStep index={4} title={allowPublish ? '正式写回' : '人工采纳'} done={Boolean(selectedPublishDecision)}>
+          {allowPublish ? '查看改动后确认写回正文。' : '提案只供人工采纳，不直接覆盖。'}
+        </FlowStep>
       </div>
-      <CandidateSelector
-        artifactId={artifactId}
-        setArtifactId={setArtifactId}
-        candidates={artifacts.data ?? []}
-        artifactKind={artifactKind}
-        allowPublish={allowPublish}
-        baseChapterId={baseChapterId}
-      />
-      {artifactId && (
-        <section className="artifact-preview-panel">
-          <div className="compact-title">
-            <div>
-              <p className="eyebrow">草稿内容</p>
-              <h3>{artifactText.isLoading ? '正在读取草稿' : '人工检查这份草稿'}</h3>
+      <div className="artifact-review-board">
+        <aside className="artifact-review-board__list">
+          <CandidateSelector
+            artifactId={artifactId}
+            setArtifactId={setArtifactId}
+            candidates={artifacts.data ?? []}
+            artifactKind={artifactKind}
+            allowPublish={allowPublish}
+            baseChapterId={baseChapterId}
+          />
+        </aside>
+        <section className="artifact-review-board__preview">
+          <div className="artifact-preview-panel">
+            <div className="compact-title">
+              <div>
+                <p className="eyebrow">草稿正文</p>
+                <h3>{artifactText.isLoading ? '正在读取草稿' : artifactId ? '人工检查这份草稿' : '等待选择草稿'}</h3>
+              </div>
+              <Button
+                variant={manualChecked ? 'primary' : 'secondary'}
+                onClick={() => manualCheckMutation.mutate()}
+                disabled={!artifactText.data || manualChecked || manualCheckMutation.isPending || !canOperate}
+                loading={manualCheckMutation.isPending}
+              >
+                {manualChecked ? '检查已完成' : '检查完成'}
+              </Button>
             </div>
-            <Button
-              variant={manualChecked ? 'primary' : 'secondary'}
-              onClick={() => manualCheckMutation.mutate()}
-              disabled={!artifactText.data || manualChecked || manualCheckMutation.isPending || !canOperate}
-              loading={manualCheckMutation.isPending}
-            >
-              {manualChecked ? '检查已完成' : '检查完成'}
-            </Button>
+            {artifactText.isLoading && <p className="muted">正在读取草稿内容...</p>}
+            {artifactText.isError && <p className="form-hint form-hint--error">草稿内容读取失败，请确认草稿文件仍存在。</p>}
+            {!artifactId && <p className="muted">从左侧选择草稿后，这里会显示完整正文，便于人工逐段检查。</p>}
+            {artifactText.data && <pre className="document-preview artifact-preview-text">{artifactText.data.text}</pre>}
           </div>
-          {artifactText.isLoading && <p className="muted">正在读取草稿内容...</p>}
-          {artifactText.isError && <p className="form-hint form-hint--error">草稿内容读取失败，请确认草稿文件仍存在。</p>}
-          {artifactText.data && <pre className="document-preview artifact-preview-text">{artifactText.data.text}</pre>}
+          {diffText && !compact && <pre className="diff-preview">{diffText}</pre>}
+          {diffText && compact && <pre className="diff-preview diff-preview--compact">{diffText}</pre>}
         </section>
-      )}
-      <PublishGateChecklist
-        artifact={selectedArtifact.data}
-        allowPublish={allowPublish}
-        diffReady={Boolean(diffText)}
-        contextValid={validation.valid}
-        artifactSelected={Boolean(artifactId)}
-      />
-      <div className="action-row artifact-main-actions">
-        <Button
-          variant="secondary"
-          onClick={() => diffMutation.mutate()}
-          disabled={!canOperate || !manualChecked || diffMutation.isPending}
-          title={!manualChecked ? '请先查看草稿并点击“检查完成”。' : operationBlockedReason ?? undefined}
-          loading={diffMutation.isPending}
-        >
-          查看改动
-        </Button>
-        {allowPublish ? (
-          <Button
-            variant="danger"
-            onClick={() => publishMutation.mutate()}
-            disabled={!canPublish || publishMutation.isPending}
-            title={publishBlockedReason ?? undefined}
-            loading={publishMutation.isPending}
-          >
-            确认写回正文
-          </Button>
-        ) : (
-          <Button variant="secondary" disabled title="设定和章纲只生成提案，不在这里覆盖源文件。">
-            提案不直接写回
-          </Button>
-        )}
+        <aside className="artifact-review-board__gate">
+          <PublishGateChecklist
+            artifact={selectedArtifact.data}
+            allowPublish={allowPublish}
+            diffReady={Boolean(diffText)}
+            contextValid={validation.valid}
+            artifactSelected={Boolean(artifactId)}
+          />
+          <div className="artifact-main-actions">
+            <Button
+              variant="secondary"
+              onClick={() => diffMutation.mutate()}
+              disabled={!canOperate || !manualChecked || diffMutation.isPending}
+              title={!manualChecked ? '请先查看草稿并点击“检查完成”。' : operationBlockedReason ?? undefined}
+              loading={diffMutation.isPending}
+            >
+              查看改动
+            </Button>
+            {allowPublish ? (
+              <Button
+                variant="danger"
+                onClick={() => publishMutation.mutate()}
+                disabled={!canPublish || publishMutation.isPending}
+                title={publishBlockedReason ?? undefined}
+                loading={publishMutation.isPending}
+              >
+                确认写回正文
+              </Button>
+            ) : (
+              <Button variant="secondary" disabled title="设定和章纲只生成提案，不在这里覆盖源文件。">
+                提案不直接写回
+              </Button>
+            )}
+          </div>
+          {allowPublish && (
+            <details className="advanced-details">
+              <summary>AI 辅助检查</summary>
+              <p className="form-hint">人工写回不强制 AI 检查；如果这是 AI 草稿或你不确定内容质量，可先让 AI 检查。</p>
+              <Button
+                variant="secondary"
+                onClick={() => reviewMutation.mutate()}
+                disabled={!canOperate || reviewMutation.isPending}
+                title={operationBlockedReason ?? undefined}
+                loading={reviewMutation.isPending}
+              >
+                AI 检查草稿
+              </Button>
+            </details>
+          )}
+          {artifactId && selectedArtifact.isLoading && <p className="form-hint">正在校验草稿归属...</p>}
+          {artifactId && selectedArtifact.isError && <p className="form-hint form-hint--error">草稿不存在，不能继续操作。</p>}
+          {!artifactId && <p className="form-hint form-hint--error">请先选择草稿；如果没有草稿，请先在写作页保存正文版本，或在 AI 工作台生成修订草稿。</p>}
+          {!validation.valid && <p className="form-hint form-hint--error">{validation.message}</p>}
+          {selectedArtifact.data && (
+            <ArtifactTrace
+              artifact={selectedArtifact.data}
+              publishDecision={selectedPublishDecision}
+              allowPublish={allowPublish}
+              diffReady={Boolean(diffText)}
+            />
+          )}
+        </aside>
       </div>
-      {allowPublish && (
-        <details className="advanced-details">
-          <summary>AI 辅助检查</summary>
-          <p className="form-hint">人工写回不强制 AI 检查；如果这是 AI 草稿或你不确定内容质量，可先让 AI 检查。</p>
-          <Button
-            variant="secondary"
-            onClick={() => reviewMutation.mutate()}
-            disabled={!canOperate || reviewMutation.isPending}
-            title={operationBlockedReason ?? undefined}
-            loading={reviewMutation.isPending}
-          >
-            AI 检查草稿
-          </Button>
-        </details>
-      )}
-      {artifactId && selectedArtifact.isLoading && <p className="form-hint">正在校验草稿归属...</p>}
-      {artifactId && selectedArtifact.isError && <p className="form-hint form-hint--error">草稿不存在，不能继续操作。</p>}
-      {!artifactId && <p className="form-hint form-hint--error">请先选择草稿；如果没有草稿，请先在写作页保存正文版本，或在 AI 工作台生成修订草稿。</p>}
-      {!validation.valid && <p className="form-hint form-hint--error">{validation.message}</p>}
-      {selectedArtifact.data && (
-        <ArtifactTrace
-          artifact={selectedArtifact.data}
-          publishDecision={selectedPublishDecision}
-          allowPublish={allowPublish}
-          diffReady={Boolean(diffText)}
-        />
-      )}
-      {diffText && !compact && <pre className="diff-preview">{diffText}</pre>}
-      {diffText && compact && <pre className="diff-preview diff-preview--compact">{diffText}</pre>}
+    </div>
+  );
+}
+
+function FlowStep({
+  index,
+  title,
+  done,
+  children,
+}: {
+  index: number;
+  title: string;
+  done: boolean;
+  children: string;
+}) {
+  return (
+    <div className={done ? 'manual-step manual-step--done' : 'manual-step'}>
+      <span className="manual-step__index">{String(index).padStart(2, '0')}</span>
+      <strong>{title}</strong>
+      <span>{children}</span>
     </div>
   );
 }

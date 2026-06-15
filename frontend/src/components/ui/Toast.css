@@ -89,13 +89,13 @@
   }
 }
 
-/* Bright theme */
-:root[data-theme="bright"] .toast {
+/* Light material themes */
+:root[data-theme="breeze"] .toast,
+:root[data-theme="silk"] .toast {
   box-shadow: 0 8px 24px rgba(39, 92, 102, 0.1);
 }
 
-/* Anime/dark theme */
-:root[data-theme="anime"] .toast,
-:root[data-theme="dark"] .toast {
+/* Stargold theme */
+:root[data-theme="stargold"] .toast {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }

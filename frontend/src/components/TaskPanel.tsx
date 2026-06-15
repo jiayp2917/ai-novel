@@ -14,7 +14,7 @@ export function TaskPanel({ compact = false }: { compact?: boolean }) {
   const runningJobs = (jobs.data ?? []).filter((job) => job.status === 'running' || job.status === 'queued').length;
   const authorSummary = (
     <>
-      {pausedBudgetJobs.length > 0 && <span className="budget-paused">AI 调用已暂停 {pausedBudgetJobs.length}</span>}
+      {pausedBudgetJobs.length > 0 && <span className="budget-paused">AI 任务已暂停 {pausedBudgetJobs.length}</span>}
       {jobs.isSuccess && <span>运行任务 {runningJobs}</span>}
       {jobs.isSuccess && jobs.data.length > 0 && <span>后台任务 {jobs.data.length}</span>}
     </>

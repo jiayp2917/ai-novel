@@ -75,11 +75,27 @@
 
 每批处理后在下方追加记录（日期 + commit + 处理项）。
 
-### 2026-06-17 — 批次 1 处理
-（待填）
+### 2026-06-17 — 批次 1 处理（commit d2e4c62）
 
-### 2026-06-17 — 批次 2 处理
-（待填）
+- ✅ B1 删除：`ReaderToolbar.tsx`、顶层 `ReaderContextMenu.tsx`、`ReaderToolbar.test.tsx`
+- ✅ B2 迁移：建 `components/workflow/index.ts` barrel；删 `WorkflowActions.tsx` shim（CorePages/ModelsSkills 改走 barrel）；删 `PipelineView.tsx` 的 `PipelineFailureSummary` 重导出（测试直引子目录）
+- ⏸ B3 保留：`useModelCallActions.testConnection`（有意 API 占位）、`lib/dynamicAsset.ts`（Phase 1 预留骨架，有测试）
+- ✅ B4 删除：`pipeline/runner.py` + `pipeline/policy.py`（含 tests 零引用；`test_pipeline_state_machine` 改为直测 `PipelineStateMachine.mark_output`）
+- 附带：新增 `docs/architecture.md` + `docs/tech-debt.md`
 
-### 2026-06-17 — 批次 3 处理
-（待填）
+### 2026-06-17 — 批次 2 处理（commit a02ba09）
+
+- ✅ C1 补测试：3 文件 140 用例（`pipelineUtils.test.ts` 89 + `modelsShared.test.ts` 44 + `useChapterEditorExtensions.test.ts` 7）；前端测试 95→235
+- ✅ C2 修文档：`ui-refactor-plan.md` §0.7 加导航注释（标明为 v0.6 快照，最新看 §0.8）
+- ⏸ C3 保留：`Surface.tsx` co-located CSS（已在 architecture.md §5 记录为例外）
+- ✅ C4 删依赖：`requirements.txt` 移除 `python-dotenv`
+- ⏸ B6 不升级：`lucide-react`（已在 architecture.md §6 记录）
+
+### 2026-06-17 — 批次 3 处理（commit 29faaf9）
+
+- ✅ I4 文件头：21 个 >200 行文件补 1 行 header/docstring（10 前端 + 11 后端）
+- ✅ N11 配置：`.env.example` 补全（分组 + 3 个缺失 env + 前端 VITE 段）
+- ✅ N1 存档：`scripts/strip-old-theme-selectors.py` docstring 标注 ALREADY RUN
+- ✅ N2/N3 磁盘清理：删 `runtime/image2-theme-assets/20260615-*` × 3 + `runtime/runtime/`（gitignored，不入 commit）
+
+> 三批全部通过 `frontend build + frontend test 235/235 + backend pytest 206/206`。

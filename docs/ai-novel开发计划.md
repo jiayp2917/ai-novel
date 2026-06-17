@@ -15,7 +15,7 @@
 - 模型配置已升级为模型档案池和角色分配；内置档案只读，自定义档案被角色使用时禁止删除。
 - AI 工作台已形成“选择草稿 -> 查看内容 -> 检查完成 -> 查看改动 -> 确认写回正文”的人工主线。
 - 通用 skills、作品级 skill 隔离原则和生成模式记录。
-- 后端单元/集成测试、前端构建、Playwright E2E 和 GitHub Actions 基线。
+- 后端单元/集成测试、前端单元测试、前端构建、Playwright E2E 覆盖和 GitHub Actions 基线。
 
 仍需保持保守表述：自动流水线当前是章节候选生产和安全门验证，不是无人值守全书发布器。
 
@@ -52,14 +52,16 @@
 
 项目当前默认 AI 路径是 Agnes AI，角色探针、沙盒发布门、流水线 dry-run、前端 E2E 和原始工作区 hash 复核是后续模型与流水线变更的基础验收组合。
 
-最近一次本地验证基线：
+最近一次本地审核验证（2026-06-17）：
 
-- `python -m compileall -q .\backend .\tests`
-- `python -m pytest -q`：206 passed
-- `cd .\frontend && npm test -- --run`：46 passed
-- `cd .\frontend && npm run build`
-- `cd .\frontend && npm run e2e`：27 passed
+- `python -m compileall -q .\backend .\tests`：通过
+- `python -m pytest -q`：206 passed，1 个 Starlette/httpx 兼容性 warning
+- `cd .\frontend && npm test -- --run`：235 passed
+- `cd .\frontend && npm run build`：通过
+- `cd .\frontend && npm run e2e`：27 passed（此前 7 个 v0.8 回归已修复，见 commit a0f3792）
 - `python <codex-home>\skills\codex-dev-team\scripts\project_audit.py --root <repo-root> --json`：无 forbidden hits；`.env.example` 仅作为配置模板被标记为可疑路径。
+
+此前 v0.8 重构引入的 7 个 e2e 回归已修复（commit a0f3792）：Dialog 关闭守卫恢复、ReaderPanel 搜索状态去重、模型页/流水线过期选择器与文案更新，外加后端 `app.routes` 版本漂移过滤；流水线章节卡片漏译的 `Paused by user` 也一并按状态过滤修复。详见 docs/tech-debt.md。
 
 新增 E2E 覆盖包含破坏性误操作：草稿切换后旧 diff 不得残留、未检查草稿不能查看改动或写回、无效模型配置被拒绝、被角色使用的模型档案不能删除、预算暂停状态必须从任务队列正确显示。
 
@@ -67,6 +69,8 @@
 
 - 需要补一章复制工作区显式发布门验收，确认 diff、backup、publish decision 和原始作品 hash 不变。
 - 审计仍显示 `frontend/src/styles.css`、模型配置/流水线组件和若干集成测试文件偏大，需要继续拆分。
+- 当前 `docs/` 除三份核心公开文档外还保留架构、技术债、UI 重构和 A/B 评审记录；开源前需要确认是合并进三件套，还是作为过程材料移出公开文档目录。
+- 三主题 image2 素材已进入前端构建，当前图片体积较大；后续应压缩或增加 WebP/AVIF 资产，避免安装包和首屏资源膨胀。
 - 自动流水线的宣传和文档必须继续避免“无人值守全书发布”表述。
 
 ## 4. P0：稳定写作闭环

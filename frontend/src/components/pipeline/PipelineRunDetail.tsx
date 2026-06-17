@@ -110,7 +110,9 @@ function RunDetailBody({ run }: { run: PipelineRun }) {
       <div className={`pipeline-next-step pipeline-next-step--${nextStep.tone}`}>
         <strong>{nextStep.label}</strong>
         <span>{nextStep.text}</span>
-        {run.error && <small>任务提示：{run.error}</small>}
+        {/* run.status === 'paused' 时 run.error 是后端写入的英文 "Paused by user"，
+            与上方的「已暂停」状态重复，隐藏避免英文漏译；其它状态（失败/预算暂停）的真实提示照常显示。 */}
+        {run.error && run.status !== 'paused' && <small>任务提示：{run.error}</small>}
       </div>
       <PipelineFailureSummary run={run} />
       {run.report_summary.path && (
@@ -130,10 +132,10 @@ function RunDetailBody({ run }: { run: PipelineRun }) {
                 </span>
               ))}
             </div>
-            {tasks.some((t) => t.error) && (
+            {tasks.some((t) => t.error && t.status !== 'paused') && (
               <details className="advanced-details">
                 <summary>查看错误详情</summary>
-                {tasks.filter((t) => t.error).map((t) => (
+                {tasks.filter((t) => t.error && t.status !== 'paused').map((t) => (
                   <small key={t.id}>{jobTypeLabel(t.type)}：{t.error}</small>
                 ))}
               </details>

@@ -75,6 +75,17 @@
 
 每批处理后在下方追加记录（日期 + commit + 处理项）。
 
+### 2026-06-17 — E2E 回归修复（commit a0f3792）
+
+- ✅ `npm run e2e` 7 failed → 27 passed。7 个失败全部源自 v0.8（f028862）重构，本轮已修复。
+- 后端 1 个版本漂移：`test_revision_api_route_registered` 遍历 `app.routes` 撞到无 `.path` 的 `_IncludedRouter`（新版 Starlette），加 `hasattr(route,'path')` 过滤。
+- 三个真 bug（均 v0.8 引入）：
+  - `confirm-backdrop` 拦截点击（e2e 1/3/5）：v0.8 加 `useFocusTrap` 时误删 Dialog 的 `if(!open) return null` 守卫，关闭弹窗仍渲染满屏 backdrop。已恢复守卫（hooks 之后，焦点回退仍经 effect cleanup 生效）。
+  - 写作搜索 `.cm-search-match` 0 匹配（e2e 2）：ReaderPanel 既直接调 `useReaderState()` 又经 `useReaderPanelState()` 内部再调一次，产生两份独立本地 `searchQuery`，搜索栏写一份、编辑器读另一份。改为复用 `panel.detail` 单一实例。
+  - 过期选择器/文案（e2e 4/6/7）：`models-section--overview`→`.models-overview__surface`、`models-section--calls`→`.models-troubleshooting__surface`、`model-profile-panel` 包裹层删除、流水线步骤文案 `生成草稿`→`生成章节草稿`（pipelineLabels.ts:59）。
+- 验证：`pytest 206`、`frontend build`、`vitest 235`、`e2e 27/27`。
+- 附带修复（非 CI 阻塞）：流水线章节卡片此前把后端 `error="Paused by user"`（state_machine.py:281）原文渲染，与已翻译的「已暂停」pill 并存。改为按 `status === 'paused'` 过滤掉用户暂停的原始 error，仅保留失败/预算暂停等有信息量的提示。
+
 ### 2026-06-17 — 批次 1 处理（commit d2e4c62）
 
 - ✅ B1 删除：`ReaderToolbar.tsx`、顶层 `ReaderContextMenu.tsx`、`ReaderToolbar.test.tsx`

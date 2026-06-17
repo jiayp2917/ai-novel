@@ -1,3 +1,4 @@
+"""提供 E2E 与集成测试用的种子数据接口与沙盒重置入口。"""
 import json
 
 from fastapi import APIRouter, Depends, HTTPException

@@ -1,3 +1,4 @@
+/** 源文件候选稿生成、预览与确认的操作面板。 */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../api';

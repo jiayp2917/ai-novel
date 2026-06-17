@@ -1,3 +1,4 @@
+"""源文件改写提案服务：基于批注为设定/章纲生成 Markdown 改写建议。"""
 import json
 from datetime import UTC, datetime
 

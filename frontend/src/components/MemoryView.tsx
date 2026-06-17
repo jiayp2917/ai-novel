@@ -1,3 +1,4 @@
+/** 写作参考资料视图组件，展示、预览与重建人物伏笔等记忆条目。 */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { apiRequest } from '../api';

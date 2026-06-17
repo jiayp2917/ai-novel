@@ -1,3 +1,4 @@
+/** 候选稿审核与发布门控面板。 */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { apiRequest } from '../api';

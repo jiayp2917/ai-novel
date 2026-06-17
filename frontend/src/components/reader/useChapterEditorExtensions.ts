@@ -1,3 +1,4 @@
+/** 构建章节编辑器的 CodeMirror 扩展（批注高亮、搜索标记与交互回调）。 */
 import { markdown } from '@codemirror/lang-markdown';
 import { Compartment, EditorState, RangeSetBuilder, type Extension } from '@codemirror/state';
 import {

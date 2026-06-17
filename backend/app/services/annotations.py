@@ -1,3 +1,4 @@
+"""批注服务：管理批注状态与正文引文重定位。"""
 from dataclasses import dataclass
 from pathlib import Path
 

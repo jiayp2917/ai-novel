@@ -1,3 +1,4 @@
+"""封装模型调用、缓存、预算控制与并发限流。"""
 import json
 import os
 import threading

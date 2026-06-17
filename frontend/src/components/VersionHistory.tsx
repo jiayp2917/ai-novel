@@ -1,3 +1,4 @@
+/** 章节版本历史组件，展示并管理候选版本。 */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { apiRequest } from '../api';

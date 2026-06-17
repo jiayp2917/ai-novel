@@ -1,3 +1,4 @@
+"""为 Pipeline 各岗位组装提示上下文。"""
 import json
 from dataclasses import dataclass
 from typing import Any

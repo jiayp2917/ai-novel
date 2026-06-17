@@ -1,3 +1,4 @@
+/** 阅读器顶部栏组件，承载章节标题、模式标签与导航控件。 */
 import type { Chapter } from '../../types';
 import { Surface } from '../ui/Surface';
 

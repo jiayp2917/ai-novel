@@ -1,3 +1,4 @@
+"""提供章节解析与素材库的核心服务。"""
 import re
 import threading
 from dataclasses import dataclass

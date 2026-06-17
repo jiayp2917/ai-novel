@@ -1,3 +1,4 @@
+"""小说创作记忆的抽取、汇总与重建服务。"""
 import json
 import re
 from pathlib import Path

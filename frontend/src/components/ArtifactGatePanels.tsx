@@ -1,3 +1,4 @@
+/** 草稿写回门控面板：候选选择、追踪与写回检查清单。 */
 import { useEffect, useMemo, useState } from 'react';
 import { useChapters } from '../hooks';
 import type { Artifact } from '../types';

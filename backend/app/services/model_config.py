@@ -1,3 +1,4 @@
+"""模型配置服务：维护角色路由、profile 列表与密钥存取。"""
 from __future__ import annotations
 
 import base64

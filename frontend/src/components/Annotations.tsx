@@ -1,3 +1,4 @@
+/** 批注侧边栏：整合批注列表、详情、洞察与版本历史。 */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../api';
 import {

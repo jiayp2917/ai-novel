@@ -1,4 +1,5 @@
-﻿from datetime import UTC, datetime
+﻿"""SQLAlchemy ORM 模型与数据库表结构定义。"""
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship

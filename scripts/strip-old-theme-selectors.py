@@ -1,5 +1,5 @@
 """
-3.5 Phase: Strip dead CSS rules targeting only old theme aliases (bright/anime/dark).
+3.5 Phase migration (ALREADY RUN before v0.8 — kept for archive, no future callers): strip dead CSS rules targeting only old theme aliases (bright/anime/dark).
 Strategy:
   - Tokenize CSS into selector-block pairs (ignore string/comment)
   - For each rule:

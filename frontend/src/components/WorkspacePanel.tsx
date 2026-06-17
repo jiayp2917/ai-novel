@@ -1,3 +1,4 @@
+/** 工作区面板：扫描、展示与切换小说工作区根目录。 */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../api';

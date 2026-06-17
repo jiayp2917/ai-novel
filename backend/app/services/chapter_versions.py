@@ -1,3 +1,4 @@
+"""章节版本管理：保存快照、查询历史版本并发布正文。"""
 import difflib
 import json
 import shutil

@@ -1,3 +1,4 @@
+/** 展示设定、章纲与章节目录的统一目录面板组件。 */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { apiRequest } from '../api';

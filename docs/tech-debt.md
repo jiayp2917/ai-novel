@@ -100,9 +100,9 @@
 
 > 三批全部通过 `frontend build + frontend test 235/235 + backend pytest 206/206`。
 
-### 2026-06-17 — A/B 截图（`ab-screenshots.spec.ts`，24 张对照图）
+### 2026-06-17 — A/B 截图（24 张对照图，spec 已从仓库移除）
 
-- ✅ 产出 24 张：`runtime/ab-screenshots/phase1/{home,writing,ai-workbench,settings}/{breeze,stargold,silk}-{ai,solid}.png`（8.4MB，gitignored）。复跑：`cd frontend && npx playwright test ab-screenshots`。
+- ✅ 产出 24 张：`runtime/ab-screenshots/phase1/{home,writing,ai-workbench,settings}/{breeze,stargold,silk}-{ai,solid}.png`（8.4MB，gitignored，本地保留）。截图采集 spec（`ab-screenshots.spec.ts`）是一次性脚本，已从仓库删除（避免截图工具污染 e2e 测试目录、迫使 CI 特殊排除）；如需复跑可从 commit `344ba7c` 取回或重写。
 - ✅ 4 维评分（可读性/一致性/情绪/噪点）**待人工看图打分**（见 `docs/ab-evaluation-checklist.md`）。
 - ⚠️ **关键发现（asset-mode 覆盖范围有限）**：md5 比对显示 `data-asset-mode` 切换**只影响 `.surface` 元素**（`[data-asset-mode="solid"] .surface` 规则，`styles.css:2`）。
   - `<Surface>` 目前**只用了 `variant="paper"`**（reader/models/pipeline），**无 `variant="bg"`**；全局 bg 背景图走 `body`/`.app` 直接 `var(--surface-bg-image)`（行 4305/4614 等），**不随 mode 切换**——solid 模式下 bg 仍显示 AI 图。

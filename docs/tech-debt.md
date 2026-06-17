@@ -100,6 +100,15 @@
 
 > 三批全部通过 `frontend build + frontend test 235/235 + backend pytest 206/206`。
 
+### 2026-06-17 — A/B 截图（`ab-screenshots.spec.ts`，24 张对照图）
+
+- ✅ 产出 24 张：`runtime/ab-screenshots/phase1/{home,writing,ai-workbench,settings}/{breeze,stargold,silk}-{ai,solid}.png`（8.4MB，gitignored）。复跑：`cd frontend && npx playwright test ab-screenshots`。
+- ✅ 4 维评分（可读性/一致性/情绪/噪点）**待人工看图打分**（见 `docs/ab-evaluation-checklist.md`）。
+- ⚠️ **关键发现（asset-mode 覆盖范围有限）**：md5 比对显示 `data-asset-mode` 切换**只影响 `.surface` 元素**（`[data-asset-mode="solid"] .surface` 规则，`styles.css:2`）。
+  - `<Surface>` 目前**只用了 `variant="paper"`**（reader/models/pipeline），**无 `variant="bg"`**；全局 bg 背景图走 `body`/`.app` 直接 `var(--surface-bg-image)`（行 4305/4614 等），**不随 mode 切换**——solid 模式下 bg 仍显示 AI 图。
+  - 后果：home / settings / ai-workbench 三页无 paper Surface（grep 确认），ai/solid 渲染**完全一致**（md5 相同）；仅 writing 页（reader paper Surface）ai/solid 不同。
+  - **后续议题**（非本次范围）：① solid 模式是否应让 bg 也回退纯 CSS？② home/settings/ai-workbench 是否应接入 paper Surface 以获得主题图层？
+
 ### 2026-06-17 — 追加清理（"不处理"段中可顺手项）
 
 - ✅ **MutateAction 重复定义**：`PipelineRunDetail.tsx` 与 `usePipelineMutations.ts` 各自定义同一类型 → 移到 `pipelineUtils.ts` 作单一源，两处改为 `import { type MutateAction }`（两者本就 import pipelineUtils，零新增依赖路径）。验证：build 2.47s + test 235/235。

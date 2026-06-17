@@ -62,8 +62,8 @@
 | `storeSlices.ts` 346 行按 slice 拆文件 | 6 个 slice 尚可 |
 | `CatalogPanel.tsx` 672 行拆分 | 留待后续按需 |
 | 后端多处 `runtime_root / "artifacts"` 等字面路径集中为 `RuntimePaths` | 改动面大，收益有限 |
-| `MutateAction` 类型在 `PipelineRunDetail.tsx` 与 `usePipelineMutations.ts` 重复定义 | 轻微，可顺手处理 |
-| `api/library.py` 重复 scan 端点（GET catalog-status vs POST scan） | 待确认前端用法后清理 |
+| ~~`MutateAction` 类型重复定义~~ | ✅ 已处理（追加批次）：移到 `pipelineUtils.ts` 单一源 |
+| ~~`api/library.py` GET catalog-status~~ | ⏸ 确认后保留：前端 `useCatalogStatus`（hooks.ts:65）依赖 GET 做"查询即扫描"，POST /scan 是手动触发，二者是 CQRS 分离非简单重复；改动有回归风险 |
 | `tools/real_chapter_batch_publish.py` 硬编码 001-005 | 一次性脚本，按需 |
 | 前端 `pushTask`（145x）与 `useToast` 双错误管线 | 设计问题，需统一方案 |
 | 后端无统一 logger（28 处 print/logging） | 需引入 logging 配置，范围大 |
@@ -99,3 +99,8 @@
 - ✅ N2/N3 磁盘清理：删 `runtime/image2-theme-assets/20260615-*` × 3 + `runtime/runtime/`（gitignored，不入 commit）
 
 > 三批全部通过 `frontend build + frontend test 235/235 + backend pytest 206/206`。
+
+### 2026-06-17 — 追加清理（"不处理"段中可顺手项）
+
+- ✅ **MutateAction 重复定义**：`PipelineRunDetail.tsx` 与 `usePipelineMutations.ts` 各自定义同一类型 → 移到 `pipelineUtils.ts` 作单一源，两处改为 `import { type MutateAction }`（两者本就 import pipelineUtils，零新增依赖路径）。验证：build 2.47s + test 235/235。
+- ⏸ **library GET catalog-status**：读 `library.py` 确认 GET /catalog-status 与 POST /scan 都调 `LibraryScanner.scan()`（GET 有副作用，HTTP 语义不优雅）。但前端 `useCatalogStatus`（hooks.ts:65）依赖 GET 做 React Query 的"查询即刷新扫描"，POST /scan 是 WorkspacePanel 手动触发；二者用途不同，属 CQRS 式分离。改为纯读需拆 `LibraryScanner` 实现，回归风险 > 收益，**保留现状**。

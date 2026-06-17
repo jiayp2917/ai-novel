@@ -13,10 +13,9 @@ import {
   nextStepForRun,
   statusText,
   summarizeRun,
+  type MutateAction,
 } from './pipelineUtils';
 import { PipelineFailureSummary } from './PipelineFailureSummary';
-
-export type MutateAction = 'pause' | 'resume' | 'retry' | 'cancel';
 
 export interface PipelineRunDetailProps {
   run: PipelineRun | null;

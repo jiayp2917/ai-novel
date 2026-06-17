@@ -3,6 +3,9 @@ import { statusLabels } from '../../lib/pipelineLabels';
 
 export const RUN_LIST_LIMIT = 20;
 
+/** Pipeline run 的运行时动作（不含 delete，delete 走独立路径）。 */
+export type MutateAction = 'pause' | 'resume' | 'retry' | 'cancel';
+
 export function statusText(status: string): string {
   return statusLabels[status] ?? status;
 }

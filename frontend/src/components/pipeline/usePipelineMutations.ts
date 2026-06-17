@@ -4,10 +4,8 @@ import { apiRequest, queryClient } from '../../api';
 import { useToast } from '../ui/Toast';
 import { useWorkbenchStore } from '../../store';
 import type { PipelineRun, PipelineRunCreatePayload } from '../../types';
-import { nextStepForRun, statusText, summarizeRun } from './pipelineUtils';
+import { nextStepForRun, statusText, summarizeRun, type MutateAction } from './pipelineUtils';
 import { deletePipelineRun, waitForDeleteFeedback, type DeletePipelineRunResult } from './deletePipelineRun';
-
-export type MutateAction = 'pause' | 'resume' | 'retry' | 'cancel';
 
 export interface PipelineMutations {
   form: PipelineRunCreatePayload;

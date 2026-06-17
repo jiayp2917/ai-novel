@@ -759,11 +759,11 @@ test('model configuration rejects invalid edits, blocks assigned deletion, and s
 
   await page.reload();
   await openModelsView(page);
-  await expect(page.locator('.models-section--overview')).toContainText('1 个任务因预算暂停');
+  await expect(page.locator('.models-overview__surface')).toContainText('1 个任务因预算暂停');
   await expect(page.locator('.job-card').filter({ hasText: String(paused.job_id) })).toContainText('AI 调用已暂停');
 
   await page.getByRole('button', { name: '新增模型' }).click();
-  const createCard = page.locator('.model-profile-panel .model-profile-card').first();
+  const createCard = page.locator('.model-profile-card').first();
   await createCard.getByLabel('档案名称').fill('破坏性测试模型');
   await createCard.getByLabel('接口地址').fill('not-a-url');
   await createCard.getByText('高级设置').click();
@@ -832,11 +832,11 @@ test('model task page shows quality trends and context budget warnings', async (
   await expect(page.locator('.models-page')).toBeVisible();
   await expect(page.locator('.settings-metrics-grid')).toBeVisible();
   await expect(page.locator('.quality-grid')).toBeVisible();
-  await expect(page.locator('.models-section--overview')).toContainText('AI 助手当前是否可用');
-  await expect(page.locator('.models-section--overview')).toContainText('AI 输出去向与安全边界');
+  await expect(page.locator('.models-overview__surface')).toContainText('AI 助手当前是否可用');
+  await expect(page.locator('.models-overview__surface')).toContainText('AI 输出去向与安全边界');
   await expect(page.locator('.models-section--connectivity')).toContainText('AI 助手配置');
   await expect(page.locator('.models-section--connectivity')).toContainText('模型档案与角色分配');
-  const callRecords = page.locator('.models-section--calls');
+  const callRecords = page.locator('.models-troubleshooting__surface');
   await expect(callRecords).toContainText('AI 请求排错记录');
   await expect(callRecords).toContainText('平时不用展开');
   await expect(callRecords.locator('.observability-table--calls')).toBeHidden();
@@ -1025,7 +1025,7 @@ test('pipeline wizard can create, pause, resume, run once, and show 10-chapter t
 
   await page.getByRole('button', { name: '推进一次任务' }).click();
   await expect(page.locator('.pipeline-chapter-card')).toHaveCount(10);
-  await expect(page.locator('.pipeline-chapter-card').first()).toContainText('生成草稿');
+  await expect(page.locator('.pipeline-chapter-card').first()).toContainText('生成章节草稿');
   await expect(page.locator('.pipeline-progress')).toContainText('/60');
   expect(await page.locator('.pipeline-run-item').count()).toBeLessThanOrEqual(20);
   const timelineStyle = await page.locator('.pipeline-chapter-timeline').evaluate((element) => getComputedStyle(element).overflowY);

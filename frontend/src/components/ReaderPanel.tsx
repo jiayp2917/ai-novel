@@ -11,7 +11,6 @@ import { useDraftSave } from './reader/useDraftSave';
 import { useReaderActions } from './reader/useReaderActions';
 import { useReaderNavigation } from './reader/useReaderNavigation';
 import { useReaderPanelState } from './reader/useReaderPanelState';
-import { useReaderState } from './reader/useReaderState';
 import { placeContextMenu } from './readerUtils';
 
 export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; variant?: 'full' | 'writing' }) {
@@ -30,10 +29,14 @@ export function ReaderPanel({ variant = 'full' }: { showActions?: boolean; varia
   const selectedAnnotationId = useWorkbenchStore((state) => state.selectedAnnotationId);
   const annotationJumpSignal = useWorkbenchStore((state) => state.annotationJumpSignal);
 
-  const state = useReaderState({ variant });
+  const panel = useReaderPanelState({ variant });
+  // useReaderPanelState 内部已经调用 useReaderState 并把结果作为 detail 暴露。
+  // 必须复用这一份实例，不能再单独调用 useReaderState：searchQuery / draftText 等
+  // 是 hook 内的本地 useState，调用两次会得到两份互不同步的 state，导致搜索栏写入的
+  // 搜索词与编辑器读取的搜索词不是同一份（搜索高亮失效）。
+  const state = panel.detail;
   const nav = useReaderNavigation(state.chapters_data);
   const actions = useReaderActions(state);
-  const panel = useReaderPanelState({ variant });
 
   const saveDraftMutation = useDraftSave({
     chapter: state.content.data,

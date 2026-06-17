@@ -22,6 +22,8 @@ export function Dialog({ open, onClose, title, children, paper, mark, markVarian
     onEscape: onClose,
   });
 
+  if (!open) return null;
+
   const cls = ['confirm-dialog', paper && 'confirm-dialog--paper', className].filter(Boolean).join(' ');
 
   return (

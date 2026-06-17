@@ -518,9 +518,12 @@ def test_revision_api_route_registered(tmp_path: Path, monkeypatch: pytest.Monke
     get_settings.cache_clear()
     reset_engine()
     Base.metadata.create_all(get_engine())
-    # app.routes may contain non-route wrappers (e.g. _IncludedRouter in newer
-    # Starlette) that have no .path attribute; filter to actual route objects.
-    routes = {route.path for route in app.routes if hasattr(route, "path")}
-    assert "/api/chapters/{chapter_id}/revise-from-annotations" in routes
+    # Enumerate registered endpoints via the OpenAPI schema. Iterating app.routes
+    # is fragile across Starlette versions: newer ones wrap included routers in
+    # _IncludedRouter objects that have no top-level .path, so the /api/* routes
+    # vanish. FastAPI always resolves included routers when building the schema,
+    # so the path set is stable and complete regardless of the internal layout.
+    registered_paths = set(app.openapi().get("paths", {}))
+    assert "/api/chapters/{chapter_id}/revise-from-annotations" in registered_paths
     get_settings.cache_clear()
     reset_engine()

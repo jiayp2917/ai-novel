@@ -139,3 +139,21 @@
 :root[data-theme="silk"] .ui-btn--primary:hover:not(:disabled) {
   background: var(--brand-2);
 }
+
+/* Surface slots (Phase 2 restored): orthogonal to variant */
+.ui-btn--surface-raised {
+  background-color: var(--button-bg);
+  box-shadow: 0 4px 12px rgba(10, 18, 30, 0.12);
+}
+
+.ui-btn--surface-flat {
+  background-color: var(--surface-muted);
+  box-shadow: none;
+}
+
+.ui-btn--surface-paper {
+  background-color: var(--button-bg);
+  background-image: var(--surface-button-image, none);
+  background-size: cover;
+  background-position: center;
+}

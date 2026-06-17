@@ -3,10 +3,12 @@ import './Button.css';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonSurface = 'raised' | 'flat' | 'paper';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  surface?: ButtonSurface;
   loading?: boolean;
   icon?: ReactNode;
   iconRight?: ReactNode;
@@ -15,6 +17,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function Button({
   variant = 'secondary',
   size = 'md',
+  surface = 'paper',
   loading = false,
   disabled,
   icon,
@@ -27,6 +30,7 @@ export function Button({
     'ui-btn',
     `ui-btn--${variant}`,
     `ui-btn--${size}`,
+    `ui-btn--surface-${surface}`,
     loading && 'ui-btn--loading',
     className,
   ]

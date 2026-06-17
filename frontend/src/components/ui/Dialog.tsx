@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react';
 import { Button } from './Button';
 import type { ButtonVariant } from './Button';
+import { useFocusTrap } from './useFocusTrap';
 import './Dialog.css';
 
 export interface DialogProps {
@@ -8,21 +9,31 @@ export interface DialogProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  paper?: boolean;
   mark?: ReactNode;
   markVariant?: 'publish' | 'delete';
   className?: string;
 }
 
-export function Dialog({ open, onClose, title, children, mark, markVariant, className }: DialogProps) {
+export function Dialog({ open, onClose, title, children, paper, mark, markVariant, className }: DialogProps) {
   const titleId = useId();
+  const containerRef = useFocusTrap<HTMLDivElement>({
+    active: open,
+    onEscape: onClose,
+  });
 
-  if (!open) return null;
-
-  const cls = ['confirm-dialog', className].filter(Boolean).join(' ');
+  const cls = ['confirm-dialog', paper && 'confirm-dialog--paper', className].filter(Boolean).join(' ');
 
   return (
     <div className="confirm-backdrop" onClick={onClose}>
-      <div className={cls} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={containerRef}
+        className={cls}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="confirm-dialog__header">
           {(mark || markVariant) && (
             <span className={`confirm-dialog__mark${markVariant ? ` confirm-dialog__mark--${markVariant}` : ''}`}>
@@ -44,6 +55,7 @@ export interface ConfirmDialogProps {
   onClose: () => void;
   title: string;
   message?: string;
+  paper?: boolean;
   children?: ReactNode;
   onConfirm: () => void;
   onCancel?: () => void;
@@ -59,6 +71,7 @@ export function ConfirmDialog({
   onClose,
   title,
   message,
+  paper,
   children,
   onConfirm,
   onCancel,
@@ -68,15 +81,13 @@ export function ConfirmDialog({
   mark,
   markVariant,
 }: ConfirmDialogProps) {
-  if (!open) return null;
-
   const handleCancel = () => {
     onCancel?.();
     onClose();
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={title} mark={mark} markVariant={markVariant}>
+    <Dialog open={open} onClose={onClose} title={title} paper={paper} mark={mark} markVariant={markVariant}>
       {message && <p>{message}</p>}
       {children}
       <div className="confirm-dialog__actions">

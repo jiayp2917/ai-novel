@@ -28,3 +28,11 @@
     transform: translateY(0) scale(1);
   }
 }
+
+/* Paper surface slot (Phase 2 restored) */
+.confirm-dialog--paper {
+  background-color: var(--surface);
+  background-image: var(--surface-paper-image, none);
+  background-size: cover;
+  background-position: center;
+}

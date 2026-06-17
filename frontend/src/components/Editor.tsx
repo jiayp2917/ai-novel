@@ -1,130 +1,14 @@
-import { markdown } from '@codemirror/lang-markdown';
-import { Compartment, EditorSelection, EditorState, RangeSetBuilder } from '@codemirror/state';
-import {
-  Decoration,
-  EditorView,
-  ViewPlugin,
-  type DecorationSet,
-  type ViewUpdate,
-  keymap,
-} from '@codemirror/view';
+import { Compartment, EditorSelection, EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { Annotation, ContextMenuState, SelectionRange } from '../types';
-import { codePointToUtf16Offset, utf16ToCodePointOffset } from '../utils';
-
-function rangeFromEditorSelection(text: string, fromUtf16: number, toUtf16: number): SelectionRange | null {
-  if (toUtf16 <= fromUtf16) {
-    return null;
-  }
-  return {
-    fromUtf16,
-    toUtf16,
-    fromCodePoint: utf16ToCodePointOffset(text, fromUtf16),
-    toCodePoint: utf16ToCodePointOffset(text, toUtf16),
-    text: text.slice(fromUtf16, toUtf16),
-  };
-}
-
-function rangeFromVisibleSelection(text: string): SelectionRange | null {
-  const quote = document.getSelection()?.toString();
-  if (!quote) {
-    return null;
-  }
-  const fromUtf16 = text.indexOf(quote);
-  if (fromUtf16 < 0 || text.indexOf(quote, fromUtf16 + quote.length) >= 0) {
-    return null;
-  }
-  return rangeFromEditorSelection(text, fromUtf16, fromUtf16 + quote.length);
-}
-
-function buildAnnotationPlugin(annotations: Annotation[], selectedAnnotationId: number | null) {
-  return ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-
-      constructor(view: EditorView) {
-        this.decorations = this.build(view.state.doc.toString());
-      }
-
-      update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged) {
-          this.decorations = this.build(update.state.doc.toString());
-        }
-      }
-
-      build(text: string) {
-        const builder = new RangeSetBuilder<Decoration>();
-        for (const annotation of annotations) {
-          const from = codePointToUtf16Offset(text, annotation.range_start);
-          const to = codePointToUtf16Offset(text, annotation.range_end);
-          if (to <= from || from < 0 || to > text.length) {
-            continue;
-          }
-          const className = [
-            'cm-annotation',
-            annotation.status === 'needs_relocate' ? 'cm-annotation--relocate' : '',
-            annotation.id === selectedAnnotationId ? 'cm-annotation--selected' : '',
-          ]
-            .filter(Boolean)
-            .join(' ');
-          builder.add(from, to, Decoration.mark({ class: className }));
-        }
-        return builder.finish();
-      }
-    },
-    {
-      decorations: (plugin) => plugin.decorations,
-    },
-  );
-}
-
-function findSearchMatches(text: string, searchQuery: string): Array<{ from: number; to: number }> {
-  const query = searchQuery.trim();
-  const matches: Array<{ from: number; to: number }> = [];
-  if (!query) {
-    return matches;
-  }
-  let index = text.indexOf(query);
-  while (index >= 0) {
-    matches.push({ from: index, to: index + query.length });
-    index = text.indexOf(query, index + Math.max(query.length, 1));
-  }
-  return matches;
-}
-
-function buildSearchPlugin(searchQuery: string, searchIndex: number) {
-  return ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-
-      constructor(view: EditorView) {
-        this.decorations = this.build(view.state.doc.toString());
-      }
-
-      update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged) {
-          this.decorations = this.build(update.state.doc.toString());
-        }
-      }
-
-      build(text: string) {
-        const builder = new RangeSetBuilder<Decoration>();
-        const matches = findSearchMatches(text, searchQuery);
-        matches.forEach((match, index) => {
-          builder.add(
-            match.from,
-            match.to,
-            Decoration.mark({ class: index === searchIndex ? 'cm-search-match cm-search-match--active' : 'cm-search-match' }),
-          );
-        });
-        return builder.finish();
-      }
-    },
-    {
-      decorations: (plugin) => plugin.decorations,
-    },
-  );
-}
+import { codePointToUtf16Offset } from '../utils';
+import {
+  buildAnnotationPlugin,
+  buildSearchPlugin,
+  findSearchMatches,
+  useChapterEditorExtensions,
+} from './reader/useChapterEditorExtensions';
 
 type ChapterEditorProps = {
   content: { text: string } | undefined;
@@ -168,6 +52,28 @@ export function ChapterEditor({
 
   callbacksRef.current = { onSelectionChange, onTextChange, onContextMenu, onAnnotationJumpFailure };
 
+  const extensions = useChapterEditorExtensions({
+    editable,
+    search: { query: searchQuery, index: searchIndex },
+    annotations,
+    selectedAnnotationId,
+    callbacks: {
+      onTextChange: (text) => callbacksRef.current.onTextChange?.(text),
+      onSelectionChange: (selection) => callbacksRef.current.onSelectionChange(selection),
+      onContextMenu: (event) => callbacksRef.current.onContextMenu?.({
+        x: event.x,
+        y: event.y,
+        selection: event.selection,
+      }),
+    },
+    compartments: {
+      readOnly: readOnlyCompartmentRef.current,
+      editable: editableCompartmentRef.current,
+      annotations: annotationsCompartmentRef.current,
+      search: searchCompartmentRef.current,
+    },
+  });
+
   useLayoutEffect(() => {
     if (!hostRef.current || !content) {
       return undefined;
@@ -175,41 +81,7 @@ export function ChapterEditor({
 
     const state = EditorState.create({
       doc: content.text,
-      extensions: [
-        markdown(),
-        EditorView.lineWrapping,
-        readOnlyCompartmentRef.current.of(EditorState.readOnly.of(!editable)),
-        editableCompartmentRef.current.of(EditorView.editable.of(true)),
-        keymap.of([]),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            callbacksRef.current.onTextChange?.(update.state.doc.toString());
-          }
-          if (update.selectionSet) {
-            const range = update.state.selection.main;
-            callbacksRef.current.onSelectionChange(rangeFromEditorSelection(update.state.doc.toString(), range.from, range.to));
-          }
-        }),
-        EditorView.domEventHandlers({
-          contextmenu: (event, view) => {
-            const handler = callbacksRef.current.onContextMenu;
-            if (!handler) {
-              return false;
-            }
-            event.preventDefault();
-            const range = view.state.selection.main;
-            const text = view.state.doc.toString();
-            handler({
-              x: event.clientX,
-              y: event.clientY,
-              selection: rangeFromEditorSelection(text, range.from, range.to) ?? rangeFromVisibleSelection(text),
-            });
-            return true;
-          },
-        }),
-        annotationsCompartmentRef.current.of(buildAnnotationPlugin(annotations, selectedAnnotationId)),
-        searchCompartmentRef.current.of(buildSearchPlugin(searchQuery, searchIndex)),
-      ],
+      extensions,
     });
 
     const view = new EditorView({ state, parent: hostRef.current });
@@ -218,7 +90,7 @@ export function ChapterEditor({
       view.destroy();
       viewRef.current = null;
     };
-  }, [documentKey]);
+  }, [documentKey, extensions]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -269,7 +141,7 @@ export function ChapterEditor({
       return;
     }
     if (annotation.status === 'needs_relocate') {
-      callbacksRef.current.onAnnotationJumpFailure?.('这条批注的原文位置已经失效，请先使用“自动定位”或手动重定位。');
+      callbacksRef.current.onAnnotationJumpFailure?.('这条批注的原文位置已经失效，请先使用"自动定位"或手动重定位。');
       return;
     }
     const view = viewRef.current;

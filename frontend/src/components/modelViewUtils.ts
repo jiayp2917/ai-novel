@@ -1,4 +1,5 @@
 import type { ModelUsageReport } from '../types';
+import { jobTypeLabel as sharedTaskTypeLabel, statusLabels as sharedStatusLabels } from '../lib/pipelineLabels';
 
 export const assistantRoles = [
   { role: 'writer', label: 'AI 写作' },
@@ -31,6 +32,8 @@ export function chapterLabel(record: ModelUsageReport['context_budget']['affecte
   return `产物 #${record.artifact_id}`;
 }
 
+// 模型页用本地文案，区别于流水线卡片（"生成正文草稿" vs "生成章节草稿"）。
+// 未命中的任务类型回落 lib/pipelineLabels.jobTypeLabel，保证单一来源。
 export function taskTypeLabel(taskType: string): string {
   const labels: Record<string, string> = {
     generate_chapter_draft: '生成正文草稿',
@@ -39,9 +42,11 @@ export function taskTypeLabel(taskType: string): string {
     summarize_published_chapter: '整理章节记忆',
     rebuild_structured_memory: '重建记忆库',
   };
-  return labels[taskType] ?? taskType;
+  return labels[taskType] ?? sharedTaskTypeLabel(taskType);
 }
 
+// 模型页用本地状态文案，区别于流水线/任务卡片（"运行中/成功" vs "执行中/已完成"）。
+// 未命中的状态回落 lib/pipelineLabels.statusLabels。
 export function statusLabel(status: string): string {
   const labels: Record<string, string> = {
     reserved: '已预留',
@@ -50,7 +55,7 @@ export function statusLabel(status: string): string {
     failed: '失败',
     paused_budget: 'AI 调用已暂停',
   };
-  return labels[status] ?? status;
+  return labels[status] ?? sharedStatusLabels[status] ?? status;
 }
 
 export function usageSummary(usage: Record<string, unknown>): string {

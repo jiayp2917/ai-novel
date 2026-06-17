@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
-import { PipelineFailureSummary } from '../components/PipelineView';
+import { PipelineFailureSummary } from '../components/pipeline/PipelineFailureSummary';
 import { VersionHistory } from '../components/VersionHistory';
 import { useChapterVersions, useHealth } from '../hooks';
 import { useWorkbenchStore } from '../store';

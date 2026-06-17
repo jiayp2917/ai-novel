@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from backend.app.db.base import Base
 from backend.app.db.models import Event, Job
 from backend.app.services.pipeline.planner import PipelinePlanError, PipelinePlanner, PipelineTaskType
-from backend.app.services.pipeline.runner import PipelineRunner
 from backend.app.services.pipeline.state_machine import (
     ACTIVE_STATES,
     IN_PROGRESS_STATES,
@@ -75,7 +74,7 @@ def test_pipeline_state_machine_rejects_illegal_transition() -> None:
     assert job.status == "planned"
 
 
-def test_pipeline_runner_records_output_tracking_fields() -> None:
+def test_pipeline_state_machine_records_output_tracking_fields() -> None:
     session = make_session()
     planner = PipelinePlanner(session)
     job = planner.create_task(
@@ -85,9 +84,15 @@ def test_pipeline_runner_records_output_tracking_fields() -> None:
         status=PipelineState.QUEUED,
     )
 
-    runner = PipelineRunner(session)
-    runner.mark_context_built(job.id, context_report_artifact_id=4)
-    runner.mark_draft_generated(job.id, output_hash="a" * 64, artifact_id=5, model_call_id=6)
+    machine = PipelineStateMachine(session)
+    machine.mark_context_built(job, context_report_artifact_id=4)
+    machine.mark_output(
+        job,
+        status=PipelineState.DRAFT_GENERATED,
+        output_hash="a" * 64,
+        artifact_id=5,
+        model_call_id=6,
+    )
 
     stored = session.get(Job, job.id)
     assert stored is not None

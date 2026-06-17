@@ -4,7 +4,7 @@ import { taskTypeLabel } from '../modelViewUtils';
 import { Button } from '../ui/Button';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { Surface } from '../ui/Surface';
-import { JobList } from '../WorkflowActions';
+import { JobList } from '../workflow';
 import type { useModelCallActions } from '../../hooks/useModelCallActions';
 
 type ModelCallActions = ReturnType<typeof useModelCallActions>;

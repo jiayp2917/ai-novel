@@ -7,7 +7,7 @@ import { PipelineView } from '../components/PipelineView';
 import { ReaderPanel } from '../components/ReaderPanel';
 import { SafetyBoundaryBanner } from '../components/SafetyBoundaryBanner';
 import { WorkspacePanel } from '../components/WorkspacePanel';
-import { ChapterActions, JobList, SourceProposalActions } from '../components/WorkflowActions';
+import { ChapterActions, JobList, SourceProposalActions } from '../components/workflow';
 import { useChapterContent, useSourceFileContent } from '../hooks';
 import { useWorkbenchStore } from '../store';
 

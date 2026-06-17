@@ -13,7 +13,6 @@ import {
   numberFromPayloadValue,
 } from './pipeline/pipelineUtils';
 import { usePipelineMutations } from './pipeline/usePipelineMutations';
-export { PipelineFailureSummary } from './pipeline/PipelineFailureSummary';
 
 export function PipelineView() {
   const chapters = useChapters();

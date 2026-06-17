@@ -14,7 +14,7 @@ const outDir = path.resolve(process.cwd(), '..', 'runtime', 'ab-screenshots', 'p
 const THEMES = ['breeze', 'stargold', 'silk'] as const;
 const MODES = ['ai', 'solid'] as const;
 
-test('A/B 截图：4 视图 × 3 主题 × solid/ai = 24 张', async ({ page }) => {
+test('A/B 截图：4 视图 × 3 主题 × solid/ai = 24 张', { tag: '@screenshots' }, async ({ page }) => {
   test.setTimeout(360_000);
   fs.mkdirSync(outDir, { recursive: true });
 

@@ -29,7 +29,7 @@
 | I2 | v0.8 子目录（reader/pipeline/models/workflow） | 拆分后无单元测试覆盖 | 补纯函数单测：`pipelineUtils.ts`、`modelsShared.ts`、`useChapterEditorExtensions.ts` 可抽部分 | ⏳ |
 | I5 | `docs/ui-refactor-plan.md` §0.7 | 仍称 Phase 4.1/5/6 "✗ 未启动"且引用旧行号，与 §0.8 ✓ 自相矛盾 | §0.7 表格改为指向 §0.8 的"已完成"指针 | ⏳ |
 | I6 | `frontend/src/components/ui/Surface.tsx` | `ui/` 里唯一无 co-located CSS 的组件 | **⏸ 保留在 styles.css**（与全局主题变量强耦合，抽块会 cascade 漂移），已在 architecture.md §5 记录为例外 | ⏸ |
-| N12 | `requirements.txt` | `python-dotenv` 死依赖（0 处 `import dotenv`，pydantic-settings 自带 env 加载） | 删除 | ⏳ |
+| N12 | `requirements.txt` | ~~`python-dotenv` 死依赖~~ **误判已回退**：pydantic-settings 2.14.1 `Requires: ..., python-dotenv, ...`，config.py `env_file=".env"` 经 `from dotenv import dotenv_values` 直接用；grep import=0 不足以判定（间接依赖） | 已恢复 | ✅ |
 | B6 | `frontend/package.json` | `lucide-react ^1.18.0` 是旧 fork（上游现在是 0.x） | **⏸ 不升级**（运行正常，回归风险 > 收益），在 architecture.md §6 记录 | ⏸ |
 
 ---
@@ -88,7 +88,7 @@
 - ✅ C1 补测试：3 文件 140 用例（`pipelineUtils.test.ts` 89 + `modelsShared.test.ts` 44 + `useChapterEditorExtensions.test.ts` 7）；前端测试 95→235
 - ✅ C2 修文档：`ui-refactor-plan.md` §0.7 加导航注释（标明为 v0.6 快照，最新看 §0.8）
 - ⏸ C3 保留：`Surface.tsx` co-located CSS（已在 architecture.md §5 记录为例外）
-- ✅ C4 删依赖：`requirements.txt` 移除 `python-dotenv`
+- ⚠️ **C4 误判已回退**：commit a02ba09 以"grep `import dotenv`=0"判定 python-dotenv 死依赖并删除；实测 `pip show pydantic-settings` → `Requires: ..., python-dotenv, ...`，源码 `sources/providers/dotenv.py` 直接 `from dotenv import dotenv_values`，config.py 的 `env_file=".env"` 依赖它。已恢复到 requirements.txt（显式声明）。**教训：grep import=0 ≠ 死依赖，需查框架间接依赖**。
 - ⏸ B6 不升级：`lucide-react`（已在 architecture.md §6 记录）
 
 ### 2026-06-17 — 批次 3 处理（commit 29faaf9）
